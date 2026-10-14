@@ -40,10 +40,14 @@ internal class CapacityLauncher(
     private val evidenceProperties: Properties, private val streamsClientProperties: Properties, private val stateDir: String, private val dataSource: DataSource,
     private val threads: Int = plan.lanes, private val verifyContentDigest: Boolean = true, private val projectionIntervalMs: Long = 100,
     private val maxTransientProjectionFailures: Int = 10, private val persistent: Boolean = true,
+    /** Decisions per projector transaction. Position rows are coalesced per transaction, so a larger chunk writes fewer rows per decision (and makes each commit, and the read lag behind it, longer). */
+    private val maxApply: Int = 2_000,
 ) {
     class Running internal constructor(
         private val streams: KafkaStreams, private val loops: List<Thread>, private val failure: AtomicReference<Throwable?>,
         private val streamsFailed: AtomicBoolean, private val closing: AtomicBoolean, private val logs: List<AutoCloseable>,
+        /** Nanoseconds the projection threads spent reading and decoding the decision logs (`readNanos`) and in the projector's apply (`applyNanos`), summed over lanes. */
+        val readNanos: java.util.concurrent.atomic.AtomicLong, val applyNanos: () -> Long,
     ) : AutoCloseable {
         fun projectionFailure(): Throwable? = failure.get()
         fun streamsState(): KafkaStreams.State = streams.state()
@@ -69,15 +73,16 @@ internal class CapacityLauncher(
         CapacityStreams.verifyPinned(properties, lanes)
 
         val logs = ArrayList<AutoCloseable>()
+        val readNanos = java.util.concurrent.atomic.AtomicLong()
         val runners: List<FinanceProjectionRunner>
         val streams: KafkaStreams
         try {
             runners = (0 until lanes).map { lane ->
                 val digest = plan.bindingDigest(lane)
                 val projector = FinanceProjector(CapacityChain(plan.capacity(lane)), dataSource)
-                val epoch = projector.claim(digest)
+                val epoch = projector.claim(digest, plan.sequenceBound)
                 val log = reader.logReader(topics.decisions, lane).also { logs += it }
-                FinanceProjectionRunner.tailing({ FinanceProjectionRunner.decode(log.readNext()) }, projector, digest, epoch).also { it.open() }
+                FinanceProjectionRunner.tailing({ val s = System.nanoTime(); FinanceProjectionRunner.decode(log.readNext()).also { readNanos.addAndGet(System.nanoTime() - s) } }, projector, digest, epoch, maxApply = maxApply, sequenceBound = plan.sequenceBound).also { it.open() }
             }
             val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] })
             streams = KafkaStreams(CapacityTopology.build(config, CapacityInputDecoders(plan, captureBindingDigest, verifyContentDigest), persistent), properties)
@@ -103,7 +108,7 @@ internal class CapacityLauncher(
                     }
                 }.apply { isDaemon = true; name = "capacity-projection-$lane"; start() }
             }
-            return Running(streams, loops, failure, streamsFailed, closing, logs)
+            return Running(streams, loops, failure, streamsFailed, closing, logs, readNanos) { runners.sumOf { it.applyNanos.get() } }
         } catch (e: Throwable) {
             runCatching { FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(10)) }
             logs.forEach { runCatching { it.close() } }

@@ -138,7 +138,9 @@ internal class FinanceProjector(private val chain: DecisionChain, private val da
         val seq = ArrayList<Long>(); val ns = ArrayList<String>(); val dom = ArrayList<String>(); val aid = ArrayList<String>(); val disp = ArrayList<String>()
         val inDigest = ArrayList<String>(); val prior = ArrayList<String>(); val sum = ArrayList<String>()
         val oRun = ArrayList<String>(); val oVen = ArrayList<String>(); val oIns = ArrayList<String>(); val oEx = ArrayList<String>(); val oBuy = ArrayList<String>(); val oSell = ArrayList<String>()
-        val oQty = ArrayList<Long>(); val oPx = ArrayList<Long>(); val oCash = ArrayList<Long>()
+        val oQty = ArrayList<Long>(); val oPx = ArrayList<Long>(); val oCash = ArrayList<Long>(); val oShares = ArrayList<Long>(); val oStatus = ArrayList<String>()
+        /** Obligations inserted by this batch, by execution, so a settlement in the same batch inserts the row already settled instead of updating it afterwards. */
+        private val inBatch = HashMap<ExecutionKey, Int>()
         val aRun = ArrayList<String>(); val aVen = ArrayList<String>(); val aIns = ArrayList<String>(); val aEx = ArrayList<String>(); val aNo = ArrayList<Int>(); val aDisp = ArrayList<String>()
         val uRun = ArrayList<String>(); val uVen = ArrayList<String>(); val uIns = ArrayList<String>(); val uEx = ArrayList<String>()
         val net = LinkedHashMap<Pair<String, String>, Long>()
@@ -152,12 +154,17 @@ internal class FinanceProjector(private val chain: DecisionChain, private val da
                 is FinanceInput.Capture -> if (d.disposition == Disposition.CAPTURED) {
                     val e = input.execution
                     oRun += e.runId; oVen += e.venueSessionId; oIns += e.instrumentId; oEx += e.executionId; oBuy += input.buyer.value; oSell += input.seller.value
-                    oQty += input.quantity; oPx += input.priceNanos; oCash += Math.multiplyExact(input.quantity, input.priceNanos)
+                    oQty += input.quantity; oPx += input.priceNanos; oCash += Math.multiplyExact(input.quantity, input.priceNanos); oShares += input.quantity; oStatus += "PENDING"
+                    inBatch[e] = oEx.size - 1
                 }
                 is FinanceInput.Settle -> if (d.disposition in settleDispositions) {
                     val e = input.execution
                     aRun += e.runId; aVen += e.venueSessionId; aIns += e.instrumentId; aEx += e.executionId; aNo += input.attempt; aDisp += d.disposition.name
-                    if (d.disposition == Disposition.SETTLED) { uRun += e.runId; uVen += e.venueSessionId; uIns += e.instrumentId; uEx += e.executionId }
+                    if (d.disposition == Disposition.SETTLED) {
+                        val row = inBatch[e]
+                        if (row != null) { oStatus[row] = "SETTLED"; oCash[row] = 0L; oShares[row] = 0L }
+                        else { uRun += e.runId; uVen += e.venueSessionId; uIns += e.instrumentId; uEx += e.executionId }
+                    }
                 }
                 is FinanceInput.Fund -> Unit
             }
@@ -179,10 +186,10 @@ internal class FinanceProjector(private val chain: DecisionChain, private val da
         }
         if (r.oEx.isNotEmpty()) c.prepareStatement("""INSERT INTO boundary.calcify_finance_obligation(binding_digest, run_id, venue_session_id, instrument_id, execution_id, buyer_account_id,
             seller_account_id, quantity, price_nanos, status, cash_residual, share_residual)
-            SELECT ?, t.r, t.v, t.i, t.e, t.b, t.s, t.q, t.p, 'PENDING', t.c, t.q FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::bigint[], ?::bigint[], ?::bigint[])
-            AS t(r,v,i,e,b,s,q,p,c)""").use {
+            SELECT ?, t.r, t.v, t.i, t.e, t.b, t.s, t.q, t.p, t.st, t.c, t.sh FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::bigint[], ?::bigint[], ?::bigint[], ?::bigint[], ?::text[])
+            AS t(r,v,i,e,b,s,q,p,c,sh,st)""").use {
             it.setString(1, digest); it.setArray(2, text(r.oRun)); it.setArray(3, text(r.oVen)); it.setArray(4, text(r.oIns)); it.setArray(5, text(r.oEx)); it.setArray(6, text(r.oBuy))
-            it.setArray(7, text(r.oSell)); it.setArray(8, big(r.oQty)); it.setArray(9, big(r.oPx)); it.setArray(10, big(r.oCash)); it.executeUpdate()
+            it.setArray(7, text(r.oSell)); it.setArray(8, big(r.oQty)); it.setArray(9, big(r.oPx)); it.setArray(10, big(r.oCash)); it.setArray(11, big(r.oShares)); it.setArray(12, text(r.oStatus)); it.executeUpdate()
         }
         if (r.aEx.isNotEmpty()) c.prepareStatement("""INSERT INTO boundary.calcify_finance_attempt(binding_digest, run_id, venue_session_id, instrument_id, execution_id, attempt, disposition)
             SELECT ?, t.r, t.v, t.i, t.e, t.n, t.d FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::int[], ?::text[]) AS t(r,v,i,e,n,d)""").use {

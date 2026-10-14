@@ -22,6 +22,8 @@ internal class FinanceProjectionRunner private constructor(
     constructor(reader: FinanceEvidenceReader, projector: FinanceProjector, bindingDigest: String, ownerEpoch: Long, decisionsTopic: String) :
         this({ decode(reader.readAll(decisionsTopic)) }, projector, bindingDigest, ownerEpoch)
 
+    /** Nanoseconds spent inside [FinanceProjector.apply] (database time plus its in-memory verification), for operators and measurements. */
+    val applyNanos = java.util.concurrent.atomic.AtomicLong()
     private var nextSequence = 1L
     private val pending = ArrayList<Pair<Decision, FinanceInput>>()
 
@@ -67,7 +69,9 @@ internal class FinanceProjectionRunner private constructor(
             if (done > 0) pending.subList(0, done).clear()
             while (pending.isNotEmpty()) {
                 val chunk = pending.subList(0, minOf(maxApply, pending.size)).toList()
+                val started = System.nanoTime()
                 applied += projector.apply(bindingDigest, ownerEpoch, chunk)
+                applyNanos.addAndGet(System.nanoTime() - started)
                 stored = chunk.last().first.sequence; chain = chunk.last().first.checksum
                 pending.subList(0, chunk.size).clear()
             }

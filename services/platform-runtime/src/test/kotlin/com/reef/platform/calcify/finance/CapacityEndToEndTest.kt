@@ -132,6 +132,9 @@ class CapacityEndToEndTest {
                 assertEquals(oracle[lane].chain to expected[lane].size.toLong(), ds.connection.use { c -> c.prepareStatement("SELECT last_chain, last_sequence FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps -> ps.setString(1, plan.bindingDigest(lane)); ps.executeQuery().use { r -> r.next(); r.getString(1) to r.getLong(2) } } }, "lane $lane projection")
                 val positions = ds.connection.use { c -> c.prepareStatement("SELECT account_id, asset_id, amount FROM boundary.calcify_finance_position WHERE binding_digest = ?").use { ps -> ps.setString(1, plan.bindingDigest(lane)); ps.executeQuery().use { r -> val m = HashMap<Pair<String, String>, Long>(); while (r.next()) m[r.getString(1) to r.getString(2)] = r.getLong(3); m } } }
                 assertEquals(oracle[lane].snapshot().positions.filterValues { it != 0L }.mapKeys { it.key.first.value to it.key.second.value }, positions.filterValues { it != 0L }, "lane $lane positions")
+                val obligations = ds.connection.use { c -> c.prepareStatement("SELECT execution_id, status, cash_residual, share_residual FROM boundary.calcify_finance_obligation WHERE binding_digest = ?").use { ps -> ps.setString(1, plan.bindingDigest(lane)); ps.executeQuery().use { r -> val m = HashMap<String, Triple<String, Long, Long>>(); while (r.next()) m[r.getString(1)] = Triple(r.getString(2), r.getLong(3), r.getLong(4)); m } } }
+                val wanted = oracle[lane].snapshot().obligations.entries.associate { (k, o) -> k.executionId to Triple(o.status.name, o.cashResidual, o.shareResidual) }
+                assertEquals(wanted, obligations, "lane $lane obligations (inserted settled when settled in the same batch, updated otherwise)")
                 assertEquals(oracle[lane].commitment(), StateCommitment.reference(oracle[lane].snapshot()), "lane $lane oracle commitment")
             }
         }
