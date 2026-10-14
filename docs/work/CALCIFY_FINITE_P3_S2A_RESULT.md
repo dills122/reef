@@ -121,7 +121,7 @@ Deferred, with owner Dylan, before any capacity or authority claim:
   chain is unkeyed (integrity, not authenticity). A keyed or externally anchored chain and a re-deciding projector are required first.
 - **Real ownership-epoch integration.** The projector's owner epoch is supplied by the caller (a constant in the fixture); tying it to the
   O2 ownership claim is part of the product launcher.
-- **Single approved live recording** and finite stage costs (S3-A2 live part; owner-gated).
+- **Single approved live recording (S3-A2 live part): done 2026-10-13, pass.** Attempt `live-s3a2-1`, evidence in [docs/evidence/calcify-finite-p3/2026-10-13-s3a2-live](../evidence/calcify-finite-p3/2026-10-13-s3a2-live/README.md). Finite stage costs remain open.
 - The plan's "progress" read is served by the checkpoint route (last sequence and chain); there is no separate progress route.
 
 ### Integration review 2 of 3 and what changed

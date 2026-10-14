@@ -132,7 +132,7 @@ O3a on its own implies no financial authority and no capacity. The O2 follow-up 
 
 ## Calcify finite P3 financial path — October 13, 2026
 
-Refreshed against `master` at `fd8f3ef6a` (PR519). The finite P3 financial path is **built, tested on real infrastructure and independently reviewed, but not run live**; it implies
+Refreshed against `master` at `fd8f3ef6a` (PR519). The finite P3 financial path is **built, tested on real infrastructure, independently reviewed, and recorded once on local Docker (S3-A2 live part, attempt `live-s3a2-1`, 2026-10-13, pass; [evidence](evidence/calcify-finite-p3/2026-10-13-s3a2-live/README.md))**; it implies
 no capacity claim (the 50,000 decisions/s gate is waived for the bounded finite profile, owner decision 2026-10-12).
 
 - **Delivered (PR numbers):** O4 projection schema and projector (501); binding v2 openings, registration and startup witnesses (502, 504, 505); finance processor, per-entity store, restore cut
@@ -145,8 +145,8 @@ no capacity claim (the 50,000 decisions/s gate is waived for the bounded finite 
 - **Operator documents:** [role sign-off packet](work/CALCIFY_FINITE_P3_ROLE_SIGNOFF.md) (awaiting sign-off), [finance runtime runbook](work/CALCIFY_FINITE_P3_FINANCE_RUNTIME.md),
   [binding v2 spec](work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md), [S2 close-out research](work/CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md).
 - **Open, recorded limits:** the owner epoch is claimed by the finance process at start (a newer instance fences the older one loudly; not derived from the ingress owner claim); the decision log and `stateDigest` are unkeyed integrity digests, not authenticity;
-  F6 (each projection pass opens fresh evidence consumers); TLS and credential delivery are deployment decisions; the operator read routes rely on the internal-HTTP exposure mode; no live run.
-- **Owner-gated:** sign-off of the role matrix, the live recording window, warm-restart proof approval, the O2 replay, and Decision 0 for any capacity profile.
+  F6 (each projection pass opens fresh evidence consumers); TLS and credential delivery are deployment decisions; the operator read routes rely on the internal-HTTP exposure mode; the live recording was a single local-Docker attempt on a closed network.
+- **Owner-gated:** warm-restart proof approval, the O2 replay, and Decision 0 for any capacity profile.
 - **Throughput:** stage targets and last measurements are indexed in [Calcify throughput budget](work/CALCIFY_THROUGHPUT_BUDGET.md); every measurement belongs in the append-only
   [throughput ledger](THROUGHPUT_BASELINES.md) (entry CAL-FIN-S0). A scalable-commitment design exists but is **not accepted** and is gated on Decision 0:
   [state commitment design](work/CALCIFY_FINANCE_STATE_COMMITMENT_DESIGN.md).
