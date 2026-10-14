@@ -1,0 +1,53 @@
+# Calcify capacity runtime: how to run the capacity finance service
+
+Status: working description of what is built (2026-10-14). The capacity profile is separate from the finite P3 profile and does not use its binding; binding v3 will replace the plan file below with a registered, signed opening. No capacity claim: see CAL-FIN-P16 in the throughput ledger for what has been measured.
+
+## What it is
+One process (`CALCIFY_CAPACITY_PLAN_FILE` set; never together with `CALCIFY_STAGE`, `CALCIFY_FINITE_BINDING_DIGEST` or `CALCIFY_FINANCE_BINDING_DIGEST`) running:
+- a Kafka Streams app, exactly-once v2, **one stream thread per lane** (task N is lane N): reads partition N of the capture and control topics, keeps lane N's ledger in a RocksDB store with a changelog, writes partition N of the decisions topic;
+- one **projection** per lane (own binding digest, own owner epoch, own tailing thread) into `boundary.calcify_finance_*`.
+
+A lane is a set of instruments. With the production source the lanes are the **venue source partitions**: the Phase 2 resolver publishes each resolved match context to the partition of the venue event it came from, and the platform routes an instrument to its lane with `PartitionLaneHash.laneFor(instrumentId, lanes)`. Set `laneRouting` to `partition-lane-hash-v1` and the service refuses a plan whose instrument sets differ from that.
+
+Every executed trade becomes two decisions in its lane's log: the capture and its first settlement attempt (`<executionId>/1`). A failed attempt (insufficient cash or shares) stays pending and is repaired by an operator control with attempt 2 or later. Cash is held **per lane**: fund each participant's cash in each lane with `CapacityControlWriter.fundCash`, and shares of an instrument in the lane that trades it (`fundSecurity`). There is no automatic cash rebalance between lanes yet.
+
+## The plan file (`calcify-capacity-plan-v1`)
+Strict JSON, every field required, numbers as decimal text:
+
+```json
+{"schema":"calcify-capacity-plan-v1","planId":"arena-1","run":"run-1","session":"session-1","cashAsset":"USD","openingAccount":"opening",
+ "laneRouting":"partition-lane-hash-v1","laneInstruments":[["INS0","INS4"],["INS1","INS2"],["INS3"]],
+ "maxObligations":"4000000","maxCaptures":"4000000","maxSettleAttempts":"8000000","maxControls":"100000","sequenceBound":"8000000","autoSettle":true,
+ "applicationId":"capacity-arena-1","topics":{"capture":"CAPACITY_CAPTURE","control":"CAPACITY_CONTROL","decisions":"CAPACITY_DECISIONS"},
+ "captureSource":{"kind":"resolved-context-v1","policyVersion":"1"}}
+```
+
+`captureSource` may instead be `{"kind":"finite-lifecycle-capture-v1","bindingDigest":"<64 hex>","verifyContentDigest":true}` (the finite capture envelope; any laneRouting). The lane binding digest commits to the plan id, run, session, lane count and index, sequence bound and the lane's configuration, so a store, log or projection made for another lane or plan is refused. The budgets are per lane and per slice (a slice is about five minutes of the contract rate; rotation to the next slice is not built).
+
+## Environment
+| Variable | Meaning |
+| --- | --- |
+| `CALCIFY_CAPACITY_PLAN_FILE` | the plan file; a private regular file (owner read/write only) |
+| `CALCIFY_CAPACITY_KAFKA_BOOTSTRAP_SERVERS`, `_SECURITY_PROTOCOL` (SASL_PLAINTEXT), `_SASL_MECHANISM` (PLAIN) | broker connection |
+| `CALCIFY_CAPACITY_KAFKA_USERNAME` + `CALCIFY_CAPACITY_KAFKA_PASSWORD_FILE` | the `finance` Streams principal |
+| `CALCIFY_CAPACITY_OBSERVER_KAFKA_USERNAME` + `CALCIFY_CAPACITY_OBSERVER_KAFKA_PASSWORD_FILE` | the read-only `observer` principal (decision-log heads, projection tails); must differ from the finance principal |
+| `CALCIFY_CAPACITY_STATE_DIRECTORY` | owner-only directory for the RocksDB state |
+| `CALCIFY_CAPACITY_POSTGRES_JDBC_URL` (no password in it), `_USER`, `_PASSWORD_FILE` | the projector role (SELECT, INSERT, UPDATE on `boundary.calcify_finance_*`) |
+| optional `CALCIFY_CAPACITY_STREAM_THREADS` (lanes), `_PROJECTION_INTERVAL_MS` (100), `_PROJECTION_CHUNK` (2000 decisions per transaction), `_SESSION_TIMEOUT_MS` (6000 to 45000) | tuning |
+
+Inline secrets (a variable without `_FILE`) are refused.
+
+## Provision before the first start
+- Topics `capture`, `control`, `decisions`: **at least `lanes` partitions each, the same count**, retention unlimited (`retention.ms=-1`, `retention.bytes=-1`) for the run, replication as the cluster requires. The Streams changelog `<applicationId>-capacity-finance-changelog` needs `lanes` partitions and compaction; provision it up front as the finite profile does.
+- Migrations 0014 and 0016 (`boundary.calcify_finance_*`, the per-binding `sequence_bound`).
+- Broker grants as in `docs/work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md` section 9 for the two principals, over these topic names.
+
+## Start, restart and failure
+- **Start:** reads the last read-committed record of each lane's decision log, claims each lane's projection (raising its owner epoch, which fences an older instance), opens each checkpoint with the plan's sequence bound, starts the Streams app. Each lane restores its store (the entities must hash to the head decision's committed state) and must be **exactly the head of its published log**; otherwise the lane's task fails and the process exits non-zero with nothing wrong silently accepted.
+- **Restart after a clean stop or a crash, or with the local state wiped:** the store is rebuilt from the changelog; redelivered records are absorbed by the ledger's action keys. Verified by `CapacityEndToEndTest` for both capture sources.
+- **An unusable capture record or member** (wrong lane, wrong run, inconsistent acceptances, malformed amounts, unparseable): the lane **stops** and the process exits non-zero; nothing is skipped, because a skipped record is an executed trade missing from the books. It stops at the same record until the cause is resolved. An unusable control record is counted and ignored.
+- **Projection failures:** transient database or broker errors are retried with backoff; a stale owner epoch, a projection that is not a prefix of the log, or ten consecutive failures stop the process.
+- **Health:** the process supervises itself and exits 1 when the Streams app or any projection dies, so the supervisor restarts it.
+
+## Not built yet
+Binding v3 and signed plan identity; rotation to the next slice; cash rebalance between lanes and a hot-instrument variant; arena credit; the projection tail resuming from its stored position (a restart currently re-reads each lane's decision log from the start, and applies only what the checkpoint lacks); reads, visibility and settlement-latency measurements; a dedicated-host run; metrics export (the launcher keeps read and apply time counters and the processor counts refusals and unusable controls, none exported yet).

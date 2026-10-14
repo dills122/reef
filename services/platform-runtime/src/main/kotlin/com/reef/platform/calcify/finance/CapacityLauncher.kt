@@ -84,7 +84,7 @@ internal class CapacityLauncher(
                 val log = reader.logReader(topics.decisions, lane).also { logs += it }
                 FinanceProjectionRunner.tailing({ val s = System.nanoTime(); FinanceProjectionRunner.decode(log.readNext()).also { readNanos.addAndGet(System.nanoTime() - s) } }, projector, digest, epoch, maxApply = maxApply, sequenceBound = plan.sequenceBound).also { it.open() }
             }
-            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] })
+            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] }, failOnBadCapture = true)
             streams = KafkaStreams(CapacityTopology.build(config, decoder, persistent), properties)
         } catch (e: Throwable) { logs.forEach { runCatching { it.close() } }; throw e }
         val streamsFailed = AtomicBoolean(false); val closing = AtomicBoolean(false); val failure = AtomicReference<Throwable?>(null)

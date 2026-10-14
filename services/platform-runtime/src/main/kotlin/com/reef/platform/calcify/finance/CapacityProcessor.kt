@@ -42,13 +42,20 @@ internal class CapacityProcessorConfig(
      * has been lost; null for the function itself means "not checked" (tests).
      */
     val logHead: ((Int) -> Pair<Long, String>?)? = null,
+    /**
+     * When true, a CAPTURE record (or member) the decoder calls unusable stops the lane instead of being counted and skipped: it is an executed trade the books would
+     * silently lack (a routing fault, a corrupt or foreign record), and the design requires such a fault to block the lane with the source retained, never to erase the
+     * trade. The exception ends the run; the supervisor restarts it and it stops at the same record until an operator resolves it. Bad CONTROL records are operator
+     * mistakes and are only counted. The launcher turns this on; it is off here so the processor's own tests can exercise the counting path.
+     */
+    val failOnBadCapture: Boolean = false,
 ) {
     /** One lane, lane 0. */
     constructor(bindingDigest: String, capacity: CapacityConfig, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance") :
         this(1, { lane -> require(lane == 0) { "single-lane configuration" }; CapacityLaneSpec(bindingDigest, capacity) }, captureTopic, controlTopic, decisionsTopic, applicationId, storeName)
 
-    constructor(plan: CapacityPlan, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", logHead: ((Int) -> Pair<Long, String>?)? = null) :
-        this(plan.lanes, plan::spec, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, logHead)
+    constructor(plan: CapacityPlan, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", logHead: ((Int) -> Pair<Long, String>?)? = null, failOnBadCapture: Boolean = false) :
+        this(plan.lanes, plan::spec, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, logHead, failOnBadCapture)
 
     /** Streams names the store's changelog `<application.id>-<store>-changelog`. */
     val changelogTopic: String get() = "$applicationId-$storeName-changelog"
@@ -101,7 +108,10 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
         for (item in items) {
             when (item) {
                 is CapacityItem.Skip -> Unit
-                is CapacityItem.Bad -> badInputs++
+                is CapacityItem.Bad -> {
+                    badInputs++
+                    check(!(config.failOnBadCapture && role == "CAPTURE")) { "lane $lane: unusable capture record at offset ${metadata.offset()} (digest ${item.digest}); the lane stops with the source retained" }
+                }
                 is CapacityItem.Run -> {
                     val outcome = ledger.decide(item.input)
                     val d = outcome.decision

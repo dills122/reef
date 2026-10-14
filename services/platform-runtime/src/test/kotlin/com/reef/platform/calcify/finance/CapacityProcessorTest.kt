@@ -99,6 +99,22 @@ class CapacityProcessorTest {
         assertEquals(1L, h.processor.refusals); assertEquals(1L, h.processor.badInputs)
     }
 
+    @Test fun anUnusableCaptureRecordStopsTheLaneWhenConfiguredAndWritesNothingWhileABadControlIsOnlyCounted() {
+        val strict = CapacityProcessorConfig(1, { CapacityLaneSpec(binding, capacity) }, "CAPTURE", "CONTROL", "DECISIONS", "capacity-test", failOnBadCapture = true)
+        val context = MockProcessorContext<String, ByteArray>(); val store = CapacityTopology.storeBuilder(strict, persistent = false).withLoggingDisabled().build()
+        store.init(context.getStateStoreContext(), store); context.addStateStore(store)
+        val processor = CapacityProcessor(strict, decoder); processor.init(context)
+        fun send(topic: String, raw: ByteArray) { context.setRecordMetadata(topic, 0, 0); processor.process(Record(ByteArray(0), raw, 0L)) }
+        send("CONTROL", bytes(FinanceInput.Fund(ActionKey("n", "c", "f1"), Authority.OPERATOR, AccountId("acct-0"), usd, 10)))
+        val before = store.all().use { it.asSequence().associate { kv -> kv.key to kv.value.toList() } }
+        send("CONTROL", byteArrayOf(1, 2, 3))                                       // an operator's malformed control: counted, nothing else
+        assertEquals(1L, processor.badInputs)
+        val failure = kotlin.test.assertFailsWith<IllegalStateException> { send("CAPTURE", byteArrayOf(1, 2, 3)) }
+        assertTrue(failure.message!!.contains("the lane stops"), failure.message)
+        assertEquals(before, store.all().use { it.asSequence().associate { kv -> kv.key to kv.value.toList() } }, "the failed record wrote nothing")
+        assertEquals(1, context.forwarded().size, "and forwarded nothing")
+    }
+
     @Test fun aRecordWithSeveralInputsIsDecidedInOrderAndWrittenAsOneBatch() {
         val twin = CapacityInputDecoder { _, _, _, raw -> val a = FinanceWire.fromProto(FinanceInputV1.parseFrom(raw)) as FinanceInput.Fund
             listOf(CapacityItem.Run(a), CapacityItem.Run(a.copy(action = ActionKey("n", "c", a.action.actionId + "-b"), account = AccountId("acct-1")))) }
