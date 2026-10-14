@@ -71,6 +71,10 @@ test('a missing manifest source fails with the path named, not a bare ENOENT', a
 });
 
 test('every path that feeds the build or the harness is checked for untracked files', () => {
-  for (const p of ['services/matching-engine', 'services/platform-runtime/src', 'scripts/dev/db/migrations/boundary', 'scripts/dev/calcify-financial', 'contracts']) assert.ok(BUILD_PATHS.includes(p), p);
+  for (const p of ['services/matching-engine', 'services/platform-runtime', 'scripts/dev/db/migrations/boundary', 'scripts/dev/calcify-financial', 'contracts']) assert.ok(BUILD_PATHS.includes(p), p);
   for (const source of SOURCES) assert.ok(BUILD_PATHS.some(p => source === p || source.startsWith(p + '/')), `${source} is outside the checked paths`);
+});
+
+test('the builder script is part of the manifest it produces', () => {
+  assert.ok(SOURCES.includes('scripts/dev/calcify-financial/finite-o2-build-inputs.mjs'));
 });

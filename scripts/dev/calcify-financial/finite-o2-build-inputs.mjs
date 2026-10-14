@@ -12,6 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const HARNESS = ['finite-o2-proof.mjs', 'finite-o2-engine-adverse.mjs', 'finite-o2-resource-monitor.mjs', 'finite-o2/compose.yml', 'finite-o2/fixture.json', 'finite-o2/redpanda.yaml'].map(f => `scripts/dev/calcify-financial/${f}`);
 export const SOURCES = [
   ...HARNESS,
+  'scripts/dev/calcify-financial/finite-o2-build-inputs.mjs',
   'services/matching-engine/cmd/calcify-finite-probe/main.go',
   'scripts/dev/db/migrations/boundary/0013_calcify_finite_ingress.sql',
   'services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/FiniteRuntime.kt',
@@ -19,7 +20,7 @@ export const SOURCES = [
   'contracts/calcify/finite-binding-v1.hex',
 ];
 
-export const BUILD_PATHS = ['services/matching-engine', 'services/platform-runtime/src', 'services/platform-runtime/build.gradle.kts', 'scripts/dev/db/migrations/boundary', 'scripts/dev/calcify-financial', 'contracts'];
+export const BUILD_PATHS = ['services/matching-engine', 'services/platform-runtime', 'scripts/dev/db/migrations/boundary', 'scripts/dev/calcify-financial', 'contracts'];
 
 const sha = b => createHash('sha256').update(b).digest('hex');
 
