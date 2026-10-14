@@ -23,7 +23,7 @@ internal object CapacityStore {
     private val hex = HexFormat.of()
 
     fun entityKey(e: StateCommitment.Entity) = "e/${e.tag}/${hex.formatHex(e.keyBytes)}"
-    private fun entityValue(e: StateCommitment.Entity) = Canon.bytes { str(ENTITY_VERSION) } + e.valueBytes
+    fun entityValue(e: StateCommitment.Entity) = Canon.bytes { str(ENTITY_VERSION) } + e.valueBytes
 
     data class Meta(val bindingDigest: String, val configDigest: String, val sequence: Long, val chain: String, val controls: Int) {
         fun bytes() = Canon.bytes { str(META_VERSION); str(bindingDigest); str(configDigest); long(sequence); str(chain); int(controls) }
