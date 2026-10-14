@@ -74,6 +74,8 @@ internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val 
     var blockedNanos = 0L; var blockedCount = 0L
     /** The state digest the last recorded decision carried (tests). */
     var lastStateDigest = ""
+    /** The full decision of the last recorded input (the lane test serialises it); null after a refusal. */
+    var lastDecision: Decision? = null
 
     private fun submitBatch(boundary: Long) {
         val batch = LinkedHashMap(pending); pending.clear()
@@ -111,7 +113,7 @@ internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val 
     }
 
     fun decide(input: FinanceInput): ScaleResult {
-        touchedLastDecision = 0; touched.clear()
+        touchedLastDecision = 0; touched.clear(); lastDecision = null
         val digest = input.digest()
         actions[input.action]?.let { prior -> return if (prior.digest == digest) ScaleResult(Disposition.PRIOR_RESULT, false, emptyList()) else ScaleResult(Disposition.ACTION_CONFLICT, false, emptyList()) }
         return when (input) {
@@ -128,9 +130,10 @@ internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val 
         // rootEvery > 1 models a decision that commits to the state only every K decisions (a design change, not O3a): the chain still covers every decision.
         if (asyncCommit && commit && sequence % rootEvery == 0L) submitBatch(sequence)
         val stateDigest = if (asyncCommit) (if (commit) laggedDigest(sequence) else "0".repeat(64)) else if (commit && sequence % rootEvery == 0L) scaleHex(root()) else "0".repeat(64)
-        lastStateDigest = stateDigest
+        lastStateDigest = stateDigest; val priorChain = chain
         val bytes = Canon.bytes { str("calcify-finance-decision-v1"); str(chain); long(sequence); str(stateDigest); str(input.action.namespace); str(input.action.domain); str(input.action.actionId); str(digest); str(disposition.name); int(legs.size); legs.forEach { leg(it) } }
         chain = Canon.sha(bytes)
+        lastDecision = Decision(sequence, input.action, digest, disposition, legs, priorChain, stateDigest, chain)
         // Local invariants and counters in place of the whole-state check (design 5.5).
         check(sumCash.signum() == 0 && sumSecurity.signum() == 0) { "legs do not balance" }
         check(sequence == actions.size.toLong()) { "action count differs from sequence" }
