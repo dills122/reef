@@ -35,6 +35,7 @@ cleanup() {
       destroyed=1
     else
       log "DESTROY FAILED: check 'doctl compute droplet list' and 'doctl compute volume list' (a volume named reef-stream-ack-benchmark-vol may remain) and destroy by hand"
+      exit 1                                                  # a failed teardown must not look like a clean run
     fi
   fi
 }
