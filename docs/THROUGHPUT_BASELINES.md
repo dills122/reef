@@ -1912,6 +1912,18 @@ The c-16 line shows the latency is not the whole story (a 16 vCPU host with a 1.
 
 Interpretation limits: see CAL-FIN-P10 and P11. One droplet per size, single runs except one repeat (six lanes within 1.0 percent); the root-disk check is a 200-write `dd` sample taken once per host. No capacity claim.
 
+## Calcify commitment on the deciding thread versus a second thread, end to end without the coverage agent, CAL-FIN-P14 (October 14, 2026)
+
+Settles the size of the gain behind design section 5.6 (lagged commitment), raised by independent review 1 of 5.6 (the earlier 1.5x to 1.8x came from the S3d stand-in lane, and the only end-to-end pair, CAL-FIN-P4, ran with the JaCoCo agent). `S4EndToEndSpikeTest.wholeChainOnOneMachine`, laptop (load average 5 to 7, not quiet), one lane, projector off, K = 100, 100,000 trades (200,000 inputs), JaCoCo off (`-PresearchTests`), `-XX:+UseParallelGC`, Redpanda and Postgres in Docker; `S4_ASYNC=false` puts the root on the deciding thread, `true` on a second thread; three interleaved pairs.
+
+| Pair | Root on the deciding thread | Root on a second thread |
+| --- | --- | --- |
+| 1 | 13,238 inputs/s (66.9 microseconds per record in `process`) | 18,386 (45.3; 7 waits for the worker) |
+| 2 | 13,244 (66.5) | 18,862 (45.0; 8 waits) |
+| 3 | 14,567 (60.6) | 18,405 (46.0; 3 waits) |
+
+Means 13,683 and 18,551: **a second thread is 1.35x faster end to end** (processor path 64.7 against 45.4 microseconds per record), against 1.5x to 1.8x in the S3d stand-in lane and about 1.3x in the one CAL-FIN-P4 pair. The lane with the root on a second thread is within 8 percent of 20,000 inputs/s on this machine; the same lane with the root on the deciding thread is 32 percent short. Not measured: the undo ring's put, the worker's wait share at higher rates, any restore. Limits: one machine, three pairs, 15 percent spread elsewhere in this ledger; a one-lane, projector-off lane isolates the commitment term and is not the whole chain. No capacity claim.
+
 ## Calcify finance projector: set-based writes in product code, CAL-FIN-P13 (October 14, 2026)
 
 First product-code change from the capacity work: `FinanceProjector.apply` now verifies every record in memory (order, input digest, replay equality, hash link) and writes the batch with one `INSERT ... SELECT FROM unnest(arrays)` statement per table (decisions, positions with net deltas, obligations, attempts) and one set-based update for settled obligations, instead of up to five prepared statements per record. Behaviour is unchanged: the same fence, the same replay check (now one query for all replayed sequences), the same rollback of the whole batch on any failure. Measured with `FinanceProjectorThroughputSpikeTest` (new, research-tagged) on the product class, the laptop's Docker Postgres 16 (load average 5 to 7, not quiet), decisions from the real `FinanceLedger`, 40 bindings of 207 decisions per batch size, the 320-sequence bound of migration 0014 lifted as in the capacity spikes:
