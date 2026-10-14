@@ -55,12 +55,9 @@ internal class FinanceProjectionRunner private constructor(
     private fun tailOnce(): Int {
         var (stored, chain) = projector.checkpoint(bindingDigest) ?: throw FinanceProjectionDiverged("projection checkpoint is missing; open() first")
         var applied = 0
-        while (true) {
-            val fresh = readLog()
-            for (record in fresh) {
-                if (record.first.sequence != nextSequence) throw FinanceProjectionDiverged("decision log is not a contiguous sequence at sequence ${record.first.sequence}, expected $nextSequence")
-                nextSequence++; pending += record
-            }
+        // Records already read are applied BEFORE more are read, so a write that keeps failing holds the reader back instead of letting the backlog grow;
+        // [pending] never holds more than one read plus what a failed write left behind.
+        fun applyPending() {
             // Records at or before the stored progress are already projected; the one at the stored position must be on the stored chain.
             var done = 0
             while (done < pending.size && pending[done].first.sequence <= stored) {
@@ -74,7 +71,15 @@ internal class FinanceProjectionRunner private constructor(
                 stored = chunk.last().first.sequence; chain = chunk.last().first.checksum
                 pending.subList(0, chunk.size).clear()
             }
+        }
+        while (true) {
+            applyPending()
+            val fresh = readLog()
             if (fresh.isEmpty()) break
+            for (record in fresh) {
+                if (record.first.sequence != nextSequence) throw FinanceProjectionDiverged("decision log is not a contiguous sequence at sequence ${record.first.sequence}, expected $nextSequence")
+                nextSequence++; pending += record
+            }
         }
         if (stored > nextSequence - 1) throw FinanceProjectionDiverged("projection is at sequence $stored but the decision log has ${nextSequence - 1} records")
         return applied
