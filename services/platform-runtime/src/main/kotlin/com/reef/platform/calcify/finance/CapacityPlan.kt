@@ -23,6 +23,7 @@ internal class CapacityPlan(
         require(laneInstruments.flatMap { it }.let { it.size == it.toSet().size }) { "an instrument belongs to exactly one lane" }
         require(laneInstruments.flatten().none { it == cashAsset.value }) { "an instrument cannot be the cash asset" }
         require(sequenceBound in FinanceProjector.FINITE_SEQUENCE_BOUND..FinanceProjector.MAX_SEQUENCE_BOUND) { "sequence bound out of range" }
+        capacity(0)      // the budgets are validated by the ledger configuration now, not at first use
     }
 
     val lanes: Int get() = laneInstruments.size
