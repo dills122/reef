@@ -1911,3 +1911,15 @@ Against the `c-32` on its 10 ms disk (P10): +5 to +11 percent at 4 and 6 lanes, 
 The c-16 line shows the latency is not the whole story (a 16 vCPU host with a 1.5 ms disk delivers less than a 32 vCPU host with a 7 to 10 ms one, because it has half the cores). What it does show is that the two 32 vCPU hosts stay at 92 to 95 percent of the need whatever the disk, within noise of each other, while free storage gives 135 to 155 percent. The remaining open candidates: a disk with synchronous writes well under 1 ms (local NVMe on another provider, or a block-storage volume, neither tried), and less synchronous write work per decision (broker and Postgres settings that were not effective on the slow g5 disk, CAL-FIN-P8, were not retried here).
 
 Interpretation limits: see CAL-FIN-P10 and P11. One droplet per size, single runs except one repeat (six lanes within 1.0 percent); the root-disk check is a 200-write `dd` sample taken once per host. No capacity claim.
+
+## Calcify commitment on the deciding thread versus a second thread, end to end without the coverage agent, CAL-FIN-P14 (October 14, 2026)
+
+Settles the size of the gain behind design section 5.6 (lagged commitment), raised by independent review 1 of 5.6 (the earlier 1.5x to 1.8x came from the S3d stand-in lane, and the only end-to-end pair, CAL-FIN-P4, ran with the JaCoCo agent). `S4EndToEndSpikeTest.wholeChainOnOneMachine`, laptop (load average 5 to 7, not quiet), one lane, projector off, K = 100, 100,000 trades (200,000 inputs), JaCoCo off (`-PresearchTests`), `-XX:+UseParallelGC`, Redpanda and Postgres in Docker; `S4_ASYNC=false` puts the root on the deciding thread, `true` on a second thread; three interleaved pairs.
+
+| Pair | Root on the deciding thread | Root on a second thread |
+| --- | --- | --- |
+| 1 | 13,238 inputs/s (66.9 microseconds per record in `process`) | 18,386 (45.3; 7 waits for the worker) |
+| 2 | 13,244 (66.5) | 18,862 (45.0; 8 waits) |
+| 3 | 14,567 (60.6) | 18,405 (46.0; 3 waits) |
+
+Means 13,683 and 18,551: **a second thread is 1.35x faster end to end** (processor path 64.7 against 45.4 microseconds per record), against 1.5x to 1.8x in the S3d stand-in lane and about 1.3x in the one CAL-FIN-P4 pair. The lane with the root on a second thread is within 8 percent of 20,000 inputs/s on this machine; the same lane with the root on the deciding thread is 32 percent short. Not measured: the undo ring's put, the worker's wait share at higher rates, any restore. Limits: one machine, three pairs, 15 percent spread elsewhere in this ledger; a one-lane, projector-off lane isolates the commitment term and is not the whole chain. No capacity claim.
