@@ -145,6 +145,13 @@ internal class FinanceProcessor(private val config: FinanceProcessorConfig) : Pr
 internal object FinanceTopology {
     const val SESSION_TIMEOUT_MS = 6_000
     const val HEARTBEAT_INTERVAL_MS = 1_000
+    /**
+     * Producer batching for the changelog, decision and transaction traffic: every store put is one changelog record, and unbatched they leave in many tiny requests.
+     * Measured (CAL-FIN-P2, stand-in lane, ten 300-byte puts per input): 9.3k to 11.8k inputs/s at the Kafka defaults, 23.8k to 35.0k at 256 KiB and 20 ms.
+     * Cost: up to 20 ms added to the time before a decision is visible (the 100 ms commit interval already dominates it).
+     */
+    const val PRODUCER_BATCH_BYTES = 262_144
+    const val PRODUCER_LINGER_MS = 20
 
     /**
      * Spec section 8 pinned Streams configuration. The processor's all-or-nothing-per-record claim holds only under exactly-once, so
@@ -157,6 +164,7 @@ internal object FinanceTopology {
         put("replication.factor", 1)
         // Owner decision 2026-10-13: a crashed member is evicted after 6 s, not the 45 s default (measured SIGKILL restart: 44.1 s default, 6.1 s at 6,000).
         put("consumer.session.timeout.ms", SESSION_TIMEOUT_MS); put("consumer.heartbeat.interval.ms", HEARTBEAT_INTERVAL_MS)
+        put("producer.batch.size", PRODUCER_BATCH_BYTES); put("producer.linger.ms", PRODUCER_LINGER_MS)
     }
 
     /**
@@ -171,6 +179,8 @@ internal object FinanceTopology {
         val pinned = mapOf("processing.guarantee" to "exactly_once_v2", "num.stream.threads" to "1", "num.standby.replicas" to "0", "auto.offset.reset" to "earliest")
         for ((k, v) in pinned) require(props[k]?.toString() == v) { "finance Streams property $k must be $v" }
         require(props["commit.interval.ms"] != null && props["max.task.idle.ms"] != null) { "commit.interval.ms and max.task.idle.ms must be pinned" }
+        require(props["producer.batch.size"]?.toString()?.toIntOrNull() == PRODUCER_BATCH_BYTES) { "producer.batch.size must be pinned at $PRODUCER_BATCH_BYTES" }
+        require(props["producer.linger.ms"]?.toString()?.toIntOrNull() == PRODUCER_LINGER_MS) { "producer.linger.ms must be pinned at $PRODUCER_LINGER_MS" }
     }
 
     fun storeBuilder(config: FinanceProcessorConfig, persistent: Boolean): StoreBuilder<KeyValueStore<String, ByteArray>> =
