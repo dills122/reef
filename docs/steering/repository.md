@@ -34,6 +34,8 @@ For product and architecture priorities that should guide every change, read [`r
 - keep `make` targets as thin wrappers around versioned scripts in `scripts/`
 - prefer grouped local CLIs such as `scripts/dev/reef-dev.mjs` for stack, stress, and local link profiles instead of adding one-off wrapper scripts
 - avoid adding new shell-heavy automation unless there is a clear platform/runtime reason
+- run `node scripts/dev/script-surface-check.mjs --inventory` to distinguish runnable/imported scripts, operational commands, tests and test/evidence-only candidates; historical mentions are not operational ownership
+- before adding an entrypoint, extend an existing grouped command where semantics fit; retire obsolete command aliases explicitly and preserve current test/fixture consumers
 - when scripts call external tools (for example Docker/Go), keep argument handling explicit and cross-platform friendly
 - performance scripts should report attempted, durably accepted, processed, and projected throughput separately when those stages apply
 - stress/replay scripts should preserve comparable evidence artifacts across runs

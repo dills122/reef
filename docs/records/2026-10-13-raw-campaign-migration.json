@@ -1,0 +1,2357 @@
+{
+  "schema_version": 1,
+  "migration_date": "2026-10-13",
+  "source_repository": "https://github.com/dills122/reef",
+  "source_commit": "150c6d6f20fd53341a29eee5d8ee1a79a98fce1c",
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "a1050bc104ea0b701f436c36f09b1ef5561d9b91",
+  "archive_merge_commit": "94da685a33d9249fc11a71a25944e9575b026184",
+  "archive_pr": "https://github.com/dills122/reef-records/pull/13",
+  "selection_policy": "Exact tracked evidence from three closed campaign directories at master 150c6d6f2. Preserve every raw success/failure/correction and provenance companion. Phase2 fixture, SHA256SUMS and local ignore/attributes copied but retained in Reef. Current Phase2 README retained: earlier immutable revision already exists in Records; current source context linked from import note. No active finite-P3 or financial harness/source, live state, ignored artifacts or Claude work selected.",
+  "verification": {
+    "archive_commit": "a1050bc104ea0b701f436c36f09b1ef5561d9b91",
+    "remote": "https://github.com/dills122/reef-records.git",
+    "verification": "Fresh bare clone fetched from remote; every imported blob byte count and SHA256 match manifest/source",
+    "files": 296,
+    "bytes": 11794694
+  },
+  "redirect_paths": [],
+  "files": [
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/baseline-hashes.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/baseline-hashes.json",
+      "bytes": 748,
+      "sha256": "310fa9794224bb19231a2c64ce8f2d2fd2e154592ac7bc9ce68043134acf97eb",
+      "source_blob_oid": "50eb706b03eee6b36aac173662b428f1a2a0aa62",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/boundary-fsync-diagnostic.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/boundary-fsync-diagnostic.log",
+      "bytes": 2140,
+      "sha256": "694c3cbf1e63ef1d03685a5dfb3440ca1f538989233cda38c0d5ae51935a07bd",
+      "source_blob_oid": "001ffc3b56011d55050c94e0a4b509f1df79dd2c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/build-main.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/build-main.log",
+      "bytes": 457,
+      "sha256": "a0366b09e427c51a175c63bc91db23b4d88dac720eb521643b86d2dead8d8f13",
+      "source_blob_oid": "f8f8199f155ea0e709a3761c1e13cf4ac4f8bc6b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/build-observers-bytes.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/build-observers-bytes.log",
+      "bytes": 589,
+      "sha256": "2454f8286a6655d0b3444e74fe183031c935d842af3e78803d6a52772b0ff563",
+      "source_blob_oid": "50102a56013086be4ec8e3e4eaee18e41e13ddee",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/build-observers-v2.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/build-observers-v2.log",
+      "bytes": 1153,
+      "sha256": "8faba9e016ce1632f7a1aeef3f4f29b8167f8cc8c44ffccead5d6c87d04d80ed",
+      "source_blob_oid": "86d3a9b9ebde1a7ab563ff585e10d9438494ad8a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/build-observers.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/build-observers.log",
+      "bytes": 1153,
+      "sha256": "fd365c977f2bb270464d66a74eb6d40e6138b4922da79ba893e4f8f9ce52625a",
+      "source_blob_oid": "489647addbc4be7fe6b453f09c531afaf1193236",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/campaign-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/campaign-policy.json",
+      "bytes": 1885,
+      "sha256": "0504b16f52fe91ef17d85f70dab6aa2689ba33f4124cf0d8f75eb0519184653c",
+      "source_blob_oid": "2ec8a02af95af4922cc527f86c32322d16277da1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/checksum/current-full-fact-350.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/checksum/current-full-fact-350.json",
+      "bytes": 658463,
+      "sha256": "8771e3b41726ada36200d53306ccb0a45b40c10f5cff2fbed9f2b37371f3d164",
+      "source_blob_oid": "dfdc41f18dfbb24b5700354a029224fc833aa598",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-ab.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-ab.log",
+      "bytes": 1261,
+      "sha256": "72990eeb4e3834f2f8e6c7f002b2f60ce9ce0e034588c0f995e44126c1fbd0ff",
+      "source_blob_oid": "8c040d0554c5eaa819784265f1f27494cc5a7d10",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-before.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-before.log",
+      "bytes": 721,
+      "sha256": "e4b8e64b9dea01ba8989362046e031796fe58f4abd3b5ac937ad8844e74f6c03",
+      "source_blob_oid": "c1f114aeceaf805a0d28c2c86ceb705d37fe71ae",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-green-final.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-green-final.log",
+      "bytes": 84,
+      "sha256": "32ac4ef255ea0d7c8fafb0dc5ad7138ac150ed8a9a6da5ea17eabe1c6421211e",
+      "source_blob_oid": "c2ce3227af98c2ec0ec86fd30fac147bea509a4a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-paired.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-paired.log",
+      "bytes": 1227,
+      "sha256": "162776c18e099f77e118160a126347c3ba61adf7d32499193dfa994eeb8d8054",
+      "source_blob_oid": "770e633ea67b0cc67a70c34cf1da35d928205c73",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-red.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum200-red.log",
+      "bytes": 242,
+      "sha256": "afb00ee56cbf4e479b8b8251188851df3cb3c481cbff8a547802544d6b9458e7",
+      "source_blob_oid": "91f536d1f9ce6a3aacb853c49b80628d27e1e728",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum350-captured.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/checksum/reef-checksum350-captured.log",
+      "bytes": 719,
+      "sha256": "3a3a0c29880369fb6bca31e5690fad93f13312f214626e4df372d99ff3af1138",
+      "source_blob_oid": "3dd45e0313b77808e928ec016874053d3c5224a7",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/closure.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/closure.json",
+      "bytes": 808,
+      "sha256": "36e5a12411e1f97d254d6b50c629d0090d94e7aa155b309a05115d5015549a5e",
+      "source_blob_oid": "ebf754ea8a7bb9d193e348c459ac6b2180912be1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/control-60s.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/control-60s.json",
+      "bytes": 3609,
+      "sha256": "01ded71901f55b24b1cce977df87ab88a62064fc110c7a2176f17480d439684a",
+      "source_blob_oid": "92f2bbc748191127b9bab51b8e4c30bd9a333b8e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/control-60s.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/control-60s.log",
+      "bytes": 6424,
+      "sha256": "442653463ad7b5a260c1e87844cb8995d0da9a1b0f3c0b7c7bd574d78a5a666a",
+      "source_blob_oid": "7ec773497a124a10bce88e751b8b5079c01775d3",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/control-containers.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/control-containers.json",
+      "bytes": 125921,
+      "sha256": "fbb40d8fc7d9c9b7147290630457d150c36e01d771d86d4a41ebd3ff737219e5",
+      "source_blob_oid": "4c0e398354d855166a0b4061fe6ec693f99a04e4",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/control-db-pools.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/control-db-pools.json",
+      "bytes": 2546,
+      "sha256": "424364895054de0257c88196ee322b76cdebe4489c3207de947cd8583b7df577",
+      "source_blob_oid": "5adcd0d41b5cca2bb6ed7c249e9d3c7095598621",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/control-full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/control-full-facts.log",
+      "bytes": 801,
+      "sha256": "1b4d9cc60b1c811442baa8df501fd6d0306b9c42a92f43218303a572faf30090",
+      "source_blob_oid": "d2528794fba1ee26dcb9a735a1a53a6b98a8ff09",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/control-hot-path.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/control-hot-path.json",
+      "bytes": 1873,
+      "sha256": "d2dcf481bde5393c1625e5c69282da5516be5ab47b7c766fbf2feb71744b04f5",
+      "source_blob_oid": "b78d6686e3ba378ebcd450cc5139c727d0bf5ed8",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/control-resource-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/control-resource-middle.txt",
+      "bytes": 985,
+      "sha256": "10dfd000aa5deece0dcdda724f91ed87d48ba1176f7e0b43cd42e47d28caa932",
+      "source_blob_oid": "90f3d2ab2da300d1a1c6e1b8fea22c46f49edd96",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/control-resource-start.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/control-resource-start.txt",
+      "bytes": 983,
+      "sha256": "6c82f6db812aee458c2b978c724a5aeba5d8b2aa534c7d17f54c94477c7f6fee",
+      "source_blob_oid": "0d6db19b3f815e695d73e8e721aec8c366906257",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/corrections.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/corrections.json",
+      "bytes": 1473,
+      "sha256": "08fbc6d4c043da16af5598891e281a6595497ace6e884ccff213b786e51f420e",
+      "source_blob_oid": "e80027bc4e66c553d3d969f2d7eb78bc107b571d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/delivery-content-check.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/delivery-content-check.json",
+      "bytes": 186,
+      "sha256": "e0eac6ef85ddf47901c2baf7a57729eefc4711dca3017b30c874e7d916df30bd",
+      "source_blob_oid": "9112af7c565ab201271faf0d81730165cea1660a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/frozen-policy.json",
+      "bytes": 756,
+      "sha256": "1d434d0ed6c2374d2ec37f69f226a03f801d2513e72eb999beec4aa6bc0c3f62",
+      "source_blob_oid": "f2b9a4f3ffa26b635feee819e5ee3177e3e578e2",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/full-facts.log",
+      "bytes": 834,
+      "sha256": "9f4c44f0f118d9cb6bff9bd577374dfc77ae83f525775b3021edfa3bed394d62",
+      "source_blob_oid": "332fe4a57a7afdd4daad0aebad175bc0b735107e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/load.json",
+      "bytes": 4397,
+      "sha256": "635c24d3df0ac45ae7b4e9e69b21eb6e9ef59b030f93e8d7accfe2048cf4c6fd",
+      "source_blob_oid": "b2995058be51a894e6f26cac04a0fd1c4c0032f9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/load.log",
+      "bytes": 6993,
+      "sha256": "3fc23b1510b89d0ff67366649faeeb69b1c2ebadc67553f206dd7eff26c4aaa9",
+      "source_blob_oid": "d1496ba9a67c7bd9fa707dbd662302a0546e8d8b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/phase1-accounting.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/phase1-accounting.json",
+      "bytes": 684,
+      "sha256": "1ec342e9185307bebefb78a2f364440773880007a7f192bf1b2a2ee04c0c0d1c",
+      "source_blob_oid": "d305034de5ebab5b2156426597ec245912a1c51f",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/phase1-accounting.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/phase1-accounting.log",
+      "bytes": 1402,
+      "sha256": "3c8bf6b0de28732679048defff824d83707b0474905f41ca1f33b67e287e2091",
+      "source_blob_oid": "da0b3fab44b01c145c9fd2f256243812025ab1c0",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/resolved-count.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/resolved-count.log",
+      "bytes": 8959,
+      "sha256": "f13699d794f52ab199338349f2e566711a1b807e380a0389fa2eb9a4297e7242",
+      "source_blob_oid": "28175d0e8b0c9313054e6a2461309f813394f6f3",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-60s/results.json",
+      "bytes": 25641,
+      "sha256": "a8e0b06faaa656206d413432464574967cf024f4acb332d31ac4e6dd0e89abf2",
+      "source_blob_oid": "775f7041dae01a837090d14639ced44485ede4b8",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-hot-path.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-hot-path.json",
+      "bytes": 1987,
+      "sha256": "be7194c1a0f68b16c7fb9a2c351a49d097e1febfd93ae7f3436a5aed89248bfb",
+      "source_blob_oid": "c226b85b62511500a57510b2c03f15fc435f32cf",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-matching-middle.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-matching-middle.json",
+      "bytes": 1667,
+      "sha256": "71dba9ca3db7ada40ab6d2fdf9f4dd45745a26d60ba317527a19b7d8ce681e83",
+      "source_blob_oid": "60bf423bec7863f46ba5a287aaf969f5c92994f9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-resource-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-resource-middle.txt",
+      "bytes": 1063,
+      "sha256": "8fd2b4c62d0cdaf55e252cd5cac00df8a6d104be85f39e6eab648b9971f52b30",
+      "source_blob_oid": "1a0c2a5e92d77d11a6cdf9799cbde22217116258",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-runner.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-runner.log",
+      "bytes": 1465,
+      "sha256": "377ff153d9e723f6ec0c6380e11575ff61376cf88e334f5d4ef23b075e7905ba",
+      "source_blob_oid": "9dad8dd43f29f56266df1b3bfc0785a94be407a7",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-topic-configs.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/h384b450-topic-configs.txt",
+      "bytes": 10894,
+      "sha256": "3e410bfb93563832015696a360f56520b1605bfc5719c9789490944039eeeb2d",
+      "source_blob_oid": "0b68c585d14290d64131a4d13eb80e632a9c251f",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/http128-60s.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/http128-60s.json",
+      "bytes": 3832,
+      "sha256": "350ef4eb1255417ff94ac27ce490bfe091a97fa51d7ce8aaad2361e9654aeb2a",
+      "source_blob_oid": "b73429247f40f93da6a4a51925391e14be928511",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/http128-60s.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/http128-60s.log",
+      "bytes": 6688,
+      "sha256": "a69d2e0928d6a2eb05fd21e1d033ff354be4dcc0626dd242cc96e8adc7de3318",
+      "source_blob_oid": "a6c093e1cafd56a5b2859bf47c4a2b6e1ad485c2",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/http128-api-container.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/http128-api-container.json",
+      "bytes": 25667,
+      "sha256": "397951399203bc121c0196aca228db2868fba8c3c980df24c5e73566ad3450f8",
+      "source_blob_oid": "ec6155d1bba3e912857269e9e8142a29a4675bd7",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/http128-db-pools.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/http128-db-pools.json",
+      "bytes": 2546,
+      "sha256": "798420154163dcb22cba3f491762405d22dd97e25f3acd8462bfc88c3d29e5de",
+      "source_blob_oid": "0e2ac7d4540adbc14f6fd1e524178f640d82d40f",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/http128-full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/http128-full-facts.log",
+      "bytes": 801,
+      "sha256": "f41c24548ec16dc508074e4fbe241f9edc2744788539bcce506898cdcb05d0b6",
+      "source_blob_oid": "52380838e39417eeaa3cb0777f900b24579ef435",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/http128-hot-path.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/http128-hot-path.json",
+      "bytes": 1874,
+      "sha256": "d34fde3bca74be72d19066f462aee5d1fdedf4b4cd44ac37da2a32bf31a51adf",
+      "source_blob_oid": "4b5aa4a4cefe8133339b5e9203c7084f1d23b5b4",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/http128-resource-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/http128-resource-middle.txt",
+      "bytes": 980,
+      "sha256": "51ed5d403a60741524a33086a736b018122f5f1c0cbe80e9869522ba108b5da8",
+      "source_blob_oid": "44d93a090f4b26a0aa5d3f3c68bdbd535e1a0df0",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/image-canonical-matcher.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/image-canonical-matcher.log",
+      "bytes": 970,
+      "sha256": "9016ea39b95adaefa73e2b42ced4c14bf2c67cea715a86f73ec779e81e05d5f8",
+      "source_blob_oid": "991e89d239dc51924a226c69ade84f608824b5ff",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/image-master-matching.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/image-master-matching.log",
+      "bytes": 975,
+      "sha256": "673d93367392eb03815f1a5321809ffad2610d243d8068aad5d3e2b0bf76f99c",
+      "source_blob_oid": "ff8276627550605aec0d47958095bcaf7b793432",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/image-master-runtime.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/image-master-runtime.log",
+      "bytes": 933,
+      "sha256": "a5490b1754cd4c433426872feb53a1b42a537758b9ec344ce495fb9e7510eb98",
+      "source_blob_oid": "d5a7d6371c97c79b6b9b8cf410d5621da117ea87",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/image-matching.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/image-matching.log",
+      "bytes": 888,
+      "sha256": "fae45f1f160234418eb119b1ad7aca3023dab25fb596b7647d2085afa9c86916",
+      "source_blob_oid": "1d3f18d61756fbee04cb085dd0f6857183aa421e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/image-poll1000.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/image-poll1000.log",
+      "bytes": 973,
+      "sha256": "7974f5b66c2d5a4314465bc625c2146e89a1305451ee92d64b2fb6ebf2995e7d",
+      "source_blob_oid": "77c89d082161b4aeeb05b315b45ef4528f087213",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/image-runtime-staging.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/image-runtime-staging.log",
+      "bytes": 72,
+      "sha256": "d5069ef6d95398c29d81d7f351a1e04500631bd2be64d0c4f0bfe775039d9e47",
+      "source_blob_oid": "420333ed6efa165e7463aaa18a5cc7887f028e97",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/image-runtime.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/image-runtime.log",
+      "bytes": 1883,
+      "sha256": "541e9b06f5b718bbfdb9895a034434049bc61aee2f839d1cd7a28c77b3eb3c8c",
+      "source_blob_oid": "7b6db715f983a3c15b4dc68edc1661afff25cdd2",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/images.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/images.txt",
+      "bytes": 233,
+      "sha256": "af76caa1460232c28a3618a7ce0e4db3b96497140e7580daa6e32f76849cedaa",
+      "source_blob_oid": "afae6fce9409197007e4801ecc1512388ca3f6e0",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/latest-master-integration.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/latest-master-integration.json",
+      "bytes": 656,
+      "sha256": "7b0e332b5fee1fa70689dc9fa5b7ba619f8c2abcd9b247673bf8bb525dd217a7",
+      "source_blob_oid": "5b2970a6534d51475b219975a05ea564fcbdf4b9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/latest-master-matcher-race.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/latest-master-matcher-race.log",
+      "bytes": 1043,
+      "sha256": "6deba3938a821f5d854880058b23ca5960120c0cc340aa0e3e73bf8096c97b7e",
+      "source_blob_oid": "e2b2ccf7b185f553a3421cec5f258a689e2dd3f9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/latest-master-platform-check.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/latest-master-platform-check.log",
+      "bytes": 1161,
+      "sha256": "9688eb0d30e9e339b29f7fd2ffddc2582ba316c8389f28880e2e1fdf2ca102ad",
+      "source_blob_oid": "8c5408580b27e3835d5c264a36d7da5514a2ddfe",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/loader-deadline-green.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/loader-deadline-green.log",
+      "bytes": 73,
+      "sha256": "e273308a6b2554f53a630ad2608f8d8e439da0c0e731835c23d4ab87348924e2",
+      "source_blob_oid": "94ea6d999bc21d148903b81fe1d43a4a8cabf9eb",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/loader-deadline-red.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/loader-deadline-red.log",
+      "bytes": 367,
+      "sha256": "33b30882f9f2b0846f6dca809ce399dd9069829b409c0e96f9035fbbb3148c1a",
+      "source_blob_oid": "1f8f2677e4109a475b13183fe7167b208121fcc2",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/loader-race.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/loader-race.log",
+      "bytes": 73,
+      "sha256": "530a3d99734234079bafc9e380821688c913a36270cdfc22b8c912baf31d2078",
+      "source_blob_oid": "3601fbc9404f59edc2daba5b6501aa3ebdd75cf5",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/matcher-race.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/matcher-race.log",
+      "bytes": 1049,
+      "sha256": "12c56134ebe809e3f709f740e7f1bfb6d016c16387c4e9b59eee993e2d5abd51",
+      "source_blob_oid": "17f5d5aeae73392c03b58ec349f9e130e1fd2a78",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/owned-topic-cleanup.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/owned-topic-cleanup.log",
+      "bytes": 23311,
+      "sha256": "cd781c6a6be68a53f7233ee12e0cfd73c7c477216279e4b64777a450265434b3",
+      "source_blob_oid": "9b5abef8a5a094e92e3650f90e21e21fd69200cf",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/platform-check.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/platform-check.log",
+      "bytes": 684,
+      "sha256": "3b763c33c4814d978e14540e027192f0b1e3adc9c3a8b8370afce318a060ff23",
+      "source_blob_oid": "b949272645795b6c18717be09da17e26c1cefa5b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll-config-green-build.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll-config-green-build.log",
+      "bytes": 639,
+      "sha256": "bcfd5a81c5f5c71e9eff13cf2bb7c516fe5ec81aec0e8e7b4fb60ae654401280",
+      "source_blob_oid": "7117f2f6096bb109c7254dc61e4ee443ebb1229b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll-config-red.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll-config-red.log",
+      "bytes": 1161,
+      "sha256": "e7d128e8fac0fd9e5f66666db70d97ab37046cd8649dc7a6fa34b96c54607c89",
+      "source_blob_oid": "b071fce48067f37f97779eeccdd31673d6a28dd4",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/frozen-policy.json",
+      "bytes": 731,
+      "sha256": "3b63126db73ca1025832a501ff187b067b730e0a77f4bf94d123027b206c8cb1",
+      "source_blob_oid": "18dc1f8ec059aab4bb44febd369aaed49148ee5e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/full-facts.log",
+      "bytes": 803,
+      "sha256": "ac16416ef9642755bcd677a5710fa11dbc6c80a33d39abe858b145647ef9a83f",
+      "source_blob_oid": "063b9505271190cc40800b9d30ab7f591561e10e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/load.json",
+      "bytes": 3840,
+      "sha256": "11f05f8bf53b43a8b676452d6526f44ea7346f033c33bc541055f15a52642023",
+      "source_blob_oid": "b1ef038e089a657c74ad247131077bac65742271",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/load.log",
+      "bytes": 6700,
+      "sha256": "709db9d7fa1418f2a7adeb99107601ad852da50f14ac9da73bc6a586105d0795",
+      "source_blob_oid": "4cf1ad80f071d3283cc8e961e785e9bbf09792ce",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/phase1-accounting.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/phase1-accounting.json",
+      "bytes": 695,
+      "sha256": "44b24a7a456ff4f5f983c31c4e9c97dd75769dcd4de57f60c08ba4155bb8d2a3",
+      "source_blob_oid": "ed523d54c0f3bcb69ac5be084cd889d826aa1f0c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/phase1-accounting.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/phase1-accounting.log",
+      "bytes": 695,
+      "sha256": "44b24a7a456ff4f5f983c31c4e9c97dd75769dcd4de57f60c08ba4155bb8d2a3",
+      "source_blob_oid": "ed523d54c0f3bcb69ac5be084cd889d826aa1f0c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/resolved-count.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/resolved-count.log",
+      "bytes": 10101,
+      "sha256": "f3404b4d7d524aa3ab160fa205ae3902d2c96ce4b3cfd3c5566c11c20280e481",
+      "source_blob_oid": "b0615e0229e0926712ec4209840b9a1e2edbb8eb",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-60s/results.json",
+      "bytes": 27035,
+      "sha256": "a23e664ad769217f79a45ce8e57094cd98a575e07f927e5795aadf5242867678",
+      "source_blob_oid": "f924ed82587bfe9b403d1997ed93e13af9816bc4",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-db-pools.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-db-pools.json",
+      "bytes": 2548,
+      "sha256": "d428bc9b8c7bedd7c2f4aa104b11126db2dbf4ff7f65b478cf306047eacdf40a",
+      "source_blob_oid": "b6dd9dc1ff9c1555c02c67d31459fcb074931843",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-hot-path.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-hot-path.json",
+      "bytes": 1879,
+      "sha256": "6b9f54f6da0e9d2a0ade8873fe00b6a74adb17e74a8d8739086161f56371d6c9",
+      "source_blob_oid": "176a4cd68d00d3ecc87b043445a17b79b9b1795e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-resource-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-resource-middle.txt",
+      "bytes": 971,
+      "sha256": "4684e6d77f05fd4167d23ca90f5eb841850f9e2a61e0624909e02e51a97beaa4",
+      "source_blob_oid": "c1c4395046a501a4d2e1e705866cf1be0190d986",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-runner.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/poll1000-runner.log",
+      "bytes": 1456,
+      "sha256": "264f7f7af59710624f7e72263618addabed85e19ca45d7edbeb22b797aece070",
+      "source_blob_oid": "2eb92953449b2034beb4ebad3817b57f7a7d4d31",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/frozen-policy.json",
+      "bytes": 915,
+      "sha256": "903fe5e80ccd44e9741f8513f85183b9e4716f57204df0b6ff5067a64d8b64e0",
+      "source_blob_oid": "406a556a7e2b6f979e53aa3b4d08c6afc9a2dc71",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/full-facts.log",
+      "bytes": 1013,
+      "sha256": "324afaab43c561a3ac8ee01a42a234441a41e6d67711a5abcf5ff4326c87cc78",
+      "source_blob_oid": "019b49f7fc2238cfbabcc8d85f10fc5d3e8e34d3",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/load.json",
+      "bytes": 16262,
+      "sha256": "952926b55746b534a48b6bc0c29d3a981cb8692d810edd436e98b0b95f9ded12",
+      "source_blob_oid": "7d0cdab86c25f5e7a1672784c57ce60a451fb193",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/load.log",
+      "bytes": 30534,
+      "sha256": "ed04531459cc1fc4e656de8c609af5d993ee2c4b893c2625b1b765c468eeeb84",
+      "source_blob_oid": "c59164075fe3ba992a95ff9e5758b713c90b277f",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/phase1-accounting.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/phase1-accounting.json",
+      "bytes": 690,
+      "sha256": "28802dd9924cf21ef1b17406de672e227c675719748c645e4a2913e2c3ed3104",
+      "source_blob_oid": "f322bbf6cce9a76e5dcf5ad53aa7a8793ad56b90",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/phase1-accounting.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/phase1-accounting.log",
+      "bytes": 690,
+      "sha256": "28802dd9924cf21ef1b17406de672e227c675719748c645e4a2913e2c3ed3104",
+      "source_blob_oid": "f322bbf6cce9a76e5dcf5ad53aa7a8793ad56b90",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/resolved-count.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/resolved-count.log",
+      "bytes": 40314,
+      "sha256": "124a936bff12156b94d71fdb6697a51bc6667700bbf096f2700f65fd7186d6f0",
+      "source_blob_oid": "ed933e0b3052f0a4cab31b888dde3087fa68d169",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-300s/results.json",
+      "bytes": 94593,
+      "sha256": "4da4ec2617a80c2412a779c22f52704482b0012f1d16dac11704f4098140cc74",
+      "source_blob_oid": "c33160deb6a540fd166b8e1e2e211bb3349b287e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-containers.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-containers.json",
+      "bytes": 19163,
+      "sha256": "cf4767e4311c8b5d811b6f133fde94bf753ec8d6e836a0f45da3d02f3b685f4b",
+      "source_blob_oid": "b58e34527ca95e5ad115286752e88317caed2e7b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-db-pools.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-db-pools.json",
+      "bytes": 2548,
+      "sha256": "dd79e6f3bee873b69278060a392c2d88c941fa633b598fbc78412973deea0509",
+      "source_blob_oid": "8e9a74d24fc19ce28685a6620c3e56a9a757ee7c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-freeze.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-freeze.json",
+      "bytes": 163456,
+      "sha256": "35e4617c0d0104047484cc666444f0330e105ec2b4bf3efecc7564456daaf765",
+      "source_blob_oid": "d2b779b7aa3c9c27b8a24193afbe2a1cd35cd104",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-hot-path.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-hot-path.json",
+      "bytes": 2010,
+      "sha256": "382cb794ffc132258aee6c24954afa6a5f8dfa44873912eb7990c8c9dcf30ac2",
+      "source_blob_oid": "7ccb49e2d93f6a27a01002e612065f6d40825ebd",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-pg-durability.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-pg-durability.txt",
+      "bytes": 116,
+      "sha256": "9cc9ac9ed26546fee393f6eafc37ceb1747284ef9ca0bdec64de6a14d053e25e",
+      "source_blob_oid": "4e3ac7879eadcb7a65f02ecbd7341d6114f3b6ae",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-pg-waits-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-pg-waits-middle.txt",
+      "bytes": 76,
+      "sha256": "ecc7e1ac75f63d3c3b473edbcfef49b503ca232c06668a3ae37f2930519e16a7",
+      "source_blob_oid": "b06a61eeb2782038eb42315a5a8757eca3202d07",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-resource-early.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-resource-early.txt",
+      "bytes": 465,
+      "sha256": "9012a5f67d8d334d88001acc5b5878334bb6c4b71aa529c3fe113fd809469723",
+      "source_blob_oid": "e30adb813666c41990a45771b25b1c0e6631c121",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-runner.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-runner.log",
+      "bytes": 1448,
+      "sha256": "19faf116ddd2db321b86468530d6c9e151011a7a42d9f3e20ebbb7515b390213",
+      "source_blob_oid": "c79bdecf117c23d45e0fb820616979b345814327",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q1-topic-configs.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q1-topic-configs.txt",
+      "bytes": 10984,
+      "sha256": "825286dcfec3c8406684f17216a1d8643aa6fc508eaf6c11c5b0c76fd3cd05ec",
+      "source_blob_oid": "91af67803370d7482679868f702a445697de6d20",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/frozen-policy.json",
+      "bytes": 1002,
+      "sha256": "a95e05fe0babedeb66a6ad0a5d66d6c8aa75dcf145ff36f4c69c995cd8f401fa",
+      "source_blob_oid": "8bb0cc787ea206090ffe5f688a36023a69eac8bc",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/full-facts.log",
+      "bytes": 1094,
+      "sha256": "b7c1b70d0c9721d1d4347faf3c0dad624526771fa6939ca301a9770ed8856b75",
+      "source_blob_oid": "3b2c52672eba9d2cc3a13cfa59769c6865683037",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/load.json",
+      "bytes": 16308,
+      "sha256": "a779ad85e20332f0d3ea40c0c946515a94633f7354d8e666138a130e57bbf2fe",
+      "source_blob_oid": "c2a27729211d6a6ebaf36c3acbb477fcb5d69733",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/load.log",
+      "bytes": 30620,
+      "sha256": "ef1d3c0c40ce06c515a2115bd539d06fa2989f40c0286b0dacff60f29f7534ef",
+      "source_blob_oid": "4c886f1e728e2fe894973648642a99ad9c8da3d1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/phase1-accounting.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/phase1-accounting.json",
+      "bytes": 696,
+      "sha256": "9a3fc24e0ee6214ef0532e46964fca728b59ace0ae8a4f8bbea026208b2408c6",
+      "source_blob_oid": "9c920a34a6eba867cc4f00acc0003a97f8b374e4",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/phase1-accounting.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/phase1-accounting.log",
+      "bytes": 696,
+      "sha256": "9a3fc24e0ee6214ef0532e46964fca728b59ace0ae8a4f8bbea026208b2408c6",
+      "source_blob_oid": "9c920a34a6eba867cc4f00acc0003a97f8b374e4",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/resolved-count.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/resolved-count.log",
+      "bytes": 40368,
+      "sha256": "31d09fe2f23f0e31ca9cd6b00ec7b7830eeaac8aade971fbd0da574fb80a06b2",
+      "source_blob_oid": "26a5f776e0e1bd11834c89a3938d988e0ecfeb4d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-300s/results.json",
+      "bytes": 94991,
+      "sha256": "41e99dc5935e3b377a30be4129802fa6a1a3de3a2aa0d5316f328e341459b1cc",
+      "source_blob_oid": "6d8ce8a509f272bdcd15ffaf7dff5e9ab6b4ec3d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-containers.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-containers.json",
+      "bytes": 19210,
+      "sha256": "a765cf67d75741ade0d06445e6a8e6597d235f9c1a0d3ffffb1389da8b40b00c",
+      "source_blob_oid": "9f40aa8a9c2e00c7533e96cc6980659cb9833340",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-db-pools.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-db-pools.json",
+      "bytes": 2550,
+      "sha256": "a1be3a1fedb84286ad3df2b6164201cea88a49c16d5f65ea187d1c3ed8ef658c",
+      "source_blob_oid": "e05568b204036f971b8ac2e49c490917123347d1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-freeze.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-freeze.json",
+      "bytes": 163456,
+      "sha256": "40c1354dce8ac4505839a1cae0b6d8cc9737fefe5f76dac7167ff10ccd1c934c",
+      "source_blob_oid": "59876e5c889431d1c52a391ccf5c9104d72cf6ca",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-hot-path.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-hot-path.json",
+      "bytes": 1787,
+      "sha256": "fd6bd1b0f83d07b5809d5acf6c01c140f2253f04a9cad22ea2e2c2e7b5875c45",
+      "source_blob_oid": "27685d0fbd31e295979c1ea0d7a3e66b2289ca47",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-pg-durability.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-pg-durability.txt",
+      "bytes": 119,
+      "sha256": "7c811eb4be92787dc86b6bf30af84125cb1776009e1eaf1845b365e13a8ee2b6",
+      "source_blob_oid": "60a7752e8f5d9f1df5bf0d1370c97b1674628218",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-pg-waits-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-pg-waits-middle.txt",
+      "bytes": 44,
+      "sha256": "c6ad162819f62af06e28df6167b17ccb2b58afae479a91e3d58b5aea23cb0f6a",
+      "source_blob_oid": "24851171e6b0f005a0ea85a2a8be84f6a200bcc8",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-pg-wal-end-cumulative.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-pg-wal-end-cumulative.json",
+      "bytes": 207,
+      "sha256": "580bb3a510dfb2067a705780c8c69e2f418aa22c1f829a3574285d9d87217a84",
+      "source_blob_oid": "7d8799dbedd3726e64832d9154e13f3b1e55c250",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-resource-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-resource-middle.txt",
+      "bytes": 464,
+      "sha256": "6126a083420505193d0676b4ab36b5170c15a587fc149388953cc4ac8ecbcb3c",
+      "source_blob_oid": "f72603ef7577abf2edd5edb03aebaa64133c79db",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-runner.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-runner.log",
+      "bytes": 1477,
+      "sha256": "28f7e271c6268a0839231aa13832610bbff34c3b9941cf04543093f5e2e64ab0",
+      "source_blob_oid": "608d6ca7e75b8bbd7c27559117c6b2d486270315",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-topic-configs.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-topic-configs.txt",
+      "bytes": 10984,
+      "sha256": "81acc25d37da910c4ecbcbcab9ca5704fcf4f1c8f30e83dd4892a7b4a5bb4202",
+      "source_blob_oid": "0f8396234b39a7f89aa16179f349beeccf04a135",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q2-workload.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q2-workload.json",
+      "bytes": 503,
+      "sha256": "0aedb29162276478ff7f468c9d21f19def22bd12881687e50dd67b4b4b009b22",
+      "source_blob_oid": "5f49ead1b88d8f4939505c00638b621166cd9fc7",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/frozen-policy.json",
+      "bytes": 1083,
+      "sha256": "b644f2b75760d53f80c0157923e0c353c62e0fd26b36c9a900872da6e0623537",
+      "source_blob_oid": "3ad85458cc3cbee8827639f555a5ddc447701345",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/full-facts.log",
+      "bytes": 1092,
+      "sha256": "459f8ae73ba6743db8c10826d366f44e64c760daa849637d1db7d704496061f2",
+      "source_blob_oid": "de2334df976ed4b083009350e9dcbe9441e57b6b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/load.json",
+      "bytes": 11685,
+      "sha256": "eed06ba1392f17fbea4c097ac5306807cee364e39067e552fbe7e8714de9adbf",
+      "source_blob_oid": "920ec2d7b62da6c3e56847575cc1c7df6c3ccd37",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/load.log",
+      "bytes": 21200,
+      "sha256": "29cdd67c36be5aa8aa22cc9a0c612e45eca9e80019daf0e52b7af6f0602b8e8a",
+      "source_blob_oid": "0b62ed2ec116a839bde74d46dea8b9b8a2025ebd",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/phase1-accounting.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/phase1-accounting.json",
+      "bytes": 692,
+      "sha256": "d526c2574df0b564d91171369c918a8eb68c6120c7a8459aa4b9a213e5c8a35a",
+      "source_blob_oid": "f1c9f6a51737ff19d0da07932b021aa0678112c0",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/phase1-accounting.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/phase1-accounting.log",
+      "bytes": 1410,
+      "sha256": "faaa4b8ffa3dfbd6a8cff9393a1631face18ae635aa9867096ecc299d36bc0b6",
+      "source_blob_oid": "e1e391e4b32af020fd3d76a8ab2fd9f541f79eda",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/resolved-count.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/resolved-count.log",
+      "bytes": 26946,
+      "sha256": "564b2fae22a88eb522ef5e474bf84aff122104f4f4c52efb4d8f87c13e11bec3",
+      "source_blob_oid": "2bb9aa38221e8fe631ab1f13128c7e303cd60016",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-300s/results.json",
+      "bytes": 66279,
+      "sha256": "031a13688d55a0910c527cd0752f30121aae636b7185d6bb6a5f36c3b30fc0b6",
+      "source_blob_oid": "b431c8cfe5fad1e5e4d7f14217e2774b5aa47a61",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-containers.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-containers.json",
+      "bytes": 19207,
+      "sha256": "ddd8cea29ce5053e23c124ab5e875fb720531463ca75349f853390abdc8735a8",
+      "source_blob_oid": "d30e115f14d0638a3f212784a18f820e09c757c6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-db-pools.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-db-pools.json",
+      "bytes": 2549,
+      "sha256": "1948dbfa3af06daec6f8fb44a357ac3bc1aa01ec8f8e46533ef30a1bdfad72c2",
+      "source_blob_oid": "a0c70b3a716b27b7cf80186c88c7db22362b2ebb",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-freeze.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-freeze.json",
+      "bytes": 163575,
+      "sha256": "8275a9a09a48920644b5a8b71c8b5e725cddab4bdb50ca986a263e9ad4d7261b",
+      "source_blob_oid": "9e8863350adbdb21fd8aa02dbff163d8e0db2567",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-hot-path.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-hot-path.json",
+      "bytes": 1788,
+      "sha256": "66d622a34f813cb4f4cc3c0cba182188caa27b5e77d97d96684e24d2e90d0929",
+      "source_blob_oid": "df6245a18a8af7b06165508a27f134133d773888",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-pg-waits-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-pg-waits-middle.txt",
+      "bytes": 145,
+      "sha256": "ba0410bbe936e5b87425e5f6e647109b30f0724263feafa203afa0d755500c5a",
+      "source_blob_oid": "51bae9acbe875a85acfdf8f994d0e3957bfd55bb",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-pg-wal-start-cumulative.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-pg-wal-start-cumulative.json",
+      "bytes": 207,
+      "sha256": "c93a996715670445803249aed31b69e9b79a6b56c1e72de10497d49960b4afae",
+      "source_blob_oid": "bfc1b69296dfbcd3065d45d257ae5b912cd5a663",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-resource-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-resource-middle.txt",
+      "bytes": 252,
+      "sha256": "792a0ce9ff1bf2a7d5091c1ef5e9962256b662c004401e228ff6eda354fcd517",
+      "source_blob_oid": "da41f2b850325fcbd52386266b61aeb5cf0830f5",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-runner.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-runner.log",
+      "bytes": 258,
+      "sha256": "ccaae20841c7a495d9c078e01fa8623218fb01526460f7073b24d259b2a90285",
+      "source_blob_oid": "4126f4a16cc878f6908c70fe47b62d349d25a80d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-topic-configs.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-topic-configs.txt",
+      "bytes": 10984,
+      "sha256": "14a38ab58d7d7d7f57c09cb8d7dc28c2eb4b4cf43d79898ee796779590156a56",
+      "source_blob_oid": "61a4e5451c7dc5a5dac3ba8e7dea9910ed71ccfa",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/q3-workload.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/q3-workload.json",
+      "bytes": 619,
+      "sha256": "bb486c76969f6c68a263f8d8a85fdc2bb329ac51e70c4a9b76dcc61576adf351",
+      "source_blob_oid": "562fdf9b5079932a460c612615aff5995c53a911",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-control.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-control.log",
+      "bytes": 43623,
+      "sha256": "4fceb1298e712b8b3a1e4bf304c07fce675c563896b116213abf34e3eaf51c2e",
+      "source_blob_oid": "2271d9e72222bee32540b0f943e3b1a58a1bde38",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-h384b450.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-h384b450.log",
+      "bytes": 30127,
+      "sha256": "d5417c12b9184bba9b7011387510cfe50899cf06a18ce7bda6d5eca7dc30f59c",
+      "source_blob_oid": "5e32de4e3b68961b811fc7d60f8cfc54ac2249db",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-http128.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-http128.log",
+      "bytes": 30143,
+      "sha256": "8a956d997db20d365e04988c73fee8d37fc9692f8e09c8634cc6d99e40f4f76c",
+      "source_blob_oid": "26d2902e19fb682e40d2cd851f0ffbfa84d3984b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-master461.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-master461.log",
+      "bytes": 30310,
+      "sha256": "b5192f9060107a62ab3bbc1b6b3bdd5272b614a7152895e869c60e8dba3dadb3",
+      "source_blob_oid": "0668a70b4edd2cbbd367fbffaa04879db54d2e3c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-poll1000.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-poll1000.log",
+      "bytes": 30159,
+      "sha256": "79c21683d3fd389aacde3e6a4934c5d876041431514e9854366a6c5ee3ef6c18",
+      "source_blob_oid": "6011928fb6d51b5e7a723fc658895e8b1a543745",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-q1.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-q1.log",
+      "bytes": 30262,
+      "sha256": "069bff1166e33a4a4308c7814c64edc601d4c262a32c5b6e1718b44a04504968",
+      "source_blob_oid": "a896773188f91b7d3d7ddf6bdfa0732f83537d16",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-q2.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-q2.log",
+      "bytes": 30262,
+      "sha256": "b5a23935af893cfa1e560b1d12c155b321aeee8b5b3ae702c603deef5512f2a5",
+      "source_blob_oid": "13da1af6410aa239e843dc348ea71ad671f12062",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-q3.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-q3.log",
+      "bytes": 30262,
+      "sha256": "edcaac3301ad5e0d8fb23daa34e0423ea735faa166c2e15cfdcf27d38a7e9376",
+      "source_blob_oid": "d4248091f1f62c7fd54872125c3c6e90595179ef",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/smoke-sync350.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/smoke-sync350.log",
+      "bytes": 30054,
+      "sha256": "abb30fea4a8010d9db2a8ce1caae0c9c386a9fc39bea3938089766d8ee645200",
+      "source_blob_oid": "b8520886b71adc52c326e095eb8164ec3a10c1ff",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/frozen-policy.json",
+      "bytes": 778,
+      "sha256": "b824d5caf54eeda8c1b62c36f2661ea03fdbe08bd076e77b0342409f48200c8f",
+      "source_blob_oid": "7d3c874e136f0448af5e69a43410c35f1bffdba6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/full-facts.log",
+      "bytes": 843,
+      "sha256": "83fd1d5cccdd0890dc2fe0ef935e9b19c9fdd13dd43ae651bb9069258beb1ad3",
+      "source_blob_oid": "db8f437fab65a298c1577dbe04e3a605058cbc60",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/load.json",
+      "bytes": 4480,
+      "sha256": "a3aeb1e81e681eb2a239db99839a9cd8c458a5e39e9ba47202539f5a34e34a27",
+      "source_blob_oid": "e7f973d05110aed9508767d3e5279f68776a0e61",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/load.log",
+      "bytes": 7338,
+      "sha256": "f16eda5077e10ee90ec05341d89d6ece8fcf59f25f6d1ccdc3affdfc2ca8f35a",
+      "source_blob_oid": "7dbaeeab0aa590e6fba2029cb627f080877ac82e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/phase1-accounting.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/phase1-accounting.json",
+      "bytes": 685,
+      "sha256": "1eb31c93de1519701c9317149dd9fde507285e566259dff1d5ee3f7b43b6dc1e",
+      "source_blob_oid": "f328fea9e1f512f76b054664b7a6b50218e67b1c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/phase1-accounting.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/phase1-accounting.log",
+      "bytes": 685,
+      "sha256": "1eb31c93de1519701c9317149dd9fde507285e566259dff1d5ee3f7b43b6dc1e",
+      "source_blob_oid": "f328fea9e1f512f76b054664b7a6b50218e67b1c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/resolved-count.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/resolved-count.log",
+      "bytes": 9426,
+      "sha256": "919b533b73ed52e4a1f310f2db5a73c1d04b08a40783193cf38dcf090c82db56",
+      "source_blob_oid": "cee881fcc78c17c44aff3bbaeac43692cf820725",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-60s/results.json",
+      "bytes": 26579,
+      "sha256": "100c3a74adc672d7dcfaf382eb620869d9a1bc4fb96305e5ed5e2d5b669c9ad6",
+      "source_blob_oid": "1a463fc826d5b726b0f2ee37a0f3ac3fa27cce31",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-batch-timing.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-batch-timing.json",
+      "bytes": 636,
+      "sha256": "bf82199324706cc7cedcf03837dce3c0858db11694448f40414475d7795c0483",
+      "source_blob_oid": "f75b123997c88fcdf751b4e6347192372d7ec991",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-batch-timing.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-batch-timing.txt",
+      "bytes": 404,
+      "sha256": "1268301396293189dd3a699ed4973b533ff2e0cbc4bbea14d7f6e0e450aded8f",
+      "source_blob_oid": "4f3c769debedf0d1395ee76d1b060be0eb977848",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-db-pools.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-db-pools.json",
+      "bytes": 2549,
+      "sha256": "3f906d3c8304e413e0f8ef3bcff044b5f5d56307889dd8a90fa29f14158f8518",
+      "source_blob_oid": "6d1a98d20d8ca352d68a8d754528708f55071408",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-hot-path.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-hot-path.json",
+      "bytes": 1893,
+      "sha256": "2fe2bf1e11ef34bca34b883b20ddced50a4ada652eadb15831fa5e4875166c7e",
+      "source_blob_oid": "602870df8143e7bd090de3029078aebb50b1bb38",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-matching-early.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-matching-early.json",
+      "bytes": 1691,
+      "sha256": "372d1b0585dfa5fe0ea36b6dd62b6e622de2f5a1648aa64a255261e929d05090",
+      "source_blob_oid": "34131e1aef9ff54047dd641f01c896d0483c410f",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-matching-middle.json",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-matching-middle.json",
+      "bytes": 1701,
+      "sha256": "9c51489d3ea1bcbcc90a18c92cb3fc4bf994fa07be0ccdea5020bff1806c4b5c",
+      "source_blob_oid": "eb01a465b333a6f20c83d39045051ba8b5663488",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-resource-early.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-resource-early.txt",
+      "bytes": 1034,
+      "sha256": "f2bd51c2f8463690718a4c8e15eeb52a2d74ff79e6fcf53ae4213bc0b316cd6e",
+      "source_blob_oid": "349e7b5776f5005156d1677d0c76870cdb2b806d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-resource-middle.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-resource-middle.txt",
+      "bytes": 1038,
+      "sha256": "f43e8c538f503b70022c7edeb20ccbc5b4a30a7e07362a2dcafe6df9b6ee26fd",
+      "source_blob_oid": "51fe5ebd05e52e0a1abcd7d5616a0d696e518364",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-runner.log",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-runner.log",
+      "bytes": 1464,
+      "sha256": "4cb1efc7672e0ed8c78e884ed068401461f601619cc624d13028f969cabae418",
+      "source_blob_oid": "32b3cb6b4de85da1466025fd0b7919592485dd5e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-10k-timebox-2026-10-01/sync350-topic-configs.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/sync350-topic-configs.txt",
+      "bytes": 10934,
+      "sha256": "1be4818ff1245774ca733a9a1d2b6667b1b469ad4f6943ed1df45c9b7d367ff1",
+      "source_blob_oid": "692614d7cd5d4639712c991bea7c80e623afd0fe",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d1-actual-profile.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d1-actual-profile.json",
+      "bytes": 9377,
+      "sha256": "426ff9aeae9039fa30d84f9a820512ad0cb44a804499af83bafc569fbefdfe98",
+      "source_blob_oid": "372518d490f9eb8fe4c8f8cc7708e4cad9f62540",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d1-probe-full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d1-probe-full-facts.log",
+      "bytes": 2052,
+      "sha256": "6a186c46087b1ecac6c1b5f7220efb1b1be6c096dd683c7067a65915b30cb461",
+      "source_blob_oid": "6832831dff297f2b85f43f102bf1e94d66c2b40c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d1-probe-load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d1-probe-load.json",
+      "bytes": 2067,
+      "sha256": "704ec94eb0d7c26782616c3d28662f34f4a2c81345f57ab4ede6bf81ebdc080b",
+      "source_blob_oid": "09a10bfc6286c2d476a33434954dc5b12cd76f87",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/actual-profile.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/actual-profile.json",
+      "bytes": 9373,
+      "sha256": "fc7c6253d2f978454cc49e3b1d7fcfb95bdbf13fb4431946ef34b679be66aa9a",
+      "source_blob_oid": "dccc68c09e11326f83e5b71a08bbda8757beb9c6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/commands-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/commands-config.log",
+      "bytes": 2106,
+      "sha256": "9f7a377c129a86a2e2b6579e98dc96fa48bdf6c450626ac857dda8a6079c94e0",
+      "source_blob_oid": "ddfb54bde7079e0056d078c38d9dae5146d2579d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/commitments-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/commitments-config.log",
+      "bytes": 2118,
+      "sha256": "bbe84441ef703f6d5e73a42e4bfed77025d7ced2ddd8fd7b43e616de818e1f1f",
+      "source_blob_oid": "ad22d316a8e9929641edcc14c54f2dcbb8ff1809",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/events-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/events-config.log",
+      "bytes": 2112,
+      "sha256": "a52319114371bf15a9f3b5dfd31b02df15142ba1c483162a36f80d22b6c41909",
+      "source_blob_oid": "3216be1e14275eddc3636e945bcd32c1e6cd956a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/frozen-policy.json",
+      "bytes": 2177,
+      "sha256": "16064434c7648182a7295467344f9fa3556f110b38da2a7c8b5889b3c6403674",
+      "source_blob_oid": "eefcd46fcd205600d00b93ff462f9ee3af1af3e4",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/full-facts.log",
+      "bytes": 2142,
+      "sha256": "0513f18246696ce70210a3076eafacad6e41dcf25da71e6af7e97529b53dc522",
+      "source_blob_oid": "c6e53e99d5d5ef76e0490ee1ec52b886fe6e5eab",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/load.json",
+      "bytes": 3269,
+      "sha256": "aeca9bd9ab2141530edb8f35364291e3381857baa4b53784051ffdf7b82830bf",
+      "source_blob_oid": "e98768af103c648c8f1138101acde881f1cb4470",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/load.log",
+      "bytes": 6080,
+      "sha256": "fbe5b81a189faa345adb07e14d40a3d0c3b0e0047432e5523e0cf8dfb2a7929f",
+      "source_blob_oid": "548ab8bb2ed54db48c9d2f18f3a3535e2ea24d63",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/resolved-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/resolved-config.log",
+      "bytes": 2118,
+      "sha256": "00ffeabf1155841028b499b2b5db0356c98ff61b702594efc9fb7bddae5b51ca",
+      "source_blob_oid": "e0e63a4865fbef74f11bf7bc6d9f48bfe6744c07",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/resolved.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/resolved.log",
+      "bytes": 13349,
+      "sha256": "fab5d292590e6c6728d67cd3451c1c99b1625e538956eb02ffa97518faf05dcf",
+      "source_blob_oid": "cb688834b14ecb8c61f06e1d8d1363a6e1f398c6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/results.json",
+      "bytes": 73352,
+      "sha256": "fefe771bebbc627791b21ea1915b3ae629ab15de93f27a8a3323b69ffb617441",
+      "source_blob_oid": "a61fd6201cc281d1b6480929fe9d4c466ab1d0c5",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/verified-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/verified-config.log",
+      "bytes": 2118,
+      "sha256": "bbe84441ef703f6d5e73a42e4bfed77025d7ced2ddd8fd7b43e616de818e1f1f",
+      "source_blob_oid": "ad22d316a8e9929641edcc14c54f2dcbb8ff1809",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/verified.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d3-60s/verified.log",
+      "bytes": 12145,
+      "sha256": "cd67e3d6622bf7da915c56269d74d7f3de843ab9b5cca1423a566f18312005a7",
+      "source_blob_oid": "a932b43ae613be30d722747fd28884e6f97486fd",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/frozen-policy.json",
+      "bytes": 2157,
+      "sha256": "15cfab3bf911e9efd88583532131097a0f06137a115f497fa9d2147acf4539e5",
+      "source_blob_oid": "cfe1804da73cdae100759f59bf39f33bae1ad506",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/full-facts.log",
+      "bytes": 2142,
+      "sha256": "be086fdc5806cc82a4ef7521955e44c307757e34a9c42e12015be7169d18a83c",
+      "source_blob_oid": "5dd73b4726e04e2091ed2fb8e2e60b2370b46f08",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/load.json",
+      "bytes": 3269,
+      "sha256": "e6ffdebdeb72520852bc97e520ae8a70262110d8982a89c70051a58eb4a87561",
+      "source_blob_oid": "195ffea219a968eb1c7cdd6793f5b62aa682e1e2",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/load.log",
+      "bytes": 6080,
+      "sha256": "8e7ddb915a7d6d00edc11f8b5819130ac50105de3954edc28f801042ec1eb2c0",
+      "source_blob_oid": "cd47ff1ae041113a0b0076d5d31935b27928921f",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/production-lag-resources.jsonl",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/production-lag-resources.jsonl",
+      "bytes": 315516,
+      "sha256": "3546fd20485a78eca3254deeb6b42ca9101803a10ece800c1549f0118225e101",
+      "source_blob_oid": "927a549772df9204b459596ccda85d8483a22722",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/resolved.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/resolved.log",
+      "bytes": 13648,
+      "sha256": "32441c979eb832c9a6b683d9bf64d08b00c09ad447915a39826cde5728083037",
+      "source_blob_oid": "8e9b40e4100efc68bbb548df15b39ff2ff79b89c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/results.json",
+      "bytes": 75627,
+      "sha256": "b2703e63233b35ba88c36a4a072c06840e05bdeb67886c225a0d6556f6b2b163",
+      "source_blob_oid": "4c2469dda7e9c43d244528ba4f8a0bbb4751a28a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/verified.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d4-60s/verified.log",
+      "bytes": 13243,
+      "sha256": "f65836bd67e8b735e2382c32d29a44ede48490dc17e4d699bcb750fdca5e3446",
+      "source_blob_oid": "4658d81b10c4b669ba9219893bd95dde12f00292",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/frozen-policy.json",
+      "bytes": 2158,
+      "sha256": "119eeabb406b0cbd3d070996faf2699c22a9fcbda8db1d9f4689108aee81c07f",
+      "source_blob_oid": "657a00c89980cf281ed4439736d48243a776b5be",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/full-facts.log",
+      "bytes": 2142,
+      "sha256": "f685346db9c91e5dbe902d68e04e2c343d0f5765b63ccb2c13ec06ac4d67f8b7",
+      "source_blob_oid": "e30054dac374cecf918a3e98d872a5ec93ca498d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/load.json",
+      "bytes": 3270,
+      "sha256": "2f2c0b7e0868cf4665b12c5c41d5d0cd251014ccf33138e79fa84a489314372a",
+      "source_blob_oid": "34e687a0d16d2bbdec02703f71d3b93f27e2d2c2",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/load.log",
+      "bytes": 6080,
+      "sha256": "388a6366369c5d09fb5ae61b6ab8b9bb84e960e09ae2bb648e73c2ad0bb04eda",
+      "source_blob_oid": "3efa5877255c356069fdd44d070e96e69f8c05e6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/production-lag-resources.jsonl",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/production-lag-resources.jsonl",
+      "bytes": 286648,
+      "sha256": "f37d04b9c2cc20de8b27ee70b930db46545dfbb9978b9fccab7719084de8ddc7",
+      "source_blob_oid": "1ebc23c75e31e6e7aff637d7a9210809629bfc9b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/resolved.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/resolved.log",
+      "bytes": 8527,
+      "sha256": "27cebc456c99a860b0d83c8aaae018fdb0547b948ad87f2c661c601d04f7c16d",
+      "source_blob_oid": "a15f33a4ca00944331bcd94594f8a510b302229d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/results.json",
+      "bytes": 53234,
+      "sha256": "c3bbdff160ab3f286bf8ac12ce056ba9077ead29749a16030d6db55a59c18707",
+      "source_blob_oid": "44ae8187148c309fdbc2c7abf3e7fa2787286140",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/verified.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d5-60s-extractor-batched/verified.log",
+      "bytes": 9348,
+      "sha256": "cdc0b7caa78360d2fd8bab0d18bedacd44d8cc19840d6dc639c880b904c2c302",
+      "source_blob_oid": "7314ee8a81b6a92761c7d0a9f303805c3056264b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/frozen-policy.json",
+      "bytes": 2382,
+      "sha256": "d3e334f8341ba0192fe90dfa20f2be97bce4f5660754888919f1b74aaa5b89f2",
+      "source_blob_oid": "389982a12bbd3df40b4a4b9344d6fb7b03dce643",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/full-facts.log",
+      "bytes": 2143,
+      "sha256": "7d74704ddc5ba07805e778e3676266c5eab92d14e258ea9fea09454dea9c6676",
+      "source_blob_oid": "bd3f41603c34b64bbb754b2fc013ca3176e8b9c1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/load.json",
+      "bytes": 3628,
+      "sha256": "46f0e22383222498d3ac54acb83973a36d3829e8703f6a3e3f9563df21f88282",
+      "source_blob_oid": "57f47082bc46e54bddf89baa7618d5306b2e5d16",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/load.log",
+      "bytes": 6441,
+      "sha256": "5396871b536ff6f074963e7ec290e42f817a53f05e1ffb16a632012d58f46af0",
+      "source_blob_oid": "b8ba4f0c8211b7c34937395b3632fabafeb7b33b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/production-lag-resources.jsonl",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/production-lag-resources.jsonl",
+      "bytes": 350155,
+      "sha256": "1229612acdefdb847b784753eccfa1fce6564927d8050b01e21a003b8c083832",
+      "source_blob_oid": "8dd1b693122b511396488cf67e7eb733116b4aff",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/resolved.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/resolved.log",
+      "bytes": 8602,
+      "sha256": "c24c436a72bab67ec3a2b2912aa35032006a833c7569ac2114978db441bd8f13",
+      "source_blob_oid": "f1c61695336f0b1efaabfe4614c31990256aab4c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/results.json",
+      "bytes": 55307,
+      "sha256": "0b649298d6b5f973ef4ea8097c5de0fe46d780e20b15361c08b61d58878d153b",
+      "source_blob_oid": "7e0b96199d10558b0e2f5167ebb1dea2aece7a60",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/verified.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d6-60s-standing-liquidity/verified.log",
+      "bytes": 10441,
+      "sha256": "ecbc2f5417b1b792783ea674d467ee11bb8093ce7eff47980d6f0ca82b486aa7",
+      "source_blob_oid": "8209aebf5ee16885b36889b587cd6040b0839574",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/actual-profile.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/actual-profile.json",
+      "bytes": 10932,
+      "sha256": "4469f60bc032fdbc43d5588eb9257140d8112ebad2a6d622c6aaf9a94b218180",
+      "source_blob_oid": "73bd03e2d93f5f5beda123996cb2f458ad4820bc",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/closure-before-stop.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/closure-before-stop.json",
+      "bytes": 333,
+      "sha256": "49eaa9593d488e4bb19c4d42a6c9f0f3f7a12906c3a8fe764a8aceaa776588f1",
+      "source_blob_oid": "1d32ffff60be17af9862ac3d38908953866f77bd",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/closure.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/closure.json",
+      "bytes": 884,
+      "sha256": "abfe99824cc71f71d9559b662d506558b052c1388e1fe635bcd66e99e8665258",
+      "source_blob_oid": "119fa78e40624df6acb3a238a49c0a39eb4dccfa",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/commands-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/commands-config.log",
+      "bytes": 2106,
+      "sha256": "9f7a377c129a86a2e2b6579e98dc96fa48bdf6c450626ac857dda8a6079c94e0",
+      "source_blob_oid": "ddfb54bde7079e0056d078c38d9dae5146d2579d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/commitments-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/commitments-config.log",
+      "bytes": 2118,
+      "sha256": "bbe84441ef703f6d5e73a42e4bfed77025d7ced2ddd8fd7b43e616de818e1f1f",
+      "source_blob_oid": "ad22d316a8e9929641edcc14c54f2dcbb8ff1809",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/events-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/events-config.log",
+      "bytes": 2112,
+      "sha256": "a52319114371bf15a9f3b5dfd31b02df15142ba1c483162a36f80d22b6c41909",
+      "source_blob_oid": "3216be1e14275eddc3636e945bcd32c1e6cd956a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/frozen-policy.json",
+      "bytes": 2410,
+      "sha256": "8e8352116663aecc044b02a94a976949aa35a05bfedbe244eae84d93cdcf6875",
+      "source_blob_oid": "804d2c2db94baee181fc204ecbf1de763019f681",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/full-facts.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/full-facts.log",
+      "bytes": 2163,
+      "sha256": "38043c72be1d08b79d663a62add511730c233acf7d7ba6da71166b7d0dbf99d3",
+      "source_blob_oid": "d8058b6522cf0f25a68b0703d7a6b7c61196fa17",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/load.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/load.json",
+      "bytes": 8943,
+      "sha256": "abc101c54bb21ed14cf776ec8abff4a4e3f4d07feba7d4345eb088aa1a6864b1",
+      "source_blob_oid": "770123029a4dfbb5bead6811eecbdb6bb5d64f1c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/load.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/load.log",
+      "bytes": 23061,
+      "sha256": "33c6c034d95334253f3333a8522709c72b4f5007d76b7d8c6ef8d4039bc1709b",
+      "source_blob_oid": "e0d43a381e1ba0f42ffd36ebe3ad6e207932755c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/matching-final-stats.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/matching-final-stats.json",
+      "bytes": 10751,
+      "sha256": "1a1f9bbd9d5c277d55b51d934f5d9f3244cabcf0c462e1b79f2402226a290bc1",
+      "source_blob_oid": "1fd561c355cf4b3a3eac207d5d12f39f0583ce0e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/production-lag-resources-tail.jsonl",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/production-lag-resources-tail.jsonl",
+      "bytes": 573364,
+      "sha256": "3d4981af9b0ec7c4ace33d500ee20d347be2baf3a4baf04d79e3ced0abc40bf1",
+      "source_blob_oid": "02d9057da953654d956defb59cec98ba3320a037",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/production-lag-resources.jsonl",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/production-lag-resources.jsonl",
+      "bytes": 1222048,
+      "sha256": "e6b1cefdcbdf0b5ee3e2b38f2d4aacd02ffb59840306de38aeb243d5f95fd140",
+      "source_blob_oid": "794bbda5c6290e54f35ae338a4fc51fd1f444c4a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/resolved-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/resolved-config.log",
+      "bytes": 2118,
+      "sha256": "00ffeabf1155841028b499b2b5db0356c98ff61b702594efc9fb7bddae5b51ca",
+      "source_blob_oid": "e0e63a4865fbef74f11bf7bc6d9f48bfe6744c07",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/resolved.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/resolved.log",
+      "bytes": 40826,
+      "sha256": "1dee3ba30007b3867fff7aa3d13acaf10f016c018c8b8c482871ec58a29f444c",
+      "source_blob_oid": "1d3a1d625d3cda52df0c6e826d9b55ff631743e5",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/results.json",
+      "bytes": 196683,
+      "sha256": "183c07ec9afd8220b37eab34b98e17d99396fa6f8cdd5e44afa1f5e58035c998",
+      "source_blob_oid": "73a441c51287955244b0f2a1fcf5532fde16697c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/setup.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/setup.json",
+      "bytes": 1378,
+      "sha256": "f0f840cf179cfe1ec74dbe4e580aa923c06b25e10ea8410297341772b0216631",
+      "source_blob_oid": "722fb4608b1bda454a47a66217b30583150047b6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/source-class-manifest.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/source-class-manifest.json",
+      "bytes": 2789,
+      "sha256": "8da6d5e137b69a19db7e86733cd66464cc0e9986a11d4dd6b5320b92eb910716",
+      "source_blob_oid": "65ebb2aa72054b7b1fe34501f75e789cc757e479",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/verified-config.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/verified-config.log",
+      "bytes": 2118,
+      "sha256": "bbe84441ef703f6d5e73a42e4bfed77025d7ced2ddd8fd7b43e616de818e1f1f",
+      "source_blob_oid": "ad22d316a8e9929641edcc14c54f2dcbb8ff1809",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/verified.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/verified.log",
+      "bytes": 33925,
+      "sha256": "6df49bb883aa70d500e2e9fbf0d344767afff1a698d88bf44a102a1680c3d7f8",
+      "source_blob_oid": "046778c7bf488af65909b30cda8fa54ea90af524",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/docker-cleanup.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/docker-cleanup.json",
+      "bytes": 8242,
+      "sha256": "063b1fd514230151ac0f2aab75bef955a0c12b0e53fa8a1b0a7529ef1d20376b",
+      "source_blob_oid": "eaa9bb9d75c01879505229360dccf20f6a9880f1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/frozen-campaign.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/frozen-campaign.json",
+      "bytes": 1132,
+      "sha256": "1d1cd01460267ffd59a119577105d3acd11ac58971a6973ef10df5bc4c8dc8cc",
+      "source_blob_oid": "3948daa686559d38063b195128142d2d13b4d9da",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-aggressor-loader-race.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-aggressor-loader-race.log",
+      "bytes": 73,
+      "sha256": "0330a9082daf87bcb9cd047858c3c1de1e10da3e614e27726ee62be9aee35c1a",
+      "source_blob_oid": "87d92a6f61fbb4b4795433f94c7e14e94c609cc9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-extractor-platform-check.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-extractor-platform-check.log",
+      "bytes": 726,
+      "sha256": "84daf7a9dd3ef93ed8d1bf14658627cc28d6d401400a1eb70d4dfcb21e672489",
+      "source_blob_oid": "0c247b1b13d01fe413b51a761225871b2749abe6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-matcher-tests.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-matcher-tests.log",
+      "bytes": 84,
+      "sha256": "c041c8d333e4171940b1c80dcbe7952dfad33d760b29406ac2a9ac5216a4d7c1",
+      "source_blob_oid": "c48b1b1ce802965efe6dc85ed417197b260ffe8d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-observer-seed-tests.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-observer-seed-tests.log",
+      "bytes": 619,
+      "sha256": "80c0801d6193c6a9ce9b24bb46abc75ffa2001a2dc812bae985bca26910a1eef",
+      "source_blob_oid": "9c19cba4150308543fb27c0f67f6b9d58cd0f030",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-runner-mode-tests.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/tests/calcify-direct-runner-mode-tests.log",
+      "bytes": 2219,
+      "sha256": "3759cce7ff116bcff24ba3f755b0e920cc226e561133849d7faa43551cef1904",
+      "source_blob_oid": "70f900b891f354d9cf341a827e0fbb7b5aeea0c5",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/tests/final-verification.json",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/tests/final-verification.json",
+      "bytes": 889,
+      "sha256": "3c2da9837229d6ac639d562f3d2c1b47759c696e582525068c5ebc33891f3437",
+      "source_blob_oid": "ce2fc9150ca30ab7b67fe1b62f374324309cb687",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/tests/script-surface-green.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/tests/script-surface-green.log",
+      "bytes": 830,
+      "sha256": "91536d296460bd0bc24425cbcbd3bf8df96955c093d78fb9f60f4d668381bf21",
+      "source_blob_oid": "e6a0fe8b746d65c7557a1358f7d8a42878e9dfb6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-direct-throughput-2026-10-02/tests/script-surface-red.log",
+      "archive_path": "records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/tests/script-surface-red.log",
+      "bytes": 108,
+      "sha256": "c3735c34e70c69fa9cc1d72863c0aeb3eabd33bf0697ada530ef56cba44efe0e",
+      "source_blob_oid": "85cb774bea28d608e78210b99709e325548379c9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/broker-loss.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/broker-loss.log",
+      "bytes": 1807,
+      "sha256": "b9ddb5a83412569bfba94c7d37a7c40fc535d0c2c4c9e35608e9b838bb26f47f",
+      "source_blob_oid": "b3e797216094bc770ecd03998016bb5c8601824a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commands.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commands.log",
+      "bytes": 27132,
+      "sha256": "53722a57e287a9fe1805b33d04e594d69ee7007a2b829c1b1de1bb9e6e3c095b",
+      "source_blob_oid": "f446253ffe8a028d753d5c295c4ac4d26b226b75",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commit-first.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commit-first.log",
+      "bytes": 488,
+      "sha256": "85b21a492f467fecf115d70402737bb61d4207b9e8b576e552a1eb25e14b1bda",
+      "source_blob_oid": "d1ce88d4dd8908b3f8200d02cc1178f08eb73866",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commit-restored.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/commit-restored.log",
+      "bytes": 370,
+      "sha256": "914e525f8d15e930acfbf13bcab2b3b89075d25df68d1e3aa0a711d48a1c2b7c",
+      "source_blob_oid": "71a97a030d51c4aea21f7f58b10cd0371b40e6b8",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/disk-loss-first.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/disk-loss-first.log",
+      "bytes": 244,
+      "sha256": "c7a0ec57f3544448292e075b3f1c352b37cbc9b66821005010211f656d633b4b",
+      "source_blob_oid": "ce173c57d121186dd817194b65a86200bb5dc049",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/disk-loss-restored.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/disk-loss-restored.log",
+      "bytes": 850,
+      "sha256": "5cbe3d15a29a2e6ce6b5a741e1c3d5749ceeda8f2dfed8e8ebe8925311874036",
+      "source_blob_oid": "0696fa7f73fa1f24863e7fc892d1397fd9ed1234",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/forward-first.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/forward-first.log",
+      "bytes": 215,
+      "sha256": "2ac5c16f50253fad4d0d457df84d34aaa29e6b97ca81490236ec52812f9dbd29",
+      "source_blob_oid": "85ec4fd04a3b6f078d4d030315038179ca7f54db",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/forward-restored.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/forward-restored.log",
+      "bytes": 850,
+      "sha256": "9c7e8d2a98304ae6756da770d096293dc639e5663fb85108e86307bb0ef096aa",
+      "source_blob_oid": "2acd03e9276c42fd9405684c8d32b8976c920393",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/isolation-owner.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/isolation-owner.log",
+      "bytes": 1851,
+      "sha256": "a2c329c71270ae6eb06b953dc4eeb4348b5520a69e0bcaf01ca2630b256536e4",
+      "source_blob_oid": "7e988d98ddcf987f6b157143e6e26cb0588b6ba9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/isolation-second.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/isolation-second.log",
+      "bytes": 2352,
+      "sha256": "cc90fea33ea2b36475b1d69bd90e4fecdac30a31835d52f5d4df66c90154fd76",
+      "source_blob_oid": "302bae616a98a7593e84205df477531587c0be4e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/live-recreation.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/live-recreation.log",
+      "bytes": 3420,
+      "sha256": "000b34c0a23d787bb1f9b6680dd4ebf1d6abbd931ca3db45b9982de9ba35272d",
+      "source_blob_oid": "a4252df99f027a57cc96335492fedc60217449fb",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/recreation-restored.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/recreation-restored.log",
+      "bytes": 2047,
+      "sha256": "ecee34a7afe0ba7db61176b955c36b6236fbb2950868c2ab147b224d2a996f9a",
+      "source_blob_oid": "10cd3eb17d9fd24bf51d2b86c074758ae78fb6d4",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/results.json",
+      "bytes": 5024,
+      "sha256": "7344af759a354ed4fe2df7eebafa6e5606ec2cd1660eb58776b483eab347a2d2",
+      "source_blob_oid": "1d7166091a60a8c3ed5c592957c37d513959493c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/retention-fault.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/retention-fault.log",
+      "bytes": 1605,
+      "sha256": "6be1367e51cb0a5c122919e1d23071bb2f8763b50166d653b23f7f4dc2a927fb",
+      "source_blob_oid": "0b5c5e5a9a7f0570f81b176b902bc06c267e685a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/state-first.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/state-first.log",
+      "bytes": 244,
+      "sha256": "c7a0ec57f3544448292e075b3f1c352b37cbc9b66821005010211f656d633b4b",
+      "source_blob_oid": "ce173c57d121186dd817194b65a86200bb5dc049",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/state-restored.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/state-restored.log",
+      "bytes": 850,
+      "sha256": "086daf8356e531ce6c5bab753a6132c5ee5f0bf5805ffa32ff06bae6b107f62b",
+      "source_blob_oid": "8282acf4c3f36814c213e9f18588f655fc492fb1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/zombie-owner.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/zombie-owner.log",
+      "bytes": 1941,
+      "sha256": "61d57f508afc1f18df10c15333f5a9b12d4885c0b9b759041f56bd0f4fcf27eb",
+      "source_blob_oid": "4792e64ab0292dd7f098b83c372a097c1cf637c5",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/broker-a9bc0494/zombie-successor.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/broker-a9bc0494/zombie-successor.log",
+      "bytes": 1457,
+      "sha256": "04243459809f131ca4c17020c7b496f3f28e82de9a8a0b058cad282b128d91ee",
+      "source_blob_oid": "30fcad440e4d8c35e6370b59b931fe62609f8cdf",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/commands.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/commands.log",
+      "bytes": 4702,
+      "sha256": "8d065ffada469c226fadb59671b99955fb39762b0fc6b33f9ec5d6a1c9fa699a",
+      "source_blob_oid": "e0b4fa8e09856405428695c638277aad690bf8c9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/hot-worker.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/hot-worker.log",
+      "bytes": 861,
+      "sha256": "e9238d54d3bfd2dca849decc1d8578d2804205d4ee468c839e809fbd82d9bf07",
+      "source_blob_oid": "39d43ed60a1c32971944f19118751a529fe193fb",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/results.json",
+      "bytes": 2623,
+      "sha256": "6aca30eae2fc2ab6087b278c0c094482880843c1924ef75572f2acba8fc8bfb5",
+      "source_blob_oid": "c9128039df27b1006a7c0db4385531e690494d1d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/skew-worker.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/skew-worker.log",
+      "bytes": 1382,
+      "sha256": "fc7a9e78297cd96c13798fbcb4c7fbc40f6ae40e9ea27fcdb9bac4dd43f50a8d",
+      "source_blob_oid": "da7e949f5c28c26cbddd089453a1c5530cf64493",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/spread-worker.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-0ccfefa6/spread-worker.log",
+      "bytes": 878,
+      "sha256": "b8c1c60ee02bcc7fe00e6cb75721761e2a9bd87cb80dcaf8aad7ab5895429462",
+      "source_blob_oid": "e850edad205b73074cc1deeaf5c64f87e7bd6145",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/commands.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-156d616c/commands.log",
+      "bytes": 145723,
+      "sha256": "df76c00a9021ad720e07277ff6cd9a1afcdf40d0808e45c77ee650e3dedbdc79",
+      "source_blob_oid": "7a5833940bc2fcaef7e4e4d8b44223e2a55752d2",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/hot-worker.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-156d616c/hot-worker.log",
+      "bytes": 2312,
+      "sha256": "1febf3fbdcf0c79e9a69ff371fc514f935443e98daa7e0b9caea8ff465daa004",
+      "source_blob_oid": "c2e1803d215ff1bba5bfb5e4e05ee04d633058cb",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/profile-sha256.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-156d616c/profile-sha256.txt",
+      "bytes": 74,
+      "sha256": "2183f3834a3747eb65c548cd3a6383e746a0accc99c5e2988deaba7e42919614",
+      "source_blob_oid": "ad5184c506821a1086b42cc7f804fef0a6da1df1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/profile-summary.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-156d616c/profile-summary.txt",
+      "bytes": 11486,
+      "sha256": "def3d95da9fa022985c3eb041276904c5ca3f692184c78a94cc328d384ef5655",
+      "source_blob_oid": "d3cdf46ddeed7c767475a3acff94ede49d0d020b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-156d616c/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-156d616c/results.json",
+      "bytes": 1468,
+      "sha256": "750a1842a9d2e2002b88effbaf9978fd900d81b14f1abb24e0b2361f2e9badb4",
+      "source_blob_oid": "def4b93f6e06336f4c4a363ee468291a0310543e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/commands.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/commands.log",
+      "bytes": 145723,
+      "sha256": "62573c3b35a0bc9eae5aab8d839bc1f77c6f29338dc22aa13c071ce238f334b1",
+      "source_blob_oid": "04543af4182c093ed88747f4c2e613cc08088c3c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/hot-worker.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/hot-worker.log",
+      "bytes": 2313,
+      "sha256": "f8e2cf8d4456377a646d0a02c307ece07299364902d581d1cc35e297d64ef7dc",
+      "source_blob_oid": "5ad0a871ed7312da6ae5edfccdffaf3e0f3363a7",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/profile-sha256.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/profile-sha256.txt",
+      "bytes": 74,
+      "sha256": "e3b06545e2c4791d3338111807a37a436d1857d7ce0c326153eff2d0f956ee51",
+      "source_blob_oid": "6217407a580013381bd962cda9db473c895ef959",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/profile-summary.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/profile-summary.txt",
+      "bytes": 11486,
+      "sha256": "86d32ca97d1b3a54d68929d2a79ceb8a6046e641e1916d52e20e17742880eb5a",
+      "source_blob_oid": "6a3b05c4ad75c8c3f0ea3c56b176543b5f1f76ba",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/capacity-4c565d6d/results.json",
+      "bytes": 1468,
+      "sha256": "f08cda03804a17d5adac3c2b97bf8dc79efdee0d68f4e8a490f5a40b1932b93c",
+      "source_blob_oid": "5fef4f35c46f094e9ccb5c84f6d008483d4024a6",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/fault-tests.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/fault-tests.log",
+      "bytes": 642,
+      "sha256": "9be68c08fc8f2d545b2c4408dc76ce9023f2b19616946b3fc299d027684336ab",
+      "source_blob_oid": "890d913fcf43cfd5609300000cd8239a7b88c713",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/full-path/cached-image-stage-failed.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/full-path/cached-image-stage-failed.json",
+      "bytes": 277,
+      "sha256": "6b540b31db293780ddaf5fa83f3e52c1205a3d71d46705c2ac85f0ff8c6da067",
+      "source_blob_oid": "49ed95d36273124873f9e1db86cfad869e46644d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/full-path/cached-startup-validation-failed.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/full-path/cached-startup-validation-failed.log",
+      "bytes": 29753,
+      "sha256": "ac651d94190086a950fcaf4d108248490913e50c67a748bd2f7c0fc0415bbc09",
+      "source_blob_oid": "f24036871896eeaa14eb30e3fd8fb9d78c652d9c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/full-path/image-manifest.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/full-path/image-manifest.json",
+      "bytes": 968,
+      "sha256": "54a56e3c60cdb879d66ab03ee061518ea8cce3f130c6dcc3139ed8465e4d4cec",
+      "source_blob_oid": "4b70b5e633e0e16e5284cb6ebcf23373ebf26569",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/full-path/null-key-validation-failed.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/full-path/null-key-validation-failed.log",
+      "bytes": 29626,
+      "sha256": "6a0810858a3bd982d4cc80706003ca9004c709efe8ec66391c900376af12d7ab",
+      "source_blob_oid": "1576ce04932adfa4ac2f9229a47df5ff9871418a",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/full-path/passed.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/full-path/passed.log",
+      "bytes": 29874,
+      "sha256": "358c9107a5970b6b380fafb3904cc9dbfd081a60394bd3a00f782071ea701b4c",
+      "source_blob_oid": "c60ca8c27a6b711670a81a06d6358c7fd4293626",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/full-path/registry-build-failed.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/full-path/registry-build-failed.log",
+      "bytes": 23895,
+      "sha256": "21369c59a01982bf2a690d26ff05977c2a5d93af2440ab8cdfa280f290ae722c",
+      "source_blob_oid": "a2f1284851747b2aab1154ff107a9875376f0164",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/broker-shutdown.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/broker-shutdown.log",
+      "bytes": 1070,
+      "sha256": "3ed5d79dbe3f334e6f8efbe1a1712a567e1bdc47bb708555e58e5e6436b51f59",
+      "source_blob_oid": "1adfa42db528d331ee898301dca357b9b4743f78",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/brokers-before-shutdown.jsonl",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/brokers-before-shutdown.jsonl",
+      "bytes": 4602,
+      "sha256": "4337c6cafa80ffce97e4eeb2e02bd5044cffe18b0cca42f1cf0b301d289efac8",
+      "source_blob_oid": "613a2c991fb4d895e74fa5047bee110183cbde8b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/containers-after.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/containers-after.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_blob_oid": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/go-race.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/go-race.log",
+      "bytes": 1059,
+      "sha256": "1f1b2340c6b84fdfa23328433f90394915cfd4bc61cb288effaf42d4d00f348a",
+      "source_blob_oid": "cb97a67662ba454b1b6a4bd48421557501a069d5",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/owned-volumes-after.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/owned-volumes-after.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_blob_oid": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/owned-volumes-before.txt",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/owned-volumes-before.txt",
+      "bytes": 108,
+      "sha256": "1ad9a607c8ebd028cdf57b966d8430813f90abf4a81f6b5c81cc1209287df216",
+      "source_blob_oid": "4b5d2cd8779d157317b1fa9d4928dc2810342b39",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/proto-governance.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/proto-governance.log",
+      "bytes": 94,
+      "sha256": "5ecf82871f187c92f0251abcdc0bd6e78a825cc75a86a37c086dcfccf94304c6",
+      "source_blob_oid": "8ff60f4f468e8c2e05ccb4630041076a1c22b710",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/tooling-checks.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/tooling-checks.json",
+      "bytes": 642,
+      "sha256": "7f00896f38be1f9d42b6e403a09ed75dc9f2aecf2a78b78f730ed74409a04967",
+      "source_blob_oid": "657873e79fa30b9a7d4f10d6295f8f7b95a8ffbe",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/nightly-checkpoint/verification.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/nightly-checkpoint/verification.json",
+      "bytes": 1009,
+      "sha256": "6f25e4bf36df2c88d9ab40fa0e91528fa3f6fc780ee42353c48b677371f931f8",
+      "source_blob_oid": "108b09050ccb8076106e69263545945c8e710f87",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/platform-check-handoff.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/platform-check-handoff.log",
+      "bytes": 684,
+      "sha256": "3b763c33c4814d978e14540e027192f0b1e3adc9c3a8b8370afce318a060ff23",
+      "source_blob_oid": "b949272645795b6c18717be09da17e26c1cefa5b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/cold-restored.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/recovery-5545850c/cold-restored.log",
+      "bytes": 3943,
+      "sha256": "8274ce54c782ab5c48f64046d94a71893a33d094375b391b6b90c471166b4c8a",
+      "source_blob_oid": "c340a1a80e49861443c877d28b3c62ba316dd073",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/commands.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/recovery-5545850c/commands.log",
+      "bytes": 5795,
+      "sha256": "50ea7f7deb739f1a0de8b8a40eadf87fc300135a001d4f68d3b647a0628eb6e1",
+      "source_blob_oid": "a2fac3252ad982a1db3451b31752426b53b96601",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/initial.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/recovery-5545850c/initial.log",
+      "bytes": 14154,
+      "sha256": "4bd281985a5817e8e5b87ad18188f60a6b22e628d80fc4152a1f8c0b5941b1f7",
+      "source_blob_oid": "21c1ac4e73b2cd20854ccd6099559f06077152c9",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/recovery-5545850c/result.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/recovery-5545850c/result.json",
+      "bytes": 4131,
+      "sha256": "e3ae9bc86340b1a5b9c6a54c57da841f84bd616ab00188630ea08ec14a88f93e",
+      "source_blob_oid": "8276f3d2e22bdb7fcde76437876eefca2eb48a27",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/review-findings.md",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/review-findings.md",
+      "bytes": 4013,
+      "sha256": "e8cff2e0acc5220ef54fc35420c3ed9f54af95a93f65c266368cb467e17978b4",
+      "source_blob_oid": "1e488e800b7757046ec2449b46dda47c73fc013e",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/commands.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/commands.log",
+      "bytes": 584,
+      "sha256": "de9e91ef7e1cfa8500bd63ebabf27a55fdd3667a98abf549c37b6311c1d325b2",
+      "source_blob_oid": "07ce798195366e8247f2961a20403df1f9e0899b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/frozen-policy.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/frozen-policy.json",
+      "bytes": 33746,
+      "sha256": "1bdc96a6b760c216ddb607a13c3a26108bdffb0f9eec23f52ea1da9d4d118c5f",
+      "source_blob_oid": "94f3d57f0ed80ab642f39e9b8c9924627548f52c",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/harness-source.mjs",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/harness-source.mjs",
+      "bytes": 8090,
+      "sha256": "d4b0d840e17c0c1af4f96798613e034ff7f9280c7cf5ea528197e90a80123535",
+      "source_blob_oid": "6415b2710bed67572c3dd2c045c099df5e4558c2",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/hot-observer.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/hot-observer.log",
+      "bytes": 41191,
+      "sha256": "9ab9e1ffaaa5500fd155c8e816126cd7af62d46e05ed71f60084b30760129040",
+      "source_blob_oid": "66fe1e45d3c2c4785c4ae7ea8ad134d8bbb99f16",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/hot-worker.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/hot-worker.log",
+      "bytes": 49340,
+      "sha256": "ecb145736a05bf0ded55e8532bdf31eb0b609171fb1d63525136212366f96f95",
+      "source_blob_oid": "b366430fef2530675cd3a341180cbd4ca3d52aaf",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-cleanup.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-cleanup.log",
+      "bytes": 342,
+      "sha256": "b686f94c786b23bdd63d175b8b56afe372d1baa087b6eb3b3753ffea78c90c21",
+      "source_blob_oid": "0ba213e11839299598944848a49b86d1bb07762b",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-init.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-init.log",
+      "bytes": 186,
+      "sha256": "2c58b87a0350a39bb1c3b5f4891defeeb9a785e84aa11a466dc9ddb21253bf58",
+      "source_blob_oid": "ca183d2201964a87c5b3ef2a4a93c94a7e0d2737",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-paired-oracle.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-paired-oracle.log",
+      "bytes": 423,
+      "sha256": "66dacd49a6d045a59cd8493fc41290bf1bd33a8db5fedd2c1e6ae5c77bb3e985",
+      "source_blob_oid": "20d2d1e8002fe951123581550509389149ed16cd",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-paired-seed.log",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/p2-sus-8ea6c8ce-hot-paired-seed.log",
+      "bytes": 4640094,
+      "sha256": "c05d37b8c83700c5da7cef06446947fe040692f656900e52684ce9aa85c6f41c",
+      "source_blob_oid": "960fa2e756097f08bb2b4647b75af80f808f0af1",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    },
+    {
+      "source_path": "docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/results.json",
+      "archive_path": "records/reef/docs/evidence/calcify-phase2-implementation/sustained-8ea6c8ce/results.json",
+      "bytes": 85982,
+      "sha256": "a87016fbddc4189a52759f71fa1c58c22395dec0bda4e9bf3f0da87c2534ce54",
+      "source_blob_oid": "c49533f2b7962b71fc7747a15432e583fe9c406d",
+      "reason": "Complete tracked raw Phase 2/direct-throughput/joined campaign evidence, including failures, corrections and provenance; live executable fixture/checksum companions also retained in Reef."
+    }
+  ]
+}

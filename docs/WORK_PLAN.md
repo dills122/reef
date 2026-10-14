@@ -29,7 +29,7 @@ in `docs/evidence/` and analysis in the plan.
 | Track | State | Next bounded action |
 | --- | --- | --- |
 | Capture path (Phase 1/2) | Merged, opt-in. D7 10,425/s fresh-state; aged no-restart control 10.3k full contexts/s passes; resolver cold restart 8.1k/s fails the 10k gate | Warm-restart proof, then incremental keyed capture reducer |
-| Finite P3 O1/O2 | Merged after independent review; O2 live evidence for G1-G8/G10 is inherited, not replayed | One approved live replay on master; Records PR11/PR12; role sign-off |
+| Finite P3 O1/O2 | Merged after independent review; O2 live evidence for G1-G8/G10 is inherited, not replayed | One approved O2 live replay on master; Records PR11/PR12; role split signed October 13, 2026 |
 | Finite P3 O3 | Packet decided (D1-D7); O3a hardened and merged (PR493/494), wire contract merged, binding v2 spec merged as an unaccepted draft (PR495), option-B ordering spike go (PR496) | Final O3a review (3 of 3) and v2 spec review (4 of 4); fix findings; then O3b design and adapter |
 | Arena goalpost and credit | Research and proposals only (10k/s through the API, settlement lags; receivable credit) | Calibrate and adopt by owner decision; no reservation code before |
 
@@ -142,7 +142,7 @@ no capacity claim (the 50,000 decisions/s gate is waived for the bounded finite 
   data flowing, closing F8) is open.
 - **Reviews:** three independent integration reviews; the third (on the PR516/518/519 set) returned **Ready with non-blocking follow-ups**, no P0 or P1, and its fixes are in PR519.
 - **Owner decisions in force:** no processor "auto attempt 1" (every settle attempt is an operator Settle input); operator CLI holds the control credential; one binding digest per v2 run; session timeout 6,000 ms.
-- **Operator documents:** [role sign-off packet](work/CALCIFY_FINITE_P3_ROLE_SIGNOFF.md) (awaiting sign-off), [finance runtime runbook](work/CALCIFY_FINITE_P3_FINANCE_RUNTIME.md),
+- **Operator documents:** [role sign-off packet](work/CALCIFY_FINITE_P3_ROLE_SIGNOFF.md) (owner signed October 13, 2026), [finance runtime runbook](work/CALCIFY_FINITE_P3_FINANCE_RUNTIME.md),
   [binding v2 spec](work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md), [S2 close-out research](work/CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md).
 - **Open, recorded limits:** the owner epoch is claimed by the finance process at start (a newer instance fences the older one loudly; not derived from the ingress owner claim); the decision log and `stateDigest` are unkeyed integrity digests, not authenticity;
   F6 (each projection pass opens fresh evidence consumers); TLS and credential delivery are deployment decisions; the operator read routes rely on the internal-HTTP exposure mode; the live recording was a single local-Docker attempt on a closed network.
@@ -341,7 +341,7 @@ describes the remaining task, not whether the whole subsystem exists.
 | Work | Status | Next bounded action |
 | --- | --- | --- |
 | Calcify finite P3 O3 (financial admission) | Packet decided; O3a hardened (72/72 mutants killed, 5,000-schedule oracle, state-committing chain), wire contract and ordering spike merged; binding v2 spec is a draft under review | Close final O3a and spec reviews; accept the spec; then O3b adapter. |
-| Calcify O2 evidence debt | Open | One approved live replay of G1-G8/G10 on master; merge Records PR11/PR12 (merge-commit); operator sign-off of the role split. |
+| Calcify O2 evidence debt | Open | One approved live replay of G1-G8/G10 on master; merge Records PR11/PR12 (merge-commit); role split signed October 13, 2026 ([packet](work/CALCIFY_FINITE_P3_ROLE_SIGNOFF.md)). |
 | Calcify 10k arena capacity | Research; recovery gate open | Warm-restart proof at aged state; incremental keyed capture reducer with differential oracle; credit calibration and owner decision. |
 | Settlement read visibility/authorization | Contract and code work | Define run/participant/operator visibility; enforce and test both adapters. |
 | Projection `5k` downstream drain | Failed evidence gate | Diagnose final lifecycle/market maintainer work; prove drain before sustained promotion. |

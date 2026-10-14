@@ -109,6 +109,13 @@ Use `run` while iterating; it provisions or reuses the stack, syncs the checkout
 
 ## Named Materializer 10k Gate
 
+Named gates share `bun scripts/dev/do-gate.mjs <profile> <command>`:
+profiles `materializer-10k`, `materializer-scaling`, and `projection-freshness`;
+commands `plan`, `run`, `run-destroy`, and `check`. Existing Make targets and
+tier/environment overrides remain supported. The three former
+`do-<profile>-gate.sh` wrappers are replaced by this CLI. `plan` prints the
+host plan without provisioning resources.
+
 Use the wrapper below for the current Redpanda direct-stream plus
 venue-event-materializer promotion gate. It pins the known-good c-16 shape,
 10k target, 1024 load workers, SLO gates, repeated samples, and partition-spread
