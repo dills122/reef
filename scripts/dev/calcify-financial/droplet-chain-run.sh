@@ -3,7 +3,7 @@
 # It provisions the existing do-benchmark stack, ships ONLY tracked files (git archive of HEAD: never .env, .planning, .mcp.json or other untracked files),
 # installs a JDK on the host, runs a short matrix, fetches the outputs, and destroys the droplet on every exit path.
 #
-#   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | compare | smoke | s1smoke)
+#   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | compare | tmpfs | smoke | s1smoke)
 #   `compare` runs the single-thread microbenchmarks first, then lanes 1 to 4 with the projector and lanes 1 and 3 without it, all with -XX:+UseParallelGC, then the S1 shard cases.
 #
 # Needs DIGITALOCEAN_TOKEN in .env or the environment, an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
@@ -74,6 +74,7 @@ remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-21-jd
 
 log "microbenchmarks (single thread SHA-256 and memory, then a thread-scaling loop)"
 scp -i "$KEY" -o UserKnownHostsFile="$ROOT_DIR/.tmp-do-known-hosts" "$ROOT_DIR"/scripts/dev/calcify-financial/droplet-microbench/*.java "$USER_NAME@$HOST:/tmp/" >/dev/null
+scp -i "$KEY" -o UserKnownHostsFile="$ROOT_DIR/.tmp-do-known-hosts" "$ROOT_DIR/scripts/dev/calcify-financial/droplet-sizes.sh" "$USER_NAME@$HOST:/tmp/" >/dev/null
 { remote "java /tmp/Bench.java && java /tmp/Par.java"; } 2>&1 | tee "$OUT_DIR/microbench.txt" || log "microbenchmarks failed"
 
 run_case() {
@@ -81,7 +82,7 @@ run_case() {
   local label="$1"; shift
   if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
   log "case $label ($*)"
-  remote "cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S4_TRADES=\${S4_TRADES:-100000} S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.wholeChainOnOneMachine' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+  remote "(bash /tmp/droplet-sizes.sh /tmp/sizes-$label.txt &) ; cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S4_TRADES=\${S4_TRADES:-100000} S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.wholeChainOnOneMachine' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; pkill -f '[d]roplet-sizes.sh'; for d in redpanda postgres; do echo \"MAX-DATA-DIR \$d KiB: \$(grep \"^\$d \" /tmp/sizes-$label.txt | cut -d' ' -f2 | sort -n | tail -1)\"; done; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
 }
 
 run_s1() {
@@ -108,6 +109,15 @@ case "$MATRIX" in
     run_s1 "s1-shards1" $PG S1_SHARDS=1
     run_s1 "s1-shards2" $PG S1_SHARDS=2
     run_s1 "s1-shards3" $PG S1_SHARDS=3
+    ;;
+  tmpfs)
+    # Option A of the capacity plan: broker and Postgres data on tmpfs (not durable; a lost host means rerun from the captured inputs), ParallelGC, projector on.
+    T="JAVA_TOOL_OPTIONS=-XX:+UseParallelGC S4_PG_DOCKER=--tmpfs=/var/lib/postgresql/data:rw,size=6g,mode=1777 S4_RP_DOCKER=--tmpfs=/var/lib/redpanda/data:rw,size=6g,uid=101,gid=101,mode=0777"
+    run_case "tmpfs-lanes2" $T S4_LANES=2
+    run_case "tmpfs-lanes3" $T S4_LANES=3
+    run_case "tmpfs-lanes1" $T S4_LANES=1
+    run_case "tmpfs-lanes4" $T S4_LANES=4
+    run_case "tmpfs-lanes2-again" $T S4_LANES=2
     ;;
   smoke) run_case "smoke-1lane" S4_LANES=1 S4_TRADES=5000 ;;
   s1smoke) run_s1 "s1-smoke" S1_SHARDS=2 ;;
