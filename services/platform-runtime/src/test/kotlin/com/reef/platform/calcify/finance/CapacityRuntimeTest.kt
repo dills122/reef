@@ -10,16 +10,25 @@ import kotlin.test.assertTrue
 
 class CapacityRuntimeTest {
     private val digest = "a".repeat(64)
-    private fun plan(edit: (String) -> String = { it }) = edit("""{"schema":"calcify-capacity-plan-v1","planId":"arena-1","run":"run-1","session":"session-1","cashAsset":"USD","openingAccount":"opening",
+    private fun plan(edit: (String) -> String = { it }) = edit("""{"schema":"calcify-capacity-plan-v1","planId":"arena-1","run":"run-1","session":"session-1","cashAsset":"USD","openingAccount":"opening","laneRouting":"explicit",
         "laneInstruments":[["INS0","INS1"],["INS2"]],"maxObligations":"1000000","maxCaptures":"1000000","maxSettleAttempts":"2000000","maxControls":"50000","sequenceBound":"8000000","autoSettle":true,
-        "captureBindingDigest":"$digest","applicationId":"capacity-app","topics":{"capture":"CAP","control":"CTL","decisions":"DEC"}}""".replace(Regex("\\s*\n\\s*"), "")).toByteArray()
+        "captureSource":{"kind":"finite-lifecycle-capture-v1","bindingDigest":"$digest","verifyContentDigest":true},"applicationId":"capacity-app","topics":{"capture":"CAP","control":"CTL","decisions":"DEC"}}""".replace(Regex("\\s*\n\\s*"), "")).toByteArray()
 
     @Test fun aValidPlanFileBecomesAPlanWithLanesTopicsAndBindings() {
         val d = CapacityRuntime.parsePlan(plan())
         assertEquals(2, d.plan.lanes); assertEquals(setOf("INS0", "INS1"), d.plan.laneInstruments[0]); assertEquals(1, d.plan.laneOf("INS2"))
-        assertEquals(8_000_000L, d.plan.sequenceBound); assertEquals(CapacityTopics("CAP", "CTL", "DEC"), d.topics); assertEquals("capacity-app", d.applicationId); assertEquals(digest, d.captureBindingDigest)
+        assertEquals(8_000_000L, d.plan.sequenceBound); assertEquals(CapacityTopics("CAP", "CTL", "DEC"), d.topics); assertEquals("capacity-app", d.applicationId); assertTrue(d.decoder is CapacityInputDecoders)
         assertTrue(d.plan.autoSettle); assertTrue(d.plan.bindingDigest(0) != d.plan.bindingDigest(1))
         assertEquals(d.plan.bindingDigest(0), CapacityRuntime.parsePlan(plan()).plan.bindingDigest(0), "the same file gives the same lane bindings")
+    }
+
+    @Test fun anEngineAlignedPlanWithResolvedContextsIsAccepted() {
+        val instruments = (0 until 12).map { "INS$it" }; val lanes = CapacityRouting.engineLanes(instruments, 3)
+        val json = plan { it.replace("\"explicit\"", "\"partition-lane-hash-v1\"").replace(Regex("\"captureSource\":\\{[^}]*\\}"), "\"captureSource\":{\"kind\":\"resolved-context-v1\",\"policyVersion\":\"1\"}")
+            .replace(Regex("\"laneInstruments\":\\[.*?\\]\\],"), "\"laneInstruments\":[" + lanes.joinToString(",") { l -> l.sorted().joinToString(",", "[", "]") { "\"$it\"" } } + "],") }
+        val d = CapacityRuntime.parsePlan(json)
+        assertEquals(3, d.plan.lanes); assertTrue(d.decoder is CapacityResolvedContextDecoder); d.plan.requireEngineAligned()
+        assertEquals(lanes.map { it.toSet() }, d.plan.laneInstruments)
     }
 
     @Test fun everyMalformedPlanIsRefused() {
@@ -28,6 +37,11 @@ class CapacityRuntimeTest {
             "unknown field" to { it.replace("\"run\":", "\"extra\":\"x\",\"run\":") },
             "missing field" to { it.replace("\"session\":\"session-1\",", "") },
             "digest shape" to { it.replace(digest, "A".repeat(64)) },
+            "unknown source kind" to { it.replace("finite-lifecycle-capture-v1", "other-v1") },
+            "resolved source needs engine routing" to { it.replace(Regex("\"captureSource\":\\{[^}]*\\}"), "\"captureSource\":{\"kind\":\"resolved-context-v1\",\"policyVersion\":\"1\"}") },
+            "unknown routing" to { it.replace("\"explicit\"", "\"hash\"") },
+            "not the engine's partitioning" to { it.replace("\"explicit\"", "\"partition-lane-hash-v1\"") },
+            "verify flag as text" to { it.replace("\"verifyContentDigest\":true", "\"verifyContentDigest\":\"true\"") },
             "number as number" to { it.replace("\"maxControls\":\"50000\"", "\"maxControls\":50000") },
             "negative number" to { it.replace("\"maxControls\":\"50000\"", "\"maxControls\":\"-1\"") },
             "autoSettle as text" to { it.replace("\"autoSettle\":true", "\"autoSettle\":\"true\"") },
@@ -62,7 +76,7 @@ class CapacityRuntimeTest {
     @Test fun theRoleBuildsALauncherFromTheEnvironmentWithoutConnectingAnywhere() {
         val dir = Files.createTempDirectory("capacity-runtime")
         CapacityRuntime.create(env(dir))      // would throw on any missing, loose or inline input; opens no connection
-        CapacityRuntime.create(env(dir, mapOf("CALCIFY_CAPACITY_STREAM_THREADS" to "1", "CALCIFY_CAPACITY_PROJECTION_CHUNK" to "5000", "CALCIFY_CAPACITY_SESSION_TIMEOUT_MS" to "10000", "CALCIFY_CAPACITY_VERIFY_CONTENT_DIGEST" to "false")))
+        CapacityRuntime.create(env(dir, mapOf("CALCIFY_CAPACITY_STREAM_THREADS" to "1", "CALCIFY_CAPACITY_PROJECTION_CHUNK" to "5000", "CALCIFY_CAPACITY_SESSION_TIMEOUT_MS" to "10000")))
     }
 
     @Test fun looseSecretsInlineCredentialsAndBadSettingsAreRefused() {
@@ -76,7 +90,6 @@ class CapacityRuntimeTest {
         refused("threads above lanes") { k -> if (k == "CALCIFY_CAPACITY_STREAM_THREADS") "3" else ok(k) }
         refused("chunk out of range") { k -> if (k == "CALCIFY_CAPACITY_PROJECTION_CHUNK") "5" else ok(k) }
         refused("session timeout below the pinned floor") { k -> if (k == "CALCIFY_CAPACITY_SESSION_TIMEOUT_MS") "1000" else ok(k) }
-        refused("digest flag spelling") { k -> if (k == "CALCIFY_CAPACITY_VERIFY_CONTENT_DIGEST") "yes" else ok(k) }
         val loose = dir.resolve("kp"); Files.setPosixFilePermissions(loose, PosixFilePermissions.fromString("rw-r-----"))
         refused("group-readable credential") { k -> ok(k) }
         Files.setPosixFilePermissions(loose, PosixFilePermissions.fromString("rw-------"))

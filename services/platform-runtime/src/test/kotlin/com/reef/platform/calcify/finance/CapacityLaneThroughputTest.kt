@@ -85,7 +85,7 @@ class CapacityLaneThroughputTest {
                 rp.admin().use { admin -> admin.createTopics(listOf(topics.capture, topics.control, topics.decisions).map { NewTopic(it, lanes, 1.toShort()).configs(mapOf("retention.ms" to "-1", "retention.bytes" to "-1")) }).all().get(30, TimeUnit.SECONDS) }
                 val client = Properties().apply { put("bootstrap.servers", rp.bootstrap) }
                 val stateDir = Files.createTempDirectory("capacity-rate-state").toFile()
-                val launcher = CapacityLauncher(plan, captureBinding, topics, "capacity-rate", client, client, stateDir.path, ds, verifyContentDigest = verifyDigest, maxApply = env("CAP_MAX_APPLY", "2000").toInt()).start()
+                val launcher = CapacityLauncher(plan, CapacityInputDecoders(plan, captureBinding, verifyDigest), topics, "capacity-rate", client, client, stateDir.path, ds, maxApply = env("CAP_MAX_APPLY", "2000").toInt()).start()
                 val producer = KafkaProducer<ByteArray, ByteArray>(Properties().apply {
                     put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rp.bootstrap); put(ProducerConfig.ACKS_CONFIG, "all"); put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
                     put(ProducerConfig.LINGER_MS_CONFIG, 5); put(ProducerConfig.BATCH_SIZE_CONFIG, 131_072)

@@ -11,8 +11,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.streams.StreamsConfig
 import org.postgresql.ds.PGSimpleDataSource
 
-/** A parsed `calcify-capacity-plan-v1` file: the plan, the capture binding it reads, the topics and the application id. */
-internal data class CapacityDeployment(val plan: CapacityPlan, val captureBindingDigest: String, val topics: CapacityTopics, val applicationId: String)
+/** A parsed `calcify-capacity-plan-v1` file: the plan, the decoder for its capture source, the topics and the application id. */
+internal data class CapacityDeployment(val plan: CapacityPlan, val decoder: CapacityInputDecoder, val topics: CapacityTopics, val applicationId: String)
 
 /**
  * The opt-in capacity FINANCE process role (selected by `CALCIFY_CAPACITY_PLAN_FILE`, never together with the finite roles or a `CALCIFY_STAGE`). It builds a
@@ -22,8 +22,11 @@ internal data class CapacityDeployment(val plan: CapacityPlan, val captureBindin
  * operator's statement of the deployment and its digest is the lane bindings' identity.
  *
  * Plan file (strict JSON, every field required, numbers spelled as decimal text as in the finite contract):
- * `{"schema":"calcify-capacity-plan-v1","planId","run","session","cashAsset","openingAccount","laneInstruments":[["A","B"],["C"]],"maxObligations","maxCaptures",
- *   "maxSettleAttempts","maxControls","sequenceBound","autoSettle":true,"captureBindingDigest","applicationId","topics":{"capture","control","decisions"}}`
+ * `{"schema":"calcify-capacity-plan-v1","planId","run","session","cashAsset","openingAccount","laneRouting":"partition-lane-hash-v1"|"explicit","laneInstruments":[["A","B"],["C"]],
+ *   "maxObligations","maxCaptures","maxSettleAttempts","maxControls","sequenceBound","autoSettle":true,"applicationId","topics":{"capture","control","decisions"},
+ *   "captureSource":{"kind":"resolved-context-v1","policyVersion":"1"} | {"kind":"finite-lifecycle-capture-v1","bindingDigest":"<64 hex>","verifyContentDigest":true}}`
+ * `partition-lane-hash-v1` makes the file refuse any instrument assignment that is not the matching engine's own partitioning, which is required for the production
+ * source (resolved match contexts arrive on the venue source partition = the lane).
  */
 internal object CapacityRuntime {
     private val digestShape = Regex("[0-9a-f]{64}")
@@ -31,7 +34,7 @@ internal object CapacityRuntime {
     fun parsePlan(bytes: ByteArray): CapacityDeployment {
         val root = FiniteBindingContract.strictObject(bytes, 65_536)
         FiniteBindingContract.fields(root, listOf("schema", "planId", "run", "session", "cashAsset", "openingAccount", "laneInstruments", "maxObligations", "maxCaptures", "maxSettleAttempts",
-            "maxControls", "sequenceBound", "autoSettle", "captureBindingDigest", "applicationId", "topics"))
+            "maxControls", "sequenceBound", "autoSettle", "laneRouting", "captureSource", "applicationId", "topics"))
         require(FiniteBindingContract.text(root, "schema") == "calcify-capacity-plan-v1") { "unknown capacity plan schema" }
         fun t(k: String) = FiniteBindingContract.text(root, k, 128)
         fun n(k: String, max: Long) = FiniteBindingContract.number(root, k, max)
@@ -43,14 +46,31 @@ internal object CapacityRuntime {
                 .also { require(it.size == lane.size()) { "an instrument is listed twice in a lane" } }
         }
         require(root["autoSettle"].isBoolean) { "autoSettle must be a boolean" }
-        val digest = t("captureBindingDigest"); require(digestShape.matches(digest)) { "captureBindingDigest must be 64 lowercase hex characters" }
         val topicsNode = root["topics"]; FiniteBindingContract.fields(topicsNode, listOf("capture", "control", "decisions"))
         val topics = CapacityTopics(FiniteBindingContract.text(topicsNode, "capture", 128), FiniteBindingContract.text(topicsNode, "control", 128), FiniteBindingContract.text(topicsNode, "decisions", 128))
         require(setOf(topics.capture, topics.control, topics.decisions).size == 3) { "the three topics must differ" }
         val plan = CapacityPlan(t("planId"), t("run"), t("session"), AssetId(t("cashAsset")), AccountId(t("openingAccount")), laneSets,
             n("maxObligations", Int.MAX_VALUE.toLong()).toInt(), n("maxCaptures", Int.MAX_VALUE.toLong()).toInt(), n("maxSettleAttempts", Int.MAX_VALUE.toLong()).toInt(), n("maxControls", Int.MAX_VALUE.toLong()).toInt(),
             root["autoSettle"].booleanValue(), n("sequenceBound", FinanceProjector.MAX_SEQUENCE_BOUND))
-        return CapacityDeployment(plan, digest, topics, t("applicationId"))
+        val routing = t("laneRouting"); require(routing == CapacityRouting.EXPLICIT || routing == CapacityRouting.ENGINE_PARTITIONS) { "unknown laneRouting" }
+        if (routing == CapacityRouting.ENGINE_PARTITIONS) plan.requireEngineAligned()
+        val source = root["captureSource"]; require(source != null && source.isObject) { "captureSource must be an object" }
+        val decoder: CapacityInputDecoder = when (FiniteBindingContract.text(source, "kind", 64)) {
+            "resolved-context-v1" -> {
+                FiniteBindingContract.fields(source, listOf("kind", "policyVersion"))
+                require(FiniteBindingContract.number(source, "policyVersion", 1_000) == CapacityResolvedContextDecoder.POLICY_VERSION.toLong()) { "unsupported resolved-context policyVersion" }
+                require(routing == CapacityRouting.ENGINE_PARTITIONS) { "resolved contexts arrive on the engine's partitions: laneRouting must be partition-lane-hash-v1" }
+                CapacityResolvedContextDecoder(plan)
+            }
+            "finite-lifecycle-capture-v1" -> {
+                FiniteBindingContract.fields(source, listOf("kind", "bindingDigest", "verifyContentDigest"))
+                val digest = FiniteBindingContract.text(source, "bindingDigest", 64); require(digestShape.matches(digest)) { "bindingDigest must be 64 lowercase hex characters" }
+                require(source["verifyContentDigest"].isBoolean) { "verifyContentDigest must be a boolean" }
+                CapacityInputDecoders(plan, digest, source["verifyContentDigest"].booleanValue())
+            }
+            else -> throw IllegalArgumentException("unknown captureSource kind")
+        }
+        return CapacityDeployment(plan, decoder, topics, t("applicationId"))
     }
 
     /** Builds (does not start) the launcher. Reads files and the environment only: no broker or database connection is opened here. */
@@ -80,15 +100,14 @@ internal object CapacityRuntime {
         val interval = ranged("CALCIFY_CAPACITY_PROJECTION_INTERVAL_MS", 100L, 20L..10_000L)
         val maxApply = ranged("CALCIFY_CAPACITY_PROJECTION_CHUNK", 2_000L, 100L..50_000L).toInt()
         val threads = ranged("CALCIFY_CAPACITY_STREAM_THREADS", deployment.plan.lanes.toLong(), 1L..deployment.plan.lanes.toLong()).toInt()
-        val verifyDigest = (lookup("CALCIFY_CAPACITY_VERIFY_CONTENT_DIGEST") ?: "true").let { require(it == "true" || it == "false") { "CALCIFY_CAPACITY_VERIFY_CONTENT_DIGEST must be true or false" }; it.toBoolean() }
         val jdbcUrl = required("CALCIFY_CAPACITY_POSTGRES_JDBC_URL")
         require(!Regex("(?i)[?&;]password=").containsMatchIn(jdbcUrl)) { "CALCIFY_CAPACITY_POSTGRES_JDBC_URL must not carry a password; use CALCIFY_CAPACITY_POSTGRES_PASSWORD_FILE" }
         val dataSource = PGSimpleDataSource().apply {
             setURL(jdbcUrl); user = required("CALCIFY_CAPACITY_POSTGRES_USER"); password = secret("CALCIFY_CAPACITY_POSTGRES_PASSWORD")
             connectTimeout = 5; socketTimeout = 120; reWriteBatchedInserts = true
         }
-        return CapacityLauncher(deployment.plan, deployment.captureBindingDigest, deployment.topics, deployment.applicationId, evidenceProps, streamsProps, stateDir.toString(), dataSource,
-            threads = threads, verifyContentDigest = verifyDigest, projectionIntervalMs = interval, maxApply = maxApply)
+        return CapacityLauncher(deployment.plan, deployment.decoder, deployment.topics, deployment.applicationId, evidenceProps, streamsProps, stateDir.toString(), dataSource,
+            threads = threads, projectionIntervalMs = interval, maxApply = maxApply)
     }
 
     /** The capacity role is its own process: it must not share a JVM (or credentials) with the finite roles or a Calcify stage. */

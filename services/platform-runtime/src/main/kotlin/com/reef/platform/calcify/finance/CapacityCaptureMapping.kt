@@ -51,7 +51,7 @@ internal object CapacityCaptureMapping {
     fun firstSettle(execution: ExecutionKey): FinanceInput.Settle =
         FinanceInput.Settle(ActionKey(NAMESPACE, "settle", "${execution.executionId}/1"), Authority.OPERATOR, execution, 1)
 
-    private fun positive(text: String): Long {
+    internal fun positive(text: String): Long {
         require(text.isNotEmpty() && text.all { it in '0'..'9' } && (text.length == 1 || text[0] != '0')) { "non-canonical decimal" }
         val value = text.toLongOrNull() ?: throw IllegalArgumentException("decimal exceeds int64")
         require(value > 0) { "amount must be positive" }
@@ -88,8 +88,13 @@ internal class CapacityInputDecoders(private val plan: CapacityPlan, private val
         return out
     }
 
-    private fun control(raw: ByteArray): List<CapacityItem> {
-        val input = try { FinanceWire.fromProto(FinanceInputV1.parseFrom(raw)) } catch (e: Exception) { return listOf(CapacityItem.Bad(FiniteLifecycleContract.sha(raw))) }
-        return if (input is FinanceInput.Capture) listOf(CapacityItem.Bad(FiniteLifecycleContract.sha(raw))) else listOf(CapacityItem.Run(input))
+    private fun control(raw: ByteArray): List<CapacityItem> = controlItems(raw)
+
+    companion object {
+        /** A CONTROL record: Fund or Settle only; a Capture body or an unparseable one is Bad. */
+        fun controlItems(raw: ByteArray): List<CapacityItem> {
+            val input = try { FinanceWire.fromProto(FinanceInputV1.parseFrom(raw)) } catch (e: Exception) { return listOf(CapacityItem.Bad(FiniteLifecycleContract.sha(raw))) }
+            return if (input is FinanceInput.Capture) listOf(CapacityItem.Bad(FiniteLifecycleContract.sha(raw))) else listOf(CapacityItem.Run(input))
+        }
     }
 }
