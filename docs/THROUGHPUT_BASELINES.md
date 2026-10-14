@@ -1879,3 +1879,23 @@ Host: single-thread microbenchmark 3.8 M ops/s (as the c-16), 16 threads togethe
 **Not run:** session B (the fast g5 line with a 100 GB block-storage volume holding both stores) stopped at volume creation, 403 "not authorized" for the benchmark token; the droplet was destroyed within two minutes (about $0.02). No volume was created.
 
 Interpretation limits: see CAL-FIN-P4, P5, P7, P8, P9. One droplet, single runs except the repeat; fixture runs of seconds to 160 s, not minutes to an hour; sizes are encoded volume in this fixture and include the changelog before compaction. The server did not meet the 20,000 decisions/s need in this configuration; no capacity claim.
+
+## Calcify arena baseline D: the "2x SSD" 32 vCPU size, CAL-FIN-P12 (October 14, 2026)
+
+Third storage point for CAL-FIN-P10 and P11: same test, settings and matrix (`droplet-chain-run.sh baseline`, root-disk stores, full retention) on one DigitalOcean `c2-32vcpu-64gb` droplet (`sfo2`, $1.12/h, "CPU-Optimized 2x SSD", 774 GB root disk, Intel Xeon Platinum 8168, 32 vCPU, 64 GB), tried because the larger local disk was expected to write faster. 18 minutes (about $0.34), destroyed, API check clean.
+**Synchronous 4 KiB writes on the root disk: about 7 ms each** (200 writes in 1.41 to 1.54 s), against 10 ms on the `c-32` (P10), 1.5 ms on the `c-16` (P7) and 43 to 57 ms on the g5 line (P8). It is not the low-millisecond disk that was hoped for.
+
+**Rate (lanes together inputs/s; projected decisions/s; projector lag; CPU per decision):** 4 lanes 18,769; 15,932 (7.6 s); 497. 6 lanes 21,099 and 21,302; **17,985 and 18,074** (9.8 and 10.1 s); 545 and 531. 8 lanes 21,675; **19,051** (10.2 s); 551. **Sustained, 6 lanes with 250,000 trades each (3,000,000 decisions): 18,800 inputs/s over 160 s, 17,819 projected**; 564.
+Against the `c-32` on its 10 ms disk (P10): +5 to +11 percent at 4 and 6 lanes, +3 percent at 8, **-5 percent sustained** (18.7k to 17.8k); inside the 15 percent spread this ledger sees run to run. Against the same `c-32` with free storage (P11: 27.1k to 31.4k): 63 to 68 percent of it. **No size tried so far delivers a durable disk fast enough for the 20,000 decisions/s need on this chain;** the best durable result is 19,051 projected (95 percent) with eight lanes.
+
+| Storage | Root disk 4 KiB synchronous write | Best projected decisions/s (lanes) |
+| --- | --- | --- |
+| tmpfs, `c-32` (P11) | none | 31,368 (8), sustained 27,581 (6) |
+| `c-16` root disk (P7, Xeon, 16 vCPU) | 1.5 ms | 15,834 (5) |
+| `c2-32vcpu-64gb` root disk (this entry) | 7 ms | 19,051 (8), sustained 17,819 (6) |
+| `c-32` root disk (P10) | 10 ms | 18,471 (8), sustained 18,729 (6) |
+| g5 EPYC root disk (P8) | 43 to 57 ms | falls with lanes: 3,801 inputs/s at 3 lanes |
+
+The c-16 line shows the latency is not the whole story (a 16 vCPU host with a 1.5 ms disk delivers less than a 32 vCPU host with a 7 to 10 ms one, because it has half the cores). What it does show is that the two 32 vCPU hosts stay at 92 to 95 percent of the need whatever the disk, within noise of each other, while free storage gives 135 to 155 percent. The remaining open candidates: a disk with synchronous writes well under 1 ms (local NVMe on another provider, or a block-storage volume, neither tried), and less synchronous write work per decision (broker and Postgres settings that were not effective on the slow g5 disk, CAL-FIN-P8, were not retried here).
+
+Interpretation limits: see CAL-FIN-P10 and P11. One droplet per size, single runs except one repeat (six lanes within 1.0 percent); the root-disk check is a 200-write `dd` sample taken once per host. No capacity claim.
