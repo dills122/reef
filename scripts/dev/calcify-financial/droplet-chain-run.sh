@@ -30,9 +30,12 @@ destroyed=0
 cleanup() {
   local status=$?
   if [ "$destroyed" -eq 0 ]; then
-    log "destroying the droplet (exit status $status)"
-    "$HARNESS" destroy || log "DESTROY FAILED: check 'doctl compute droplet list' and destroy by hand"
-    destroyed=1
+    log "destroying the droplet and its volume, if any (exit status $status)"
+    if "$HARNESS" destroy || { log "destroy failed once; retrying"; sleep 10; "$HARNESS" destroy; }; then
+      destroyed=1
+    else
+      log "DESTROY FAILED: check 'doctl compute droplet list' and 'doctl compute volume list' (a volume named reef-stream-ack-benchmark-vol may remain) and destroy by hand"
+    fi
   fi
 }
 trap cleanup EXIT INT TERM
@@ -47,6 +50,9 @@ remote() {
 if [ "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" != 0 ]; then
   echo "tracked changes present; run from a clean checkout so the shipped tree is exactly HEAD" >&2; exit 1
 fi
+# The private key is the public key path without .pub; refuse to rent a host this script cannot log in to.
+KEY="${REEF_DO_SSH_PRIVATE_KEY:-${REEF_DO_SSH_PUBLIC_KEY:-$HOME/.ssh/id_ed25519.pub}}"; KEY="${KEY%.pub}"
+[ -r "$KEY" ] || { echo "missing or unreadable SSH private key: $KEY (set REEF_DO_SSH_PRIVATE_KEY)" >&2; exit 1; }
 HEAD_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD)"
 mkdir -p "$OUT_DIR"
 log "head $HEAD_SHA; size $REEF_DO_SIZE; matrix $MATRIX; outputs in $OUT_DIR; deadline ${DEADLINE_SECONDS}s"
@@ -55,12 +61,11 @@ log "provisioning"
 # The harness waits ten minutes for cloud-init. DigitalOcean's apt mirror has been seen mid-sync ("File has unexpected size"), which fails the bootstrap; tolerate that here and repair it below.
 "$HARNESS" up || log "harness up did not report a ready host; checking the bootstrap by hand"
 HOST="$(outputs public_ipv4)"; USER_NAME="$(outputs ssh_user)"
-KEY="${REEF_DO_SSH_PRIVATE_KEY:-${REEF_DO_SSH_PUBLIC_KEY:-$HOME/.ssh/id_ed25519.pub}}"; KEY="${KEY%.pub}"
 log "host $USER_NAME@$HOST"
 
 if ! remote "sudo test -f /var/log/reef-benchmark-bootstrap.done"; then
   log "bootstrap marker missing: pointing apt at archive.ubuntu.com and re-running the cloud-init commands"
-  remote 'sudo sed -i "s#http://mirrors.digitalocean.com/ubuntu#http://archive.ubuntu.com/ubuntu#g" /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null; sudo bash -c "nohup bash /var/lib/cloud/instance/scripts/runcmd > /var/log/bootstrap-retry.log 2>&1 &"; true'
+  remote 'sudo test -x /var/lib/cloud/instance/scripts/runcmd || { echo "cloud-init runcmd script is missing" >&2; exit 1; }; sudo sed -i "s#http://mirrors.digitalocean.com/ubuntu#http://archive.ubuntu.com/ubuntu#g" /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null; sudo bash -c "nohup bash /var/lib/cloud/instance/scripts/runcmd > /var/log/bootstrap-retry.log 2>&1 &"; true'
   for _ in $(seq 1 120); do
     if remote "sudo test -f /var/log/reef-benchmark-bootstrap.done" 2>/dev/null; then break; fi
     sleep 5

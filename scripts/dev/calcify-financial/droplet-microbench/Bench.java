@@ -4,6 +4,7 @@ import java.util.zip.CRC32C;
 public class Bench {
   static volatile long sink;
 
+  /** Best of `reps` timed runs after three warm-up runs: the fastest run is the least disturbed by other work, which is what a cross-host CPU comparison wants. */
   static double timeIt(String name, int reps, Runnable r) {
     for (int i = 0; i < 3; i++) r.run();
     long best = Long.MAX_VALUE;

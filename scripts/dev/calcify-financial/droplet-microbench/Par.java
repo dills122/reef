@@ -3,7 +3,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
 public class Par {
-  static volatile long sink;
+  static final java.util.concurrent.atomic.AtomicLong sink = new java.util.concurrent.atomic.AtomicLong();
   static long work(long seed, int iters) {
     HashMap<String, Integer> m = new HashMap<>();
     StringBuilder sb = new StringBuilder();
@@ -25,7 +25,7 @@ public class Par {
       ExecutorService ex = Executors.newFixedThreadPool(n);
       CountDownLatch go = new CountDownLatch(1);
       List<Future<Double>> fs = new ArrayList<>();
-      for (int t = 0; t < n; t++) { final int s = t; fs.add(ex.submit(() -> { go.await(); long t0 = System.nanoTime(); sink += work(s, 6_000_000); return 6_000_000 / ((System.nanoTime() - t0) / 1e9); })); }
+      for (int t = 0; t < n; t++) { final int s = t; fs.add(ex.submit(() -> { go.await(); long t0 = System.nanoTime(); sink.addAndGet(work(s, 6_000_000)); return 6_000_000 / ((System.nanoTime() - t0) / 1e9); })); }
       go.countDown();
       double sum = 0; for (Future<Double> f : fs) sum += f.get();
       ex.shutdown();
