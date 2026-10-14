@@ -21,14 +21,14 @@ import org.apache.kafka.streams.StreamsConfig
 import reef.contracts.calcify.v1.FiniteLifecycleCaptureV1
 
 /** A single-node Redpanda in a throwaway container on a host port; removed on close. Docker CLI only, default bridge network. */
-internal class DisposableRedpanda : AutoCloseable {
+internal class DisposableRedpanda(private val smp: Int = 1, private val memory: String = "1G") : AutoCloseable {
     val port = ServerSocket(0).use { it.localPort }
     val name = "reef-finance-it-${System.nanoTime().toString(36)}"
     val bootstrap = "127.0.0.1:$port"
 
     fun start(): DisposableRedpanda {
         val run = ProcessBuilder("docker", "run", "-d", "--rm", "--name", name, "-p", "$port:$port", IMAGE, "redpanda", "start",
-            "--mode", "dev-container", "--smp", "1", "--memory", "1G", "--reserve-memory", "0M", "--overprovisioned", "--node-id", "0", "--check=false",
+            "--mode", "dev-container", "--smp", smp.toString(), "--memory", memory, "--reserve-memory", "0M", "--overprovisioned", "--node-id", "0", "--check=false",
             "--kafka-addr", "0.0.0.0:$port", "--advertise-kafka-addr", "127.0.0.1:$port").redirectErrorStream(true).start()
         val out = run.inputStream.bufferedReader().readText()
         check(run.waitFor() == 0) { "docker run failed: $out" }

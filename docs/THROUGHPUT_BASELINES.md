@@ -1707,6 +1707,26 @@ Interpretation limits: two runs on a shared runner; the spread between them is 2
 figures are now the workflow's comparison baseline (`docs/work/calcify-throughput-baseline.json`, mean of the two runs; restart rows from the second run only). No new capacity claim.
 
 
+## Calcify finite finance Streams lane tuning, CAL-FIN-P2 (October 13, 2026)
+
+Diagnostic, laptop (Apple M1 Max, 64 GiB, Docker 29.7.2, Redpanda v26.2.3 single node `--smp 1 --memory 1G` unless named, RF1, EOS v2, one stream thread per lane, caching off unless named),
+`S0StreamsLaneTuningSpikeTest` (research tag; branch `claude/calcify-streams-lane-tuning`, base master `7cea03270`). The stand-in of CAL-FIN-S0 (no ledger, no capture): ten 300-byte store puts per input and one
+forwarded output, the production `FinanceTopology.streamsProperties` plus the override named. Ten puts per input is the order of the real processor's writes per decision (entities, history entry, head, meta), not a
+measured count. Rates are inputs per second end to end (produce, process, read-committed output) over the whole run; 200,000 inputs per lane unless noted; one run per cell unless several are listed.
+
+Before the change (Kafka producer defaults): 9,342 / 9,242 / 9,316 / 11,357 (four runs), **11,781 sustained over 1,000,000 inputs (84.9 s)**, in line with the 11.1k of CAL-FIN-S0.
+Overrides that did not clearly help: `commit.interval.ms` 500 8,017 and 1,000 14,201 (noise-sized, non-monotonic); consumer `max.poll.records` 5,000 with larger fetch 15,296; two of the ten puts on a hot key, record cache off 13,436 and on 16,104;
+a broker with `--smp 2 --memory 2G` 10,970; two lanes 15,102 and four lanes 15,544 in total (no scaling across independent lanes with the default producer). Fewer puts: four per input 31,358.
+**Producer batching (`batch.size` 262,144, `linger.ms` 20): 33,603 / 34,735 / 32,622 / 34,667 (200,000 inputs), 23,821 and 23,945 (two runs of 1,000,000, 42 s), 34,968 (3,000,000, 85.8 s)**, so 2.0x to 3.7x over the defaults;
+with `compression.type=lz4` 30,493; sweep: 64 KiB and 5 ms 24,872, 256 KiB and 5 ms 30,432, 256 KiB and 50 ms 31,512, 1 MiB and 20 ms 35,571; with the 500 ms commit interval 28,174; with the record cache and two hot keys 31,152.
+With batching, independent lanes scale sublinearly: two lanes 41,173 in total (20.6k each), four lanes 48,935 (12.2k each).
+
+Measurement note: the clock includes the output consumer's group join (about 1 to 3 s, started after production), so the 200,000-input figures are conservative by up to a third; the 1,000,000- and 3,000,000-input figures are not materially affected.
+
+Interpretation limits: the 1,000,000-input and 3,000,000-input batched runs differ by 47 percent (23.9k against 35.0k) and the cause is not established (machine state, compaction, or run length), so the sustained claim is the lower figure. The stand-in has no ledger,
+no capture decode, no real key sizes; the real lane's puts per input are unmeasured; the projector, the Postgres write path and the lane were not run together on one machine; the arena contract's need is about 19k inputs/s (10,000 booked and 9,091 settled
+trades/s). Hosted-runner figures not taken. The change is now the production default (`FinanceTopology.PRODUCER_BATCH_BYTES`, `PRODUCER_LINGER_MS`, pinned to exactly these values by `verifyPinned`); the weekly workflow's Streams rows will read "improved" against the old hosted
+baseline until that baseline is re-taken. Latency cost: up to 20 ms added before a decision is visible. The finance broker, launcher, crash and projection suites passed unchanged on the new properties (0 skipped).
 ## Calcify finite finance projector capacity spike, CAL-FIN-P1 (October 13, 2026)
 
 Diagnostic, laptop (Apple M1 Max, 64 GiB, Docker 29.7.2, Postgres 16-alpine, local socket, `synchronous_commit` on, `fsync` on unless named), `S0ProjectorCapacitySpikeTest`
