@@ -82,7 +82,7 @@ run_case() {
   local label="$1"; shift
   if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
   log "case $label ($*)"
-  remote "(bash /tmp/droplet-sizes.sh /tmp/sizes-$label.txt &) ; cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S4_TRADES=\${S4_TRADES:-100000} S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.wholeChainOnOneMachine' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; pkill -f '[d]roplet-sizes.sh'; for d in redpanda postgres; do echo \"MAX-DATA-DIR \$d KiB: \$(grep \"^\$d \" /tmp/sizes-$label.txt | cut -d' ' -f2 | sort -n | tail -1)\"; done; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+  remote "(bash /tmp/droplet-sizes.sh /tmp/sizes-$label.txt & echo \$! > /tmp/sizes.pid) ; cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S4_TRADES=\${S4_TRADES:-100000} S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.wholeChainOnOneMachine' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; kill \$(cat /tmp/sizes.pid) 2>/dev/null; for d in redpanda postgres; do echo \"MAX-DATA-DIR \$d KiB: \$(grep \"^\$d \" /tmp/sizes-$label.txt | cut -d' ' -f2 | sort -n | tail -1)\"; done; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
 }
 
 run_s1() {
