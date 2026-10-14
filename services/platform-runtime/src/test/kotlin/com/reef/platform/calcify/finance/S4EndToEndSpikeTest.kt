@@ -315,7 +315,7 @@ class S4EndToEndSpikeTest {
                     if (project) log.append("  projectors together: %.0f decisions/s through the whole chain (%.1f s; finished %.1f s after the lanes), max backlog per lane %s\n".format(measured / projSecs, projSecs, projSecs - laneSecs, lanes.map { it.maxBacklog.get() }))
                     val perDecision = 2.0 * trades * laneCount + lanes.sumOf { it.funds }
                     log.append("  CPU per decision (microseconds, all threads): JVM (processors, commitment, tailers, projectors, producers, verifiers) %.0f, Redpanda container %.0f, Postgres container %.0f, total %.0f; at 20,000 decisions/s that is %.1f cores\n".format(jvmCpu / perDecision, rpCpu / perDecision, pgCpu / perDecision, (jvmCpu + rpCpu + pgCpu) / perDecision, (jvmCpu + rpCpu + pgCpu) / perDecision * 20000 / 1e6))
-                    log.append("  gc %.1f s (shared JVM); machine load average at the end (1, 5, 15 min): %s\n".format(gcSecs, sh("sysctl", "-n", "vm.loadavg").trim()))
+                    log.append("  gc %.1f s (shared JVM); machine load average at the end: %s\n".format(gcSecs, "%.2f (1 min, system)".format(java.lang.management.ManagementFactory.getOperatingSystemMXBean().systemLoadAverage)))
                     for (l in lanes) { val p = l.shared.processor!!; val n = p.records.get().toDouble(); log.append("  lane %d: %d records, %.1f us per record inside process (commitment waits %d)\n".format(l.index, p.records.get(), p.tTotal.get() / n / 1e3, p.ledger.blockedCount)) }
                 } finally { producer.close(); lanes.forEach { try { it.stop() } catch (e: Throwable) { System.err.println("lane stop: $e") } } }
             }
@@ -461,7 +461,7 @@ class S4EndToEndSpikeTest {
                     log.append("S1 $label lowWater=$lowWater\n  planned: %d cash moves (%.1f per 1,000 trades; %.2f%% of trades needed one), %d true shortfalls, busiest shard %d%% of trades\n".format(moves, moves * 1000.0 / trades, tradesWithMoves * 100.0 / trades, shortfalls, (0 until shards).maxOf { indexInShard[it] } * 100 / trades))
                     log.append("  lanes: %.0f decisions/s together (%.1f s); projection finished %.1f s after; %.0f booked trades/s through the whole chain (a booked trade is a capture plus a settle)\n".format(totalDecisions / laneSecs, laneSecs, projSecs - laneSecs, trades / projSecs))
                     log.append("  moves planned %d: donor halves completed %d, inbound halves completed %d (failed moves: %d); settle attempts that failed for lack of cash: %d (planned true shortfalls %d; the rest arrived late or followed a failed move)\n".format(moves, defundsDone, inboundDone, moves - inboundDone, nonSettled, shortfalls))
-                    log.append("  machine load average at the end (1, 5, 15 min): %s; decisions per shard %s\n".format(sh("sysctl", "-n", "vm.loadavg").trim(), lanes.map { it.seen.get() }))
+                    log.append("  machine load average at the end: %s; decisions per shard %s\n".format("%.2f (1 min, system)".format(java.lang.management.ManagementFactory.getOperatingSystemMXBean().systemLoadAverage), lanes.map { it.seen.get() }))
                 } finally { producer.close(); lanes.forEach { try { it.stop() } catch (e: Throwable) { System.err.println("shard stop: $e") } } }
             }
             println(log); Files.writeString(S0Metrics.file("s1-sharded-chain.txt"), log)
