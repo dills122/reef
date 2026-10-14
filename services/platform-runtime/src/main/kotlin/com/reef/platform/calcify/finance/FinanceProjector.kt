@@ -51,26 +51,37 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         }
     }
 
-    /** Returns the number of records newly applied (replayed records that match the stored decision are skipped). */
+    /**
+     * Returns the number of records newly applied (replayed records that match the stored decision are skipped).
+     *
+     * Every record is verified (order, input digest, replay equality, hash link) in memory first; the row deltas of all newly applied records are then written
+     * with one set-based statement per table (`INSERT ... SELECT FROM unnest(arrays)`), not one statement per record. Measured at 120 decisions per call, the
+     * per-record statements capped the projector at about 740 decisions/s (CAL-FIN-P1); the set-based form is the research variant that reached several thousand.
+     */
     fun apply(bindingDigest: String, epoch: Long, records: List<Pair<Decision, FinanceInput>>): Int = tx { c ->
         var (lastSequence, lastChain) = fence(c, bindingDigest, epoch)
-        var applied = 0
         var previous = 0L
+        val rows = Rows()
+        val replays = ArrayList<Decision>()
         for ((decision, input) in records) {
             require(decision.sequence > previous) { "records must arrive in strictly increasing sequence order" }
             previous = decision.sequence
             require(input.digest() == decision.inputDigest) { "input does not match the decision's input digest" }
-            if (decision.sequence <= lastSequence) {
-                val stored = storedChecksum(c, bindingDigest, decision.sequence)
-                require(stored == decision.checksum) { "replayed record differs from the stored decision" }
-                continue
-            }
+            if (decision.sequence <= lastSequence) { replays += decision; continue }
             require(ledger.verifyLink(lastChain, lastSequence + 1, decision)) { "decision does not continue the checkpoint chain" }
-            project(c, bindingDigest, decision, input)
-            lastSequence = decision.sequence; lastChain = decision.checksum; applied++
+            rows.add(decision, input)
+            lastSequence = decision.sequence; lastChain = decision.checksum
         }
-        if (applied > 0) c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET last_sequence = ?, last_chain = ? WHERE binding_digest = ?")
-            .use { it.setLong(1, lastSequence); it.setString(2, lastChain); it.setString(3, bindingDigest); it.executeUpdate() }
+        if (replays.isNotEmpty()) {
+            val stored = storedChecksums(c, bindingDigest, replays.map { it.sequence })
+            for (d in replays) require(stored[d.sequence] == d.checksum) { "replayed record differs from the stored decision" }
+        }
+        val applied = rows.count
+        if (applied > 0) {
+            write(c, bindingDigest, rows)
+            c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET last_sequence = ?, last_chain = ? WHERE binding_digest = ?")
+                .use { it.setLong(1, lastSequence); it.setString(2, lastChain); it.setString(3, bindingDigest); it.executeUpdate() }
+        }
         applied
     }
 
@@ -87,44 +98,76 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
             }
         }
 
-    private fun storedChecksum(c: Connection, bindingDigest: String, sequence: Long): String? =
-        c.prepareStatement("SELECT checksum FROM boundary.calcify_finance_decision WHERE binding_digest = ? AND sequence = ?").use { ps ->
-            ps.setString(1, bindingDigest); ps.setLong(2, sequence)
-            ps.executeQuery().use { r -> if (r.next()) r.getString(1) else null }
+    private fun storedChecksums(c: Connection, bindingDigest: String, sequences: List<Long>): Map<Long, String> =
+        c.prepareStatement("SELECT sequence, checksum FROM boundary.calcify_finance_decision WHERE binding_digest = ? AND sequence = ANY(?)").use { ps ->
+            ps.setString(1, bindingDigest); ps.setArray(2, c.createArrayOf("bigint", sequences.toTypedArray()))
+            ps.executeQuery().use { r -> val out = HashMap<Long, String>(); while (r.next()) out[r.getLong(1)] = r.getString(2); out }
         }
 
-    private fun project(c: Connection, digest: String, d: Decision, input: FinanceInput) {
-        c.prepareStatement("""INSERT INTO boundary.calcify_finance_decision(binding_digest, sequence, action_namespace, action_domain, action_id,
-            disposition, input_digest, prior_chain, checksum) VALUES (?,?,?,?,?,?,?,?,?)""").use {
-            it.setString(1, digest); it.setLong(2, d.sequence); it.setString(3, d.action.namespace); it.setString(4, d.action.domain); it.setString(5, d.action.actionId)
-            it.setString(6, d.disposition.name); it.setString(7, d.inputDigest); it.setString(8, d.priorChain); it.setString(9, d.checksum); it.executeUpdate()
-        }
-        for (leg in d.legs) c.prepareStatement("""INSERT INTO boundary.calcify_finance_position(binding_digest, account_id, asset_id, amount) VALUES (?,?,?,?)
-            ON CONFLICT (binding_digest, account_id, asset_id) DO UPDATE SET amount = boundary.calcify_finance_position.amount + EXCLUDED.amount""").use {
-            it.setString(1, digest); it.setString(2, leg.account.value); it.setString(3, leg.asset.value); it.setLong(4, leg.amount); it.executeUpdate()
-        }
-        when (input) {
-            is FinanceInput.Capture -> if (d.disposition == Disposition.CAPTURED) c.prepareStatement("""INSERT INTO boundary.calcify_finance_obligation(binding_digest,
-                run_id, venue_session_id, instrument_id, execution_id, buyer_account_id, seller_account_id, quantity, price_nanos, status, cash_residual, share_residual)
-                VALUES (?,?,?,?,?,?,?,?,?,'PENDING',?,?)""").use {
-                val e = input.execution
-                it.setString(1, digest); it.setString(2, e.runId); it.setString(3, e.venueSessionId); it.setString(4, e.instrumentId); it.setString(5, e.executionId)
-                it.setString(6, input.buyer.value); it.setString(7, input.seller.value); it.setLong(8, input.quantity); it.setLong(9, input.priceNanos)
-                it.setLong(10, Math.multiplyExact(input.quantity, input.priceNanos)); it.setLong(11, input.quantity); it.executeUpdate()
-            }
-            is FinanceInput.Settle -> if (d.disposition in settleDispositions) {
-                val e = input.execution
-                c.prepareStatement("""INSERT INTO boundary.calcify_finance_attempt(binding_digest, run_id, venue_session_id, instrument_id, execution_id, attempt, disposition)
-                    VALUES (?,?,?,?,?,?,?)""").use {
-                    it.setString(1, digest); it.setString(2, e.runId); it.setString(3, e.venueSessionId); it.setString(4, e.instrumentId); it.setString(5, e.executionId)
-                    it.setInt(6, input.attempt); it.setString(7, d.disposition.name); it.executeUpdate()
+    /** The row deltas of one batch, in log order, ready to be written as arrays. */
+    private inner class Rows {
+        var count = 0
+        val seq = ArrayList<Long>(); val ns = ArrayList<String>(); val dom = ArrayList<String>(); val aid = ArrayList<String>(); val disp = ArrayList<String>()
+        val inDigest = ArrayList<String>(); val prior = ArrayList<String>(); val sum = ArrayList<String>()
+        val oRun = ArrayList<String>(); val oVen = ArrayList<String>(); val oIns = ArrayList<String>(); val oEx = ArrayList<String>(); val oBuy = ArrayList<String>(); val oSell = ArrayList<String>()
+        val oQty = ArrayList<Long>(); val oPx = ArrayList<Long>(); val oCash = ArrayList<Long>()
+        val aRun = ArrayList<String>(); val aVen = ArrayList<String>(); val aIns = ArrayList<String>(); val aEx = ArrayList<String>(); val aNo = ArrayList<Int>(); val aDisp = ArrayList<String>()
+        val uRun = ArrayList<String>(); val uVen = ArrayList<String>(); val uIns = ArrayList<String>(); val uEx = ArrayList<String>()
+        val net = LinkedHashMap<Pair<String, String>, Long>()
+
+        fun add(d: Decision, input: FinanceInput) {
+            count++
+            seq += d.sequence; ns += d.action.namespace; dom += d.action.domain; aid += d.action.actionId; disp += d.disposition.name
+            inDigest += d.inputDigest; prior += d.priorChain; sum += d.checksum
+            for (leg in d.legs) net.merge(leg.account.value to leg.asset.value, leg.amount) { a, b -> Math.addExact(a, b) }
+            when (input) {
+                is FinanceInput.Capture -> if (d.disposition == Disposition.CAPTURED) {
+                    val e = input.execution
+                    oRun += e.runId; oVen += e.venueSessionId; oIns += e.instrumentId; oEx += e.executionId; oBuy += input.buyer.value; oSell += input.seller.value
+                    oQty += input.quantity; oPx += input.priceNanos; oCash += Math.multiplyExact(input.quantity, input.priceNanos)
                 }
-                if (d.disposition == Disposition.SETTLED) check(c.prepareStatement("""UPDATE boundary.calcify_finance_obligation SET status = 'SETTLED', cash_residual = 0, share_residual = 0
-                    WHERE binding_digest = ? AND run_id = ? AND venue_session_id = ? AND instrument_id = ? AND execution_id = ? AND status = 'PENDING'""").use {
-                    it.setString(1, digest); it.setString(2, e.runId); it.setString(3, e.venueSessionId); it.setString(4, e.instrumentId); it.setString(5, e.executionId); it.executeUpdate()
-                } == 1) { "settled decision for a missing or already settled obligation" }
+                is FinanceInput.Settle -> if (d.disposition in settleDispositions) {
+                    val e = input.execution
+                    aRun += e.runId; aVen += e.venueSessionId; aIns += e.instrumentId; aEx += e.executionId; aNo += input.attempt; aDisp += d.disposition.name
+                    if (d.disposition == Disposition.SETTLED) { uRun += e.runId; uVen += e.venueSessionId; uIns += e.instrumentId; uEx += e.executionId }
+                }
+                is FinanceInput.Fund -> Unit
             }
-            is FinanceInput.Fund -> Unit
+        }
+    }
+
+    private fun write(c: Connection, digest: String, r: Rows) {
+        fun text(v: List<String>) = c.createArrayOf("text", v.toTypedArray())
+        fun big(v: List<Long>) = c.createArrayOf("bigint", v.toTypedArray())
+        c.prepareStatement("""INSERT INTO boundary.calcify_finance_decision(binding_digest, sequence, action_namespace, action_domain, action_id, disposition, input_digest, prior_chain, checksum)
+            SELECT ?, t.s, t.n, t.d, t.a, t.p, t.g, t.r, t.k FROM unnest(?::bigint[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[]) AS t(s,n,d,a,p,g,r,k)""").use {
+            it.setString(1, digest); it.setArray(2, big(r.seq)); it.setArray(3, text(r.ns)); it.setArray(4, text(r.dom)); it.setArray(5, text(r.aid))
+            it.setArray(6, text(r.disp)); it.setArray(7, text(r.inDigest)); it.setArray(8, text(r.prior)); it.setArray(9, text(r.sum)); it.executeUpdate()
+        }
+        if (r.net.isNotEmpty()) c.prepareStatement("""INSERT INTO boundary.calcify_finance_position(binding_digest, account_id, asset_id, amount)
+            SELECT ?, t.a, t.s, t.m FROM unnest(?::text[], ?::text[], ?::bigint[]) AS t(a,s,m)
+            ON CONFLICT (binding_digest, account_id, asset_id) DO UPDATE SET amount = boundary.calcify_finance_position.amount + EXCLUDED.amount""").use {
+            it.setString(1, digest); it.setArray(2, text(r.net.keys.map { k -> k.first })); it.setArray(3, text(r.net.keys.map { k -> k.second })); it.setArray(4, big(r.net.values.toList())); it.executeUpdate()
+        }
+        if (r.oEx.isNotEmpty()) c.prepareStatement("""INSERT INTO boundary.calcify_finance_obligation(binding_digest, run_id, venue_session_id, instrument_id, execution_id, buyer_account_id,
+            seller_account_id, quantity, price_nanos, status, cash_residual, share_residual)
+            SELECT ?, t.r, t.v, t.i, t.e, t.b, t.s, t.q, t.p, 'PENDING', t.c, t.q FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::bigint[], ?::bigint[], ?::bigint[])
+            AS t(r,v,i,e,b,s,q,p,c)""").use {
+            it.setString(1, digest); it.setArray(2, text(r.oRun)); it.setArray(3, text(r.oVen)); it.setArray(4, text(r.oIns)); it.setArray(5, text(r.oEx)); it.setArray(6, text(r.oBuy))
+            it.setArray(7, text(r.oSell)); it.setArray(8, big(r.oQty)); it.setArray(9, big(r.oPx)); it.setArray(10, big(r.oCash)); it.executeUpdate()
+        }
+        if (r.aEx.isNotEmpty()) c.prepareStatement("""INSERT INTO boundary.calcify_finance_attempt(binding_digest, run_id, venue_session_id, instrument_id, execution_id, attempt, disposition)
+            SELECT ?, t.r, t.v, t.i, t.e, t.n, t.d FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::int[], ?::text[]) AS t(r,v,i,e,n,d)""").use {
+            it.setString(1, digest); it.setArray(2, text(r.aRun)); it.setArray(3, text(r.aVen)); it.setArray(4, text(r.aIns)); it.setArray(5, text(r.aEx))
+            it.setArray(6, c.createArrayOf("int", r.aNo.toTypedArray())); it.setArray(7, text(r.aDisp)); it.executeUpdate()
+        }
+        if (r.uEx.isNotEmpty()) {
+            val n = c.prepareStatement("""UPDATE boundary.calcify_finance_obligation o SET status = 'SETTLED', cash_residual = 0, share_residual = 0
+                FROM unnest(?::text[], ?::text[], ?::text[], ?::text[]) AS t(r,v,i,e)
+                WHERE o.binding_digest = ? AND o.run_id = t.r AND o.venue_session_id = t.v AND o.instrument_id = t.i AND o.execution_id = t.e AND o.status = 'PENDING'""").use {
+                it.setArray(1, text(r.uRun)); it.setArray(2, text(r.uVen)); it.setArray(3, text(r.uIns)); it.setArray(4, text(r.uEx)); it.setString(5, digest); it.executeUpdate()
+            }
+            check(n == r.uEx.size) { "settled decision for a missing or already settled obligation" }
         }
     }
 

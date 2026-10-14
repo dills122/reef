@@ -1891,3 +1891,20 @@ Against CAL-FIN-P10 (same server, root disk, 10 ms synchronous writes): **+53 to
 It does not establish that a durable disk delivers this: tmpfs has no write cost at all. What is needed is a durable volume with synchronous writes in the low milliseconds or below (the c-16's root disk measured 1.5 ms; the c-32's 10 ms; the g5 line's 43 to 57 ms; local NVMe and block-storage volumes are untested) and a capacity of about 380 GB for a 60-minute session (CAL-FIN-P10).
 
 Interpretation limits: see CAL-FIN-P10 and earlier. One droplet, single runs except one repeat (six lanes within 1.4 percent); runs of 36 to 101 s; tmpfs is not a deployment. No capacity claim.
+
+## Calcify finance projector: set-based writes in product code, CAL-FIN-P13 (October 14, 2026)
+
+First product-code change from the capacity work: `FinanceProjector.apply` now verifies every record in memory (order, input digest, replay equality, hash link) and writes the batch with one `INSERT ... SELECT FROM unnest(arrays)` statement per table (decisions, positions with net deltas, obligations, attempts) and one set-based update for settled obligations, instead of up to five prepared statements per record. Behaviour is unchanged: the same fence, the same replay check (now one query for all replayed sequences), the same rollback of the whole batch on any failure. Measured with `FinanceProjectorThroughputSpikeTest` (new, research-tagged) on the product class, the laptop's Docker Postgres 16 (load average 5 to 7, not quiet), decisions from the real `FinanceLedger`, 40 bindings of 207 decisions per batch size, the 320-sequence bound of migration 0014 lifted as in the capacity spikes:
+
+| Schema | Batch | Before (per-record statements) | After (set-based) |
+| --- | --- | --- | --- |
+| product constraints | 1 | 98 decisions/s | 92 |
+| product constraints | 10 | 417 | 665 |
+| product constraints | 120 | **690** | **4,894** (7.1x) |
+| without the four binding foreign keys | 1 | 97 | 86 |
+| without the four binding foreign keys | 10 | 426 | 703 |
+| without the four binding foreign keys | 120 | 792 | 4,410 |
+
+A call of one record is bound by its commit and does not move; the gain grows with the batch. With the foreign keys kept (the product's schema) the projector is not measurably slower here (4,894 against 4,410, within the spread), so they stay. Existing suites pass against real Postgres: `FinanceProjectorPostgresTest` (8, including random batching with redelivery, rollback of a bad batch and the role-restriction test), `JdbcFinanceReadStorePostgresTest`, `FiniteP3EndToEndTest`, the launcher and runtime broker tests.
+
+**What this does not change.** The runner (`FinanceProjectionRunner`) re-reads the whole decision log on every pass and the product migration still bounds a binding to 320 sequences, both correct for the finite profile and both incompatible with the capacity profile; the next projector step is an incremental runner that tails the log in batches of hundreds to thousands and a capacity-profile schema decision (lifting the bound, keeping or dropping foreign keys). Batch sizes above 120 were not measured (a ledger run admits at most 128 captures). The 4,894 decisions/s is the projector alone; it is below the 20,000 decisions/s need by itself, and the Postgres side of the chain reached 15,000 to 31,000 projected decisions/s in CAL-FIN-P4 to P11 only with the test projector's larger batches and a lifted bound. No capacity claim.
