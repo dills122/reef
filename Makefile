@@ -38,7 +38,7 @@ test: test-go test-simulator test-platform-runtime test-bot-sdk test-dev-tooling
 # Local macOS live-harness checks for Calcify finite O2. The harness pins /private/tmp lease roots, so these
 # are not run in Linux CI; run them before touching scripts/dev/calcify-financial/finite-o2*.
 test-finite-o2-harness: check-bun-runtime
-	bun test scripts/dev/calcify-financial/finite-o2-engine-adverse.test.mjs scripts/dev/calcify-financial/finite-o2-proof.test.mjs scripts/dev/calcify-financial/finite-o2-resource-monitor.test.mjs
+	bun test scripts/dev/calcify-financial/finite-o2-engine-adverse.test.mjs scripts/dev/calcify-financial/finite-o2-proof.test.mjs scripts/dev/calcify-financial/finite-o2-resource-monitor.test.mjs scripts/dev/calcify-financial/finite-o2-build-inputs.test.mjs
 
 test-dev-tooling:
 	node scripts/dev/doctor.test.mjs
