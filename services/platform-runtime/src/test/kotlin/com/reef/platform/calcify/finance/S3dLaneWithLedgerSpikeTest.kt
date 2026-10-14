@@ -39,7 +39,7 @@ class S3dLaneWithLedgerSpikeTest {
         private lateinit var ctx: ProcessorContext<String, ByteArray>
         private lateinit var kv: KeyValueStore<String, ByteArray>
         private lateinit var ledger: ScaleLedger
-        private var epoch = 0; private var n = 0L; private var trade = 0L; private var position = 0L; var rotations = 0; private var blockedNanos = 0L; private var blockedCount = 0L
+        private var epoch = 0; private var n = 0L; private var trade = 0L; private var position = 0L; var rotations = 0; var lastSealRoot: ByteArray? = null; private var blockedNanos = 0L; private var blockedCount = 0L
         val totalBlockedCount get() = blockedCount + (if (::ledger.isInitialized) ledger.blockedCount else 0L); val totalBlockedNanos get() = blockedNanos + (if (::ledger.isInitialized) ledger.blockedNanos else 0L)
         private val accountSet = accounts.toSet()
         private val history = ByteArray(150); private val head = ByteArray(300); private val meta = ByteArray(100); private val output = ByteArray(250)
@@ -53,7 +53,7 @@ class S3dLaneWithLedgerSpikeTest {
             for (a in accounts) { ledger.decide(FinanceInput.Fund(ActionKey("n", "f", "u-${a.value}"), Authority.OPERATOR, a, usd, 1_000_000_000_000L)); ledger.decide(FinanceInput.Fund(ActionKey("n", "f", "s-${a.value}"), Authority.OPERATOR, a, aapl, 1_000_000_000L)) }
         }
         private fun rotate() {
-            if (v.async) { blockedNanos += ledger.blockedNanos; blockedCount += ledger.blockedCount; ledger.finalRoot() }   // the seal: wait for the commitment thread to finish the closing state
+            if (v.async) { blockedNanos += ledger.blockedNanos; blockedCount += ledger.blockedCount; lastSealRoot = ledger.finalRoot() }   // the seal: wait for the commitment thread to finish the closing state
             val closing = ledger.positions.entries.filter { it.key.first != opening }.map { it.key to it.value }
             epoch++; rotations++; ledger = newLedger()
             for ((key, amount) in closing) {
@@ -118,7 +118,8 @@ class S3dLaneWithLedgerSpikeTest {
             DisposableRedpanda().start().use { rp ->
                 rp.admin().use { a -> a.createTopics(listOf(NewTopic("S3D_IN", 1, 1.toShort()), NewTopic("S3D_OUT", 1, 1.toShort()))).all().get(30, TimeUnit.SECONDS) }
                 val processors = ArrayList<LedgerProcessor>()
-                val props = FinanceTopology.streamsProperties("s3d-${v.label}", rp.bootstrap, Files.createTempDirectory("s3d-state").toString()).apply { put("producer.batch.size", 262_144); put("producer.linger.ms", 20) }
+                val stateDir = Files.createTempDirectory("s3d-state")
+                val props = FinanceTopology.streamsProperties("s3d-${v.label}", rp.bootstrap, stateDir.toString()).apply { put("producer.batch.size", 262_144); put("producer.linger.ms", 20) }
                 val streams = KafkaStreams(topology(v, accounts, processors), props)
                 streams.setUncaughtExceptionHandler { e -> System.err.println("S3D-ERROR ${v.label}: $e"); org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT }
                 streams.start()
@@ -131,10 +132,11 @@ class S3dLaneWithLedgerSpikeTest {
                 val seen = countOutput(rp.bootstrap, n.toLong(), 900)
                 val secs = (System.nanoTime() - t0) / 1e9
                 val gcSecs = (java.lang.management.ManagementFactory.getGarbageCollectorMXBeans().sumOf { it.collectionTime } - gc0) / 1000.0; val rotations = processors.sumOf { it.rotations }; val waited = processors.sumOf { it.totalBlockedCount }; val waitedSecs = processors.sumOf { it.totalBlockedNanos } / 1e9
-                streams.close(Duration.ofSeconds(30))
+                streams.close(Duration.ofSeconds(30)); stateDir.toFile().deleteRecursively()
                 S0Metrics.record("laneWithLedger.${v.label}.inputsPerSec", Math.round(seen / secs))
                 log.append("%-16s processed=%d in %.1f s = %.0f inputs/s (rotations %d, commitment thread waited for %d times, %.2f s; gc %.1f s)\n".format(v.label, seen, secs, seen / secs, rotations, waited, waitedSecs, gcSecs))
                 check(seen == n.toLong()) { "${v.label}: processed $seen of $n" }
+                if (v.async && v.rotateAt != Int.MAX_VALUE) check(rotations == 0 || processors.any { it.lastSealRoot?.size == 32 }) { "${v.label}: rotation sealed without a root" }
             }
         }
         println(log); Files.writeString(S0Metrics.file("s3d-lane-with-ledger.txt"), log)

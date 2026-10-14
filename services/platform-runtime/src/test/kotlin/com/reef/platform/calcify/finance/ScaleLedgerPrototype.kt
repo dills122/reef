@@ -24,7 +24,7 @@ internal class ScaleTrie {
     private fun firstDiff(a: ByteArray, b: ByteArray): Int { for (i in 0 until 32) { val x = (a[i].toInt() xor b[i].toInt()) and 0xff; if (x != 0) return i * 8 + Integer.numberOfLeadingZeros(x) - 24 }; return -1 }
     /** Hashes are computed lazily: a put only marks the path dirty, and [rootHash] rehashes each dirty branch once, so puts that share a path (and decisions between roots) share the work. */
     private fun settle(n: N) { if (n is Branch && n.dirty) { settle(n.left); settle(n.right); n.hash = scaleDigest.get().let { d -> d.reset(); d.update(2); d.update((n.bit ushr 8).toByte()); d.update(n.bit.toByte()); d.update(n.left.hash); d.update(n.right.hash); d.digest() }; n.dirty = false } }
-    fun put(key: ByteArray, leaf: ByteArray) { root = insert(root, key, leaf) }
+    fun put(key: ByteArray, leaf: ByteArray) { require(key.size == 32) { "trie keys are SHA-256 digests" }; root = insert(root, key, leaf) }
     private fun insert(n: N?, key: ByteArray, leaf: ByteArray): N {
         if (n == null) { size++; return Leaf(key, leaf) }
         val d = firstDiff(n.any, key)
