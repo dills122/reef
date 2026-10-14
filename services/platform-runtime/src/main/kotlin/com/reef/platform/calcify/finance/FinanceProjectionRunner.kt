@@ -15,6 +15,7 @@ import reef.contracts.calcify.finance.v1.FinanceDecisionV1
 internal class FinanceProjectionRunner private constructor(
     private val readLog: () -> List<Pair<Decision, FinanceInput>>, private val projector: FinanceProjector,
     private val bindingDigest: String, private val ownerEpoch: Long, private val tailing: Boolean, private val maxApply: Int,
+    private val sequenceBound: Long = FinanceProjector.FINITE_SEQUENCE_BOUND,
 ) {
     constructor(readLog: () -> List<Pair<Decision, FinanceInput>>, projector: FinanceProjector, bindingDigest: String, ownerEpoch: Long) :
         this(readLog, projector, bindingDigest, ownerEpoch, false, Int.MAX_VALUE)
@@ -29,9 +30,9 @@ internal class FinanceProjectionRunner private constructor(
 
     companion object {
         /** A tailing runner: [readNext] returns the decisions after the ones it returned before (empty when caught up). */
-        fun tailing(readNext: () -> List<Pair<Decision, FinanceInput>>, projector: FinanceProjector, bindingDigest: String, ownerEpoch: Long, maxApply: Int = 2_000): FinanceProjectionRunner {
+        fun tailing(readNext: () -> List<Pair<Decision, FinanceInput>>, projector: FinanceProjector, bindingDigest: String, ownerEpoch: Long, maxApply: Int = 2_000, sequenceBound: Long = FinanceProjector.FINITE_SEQUENCE_BOUND): FinanceProjectionRunner {
             require(maxApply > 0) { "maxApply must be positive" }
-            return FinanceProjectionRunner(readNext, projector, bindingDigest, ownerEpoch, true, maxApply)
+            return FinanceProjectionRunner(readNext, projector, bindingDigest, ownerEpoch, true, maxApply, sequenceBound)
         }
 
         fun decode(records: List<Pair<ByteArray?, ByteArray?>>): List<Pair<Decision, FinanceInput>> = records.map { (_, value) ->
@@ -40,7 +41,7 @@ internal class FinanceProjectionRunner private constructor(
     }
 
     /** Creates the checkpoint at genesis (or advances the owner fence). Call once before the first pass. */
-    fun open() = projector.open(bindingDigest, ownerEpoch)
+    fun open() = projector.open(bindingDigest, ownerEpoch, sequenceBound)
 
     /** One pass; returns the number of decisions newly applied to the projection. */
     fun runOnce(): Int {

@@ -14,12 +14,15 @@ internal class CapacityPlan(
     val maxObligations: Int, val maxCaptures: Int, val maxSettleAttempts: Int, val maxControls: Int,
     /** Instant profile: every captured execution is followed by its first settlement attempt, decided in the same record (a booked trade is two decisions). */
     val autoSettle: Boolean = true,
+    /** The most decisions one lane's projection will ever hold (migration 0016); the default covers a 5-minute slice at the contract rate with room to spare. Part of the lane binding. */
+    val sequenceBound: Long = 8_000_000L,
 ) {
     init {
         require(planId.isNotBlank() && run.isNotBlank() && session.isNotBlank()) { "plan identity" }
         require(laneInstruments.isNotEmpty() && laneInstruments.all { it.isNotEmpty() }) { "every lane needs at least one instrument" }
         require(laneInstruments.flatMap { it }.let { it.size == it.toSet().size }) { "an instrument belongs to exactly one lane" }
         require(laneInstruments.flatten().none { it == cashAsset.value }) { "an instrument cannot be the cash asset" }
+        require(sequenceBound in FinanceProjector.FINITE_SEQUENCE_BOUND..FinanceProjector.MAX_SEQUENCE_BOUND) { "sequence bound out of range" }
     }
 
     val lanes: Int get() = laneInstruments.size
@@ -34,7 +37,7 @@ internal class CapacityPlan(
     }
 
     fun bindingDigest(lane: Int): String = Canon.sha(Canon.bytes {
-        str("calcify-capacity-lane-binding-v0"); str(planId); str(run); str(session); int(lanes); int(lane); str(capacity(lane).digest())
+        str("calcify-capacity-lane-binding-v0"); str(planId); str(run); str(session); int(lanes); int(lane); long(sequenceBound); str(capacity(lane).digest())
     })
 
     fun spec(lane: Int): CapacityLaneSpec = CapacityLaneSpec(bindingDigest(lane), capacity(lane))
