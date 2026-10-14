@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  * This simulation asks how often a trade finds the buyer's cash in the wrong shard, i.e. how many cross-shard cash moves a rebalancing rule would have to issue per 1,000 trades.
  * Pure JVM, no Kafka or Docker; research only (`-PresearchTests`). The workload is an ILLUSTRATIVE assumption, not the arena's: 100 participants, 64 instruments, one price,
  * quantities 1 to 10, uniformly random counterparties, instrument popularity uniform or Zipf, seller holdings per instrument, one settled trade at a time (settlement is immediate here).
- * It does not model credit, reservation, open orders or time; it counts cash moves only. Cash that cannot be found in any shard is a true shortfall, the same in every layout.
+ * It is ONE evolving session per configuration (balances carry over from trade to trade, as in a real session), not independent draws; one seed. It does not model credit, reservation, open orders or time; it counts cash moves only. Cash that cannot be found in any shard is a true shortfall, the same in every layout.
  */
 @org.junit.jupiter.api.Tag("research")
 class S5ShardingCashSimulationTest {
