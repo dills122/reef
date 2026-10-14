@@ -124,8 +124,7 @@ class S0StreamsLaneTuningSpikeTest {
                 val seen = LongArray(v.lanes)
                 val workers = (0 until v.lanes).map { lane -> thread {
                     val producer = FinanceBrokerFixture.producer(rp.bootstrap)
-                    repeat(n) { producer.send(ProducerRecord("T_IN_$lane", 0, ByteArray(0), ByteArray(120))) }
-                    producer.flush(); producer.close()
+                    try { repeat(n) { producer.send(ProducerRecord("T_IN_$lane", 0, ByteArray(0), ByteArray(120))) }; producer.flush() } finally { producer.close() }
                     seen[lane] = countOutput(rp.bootstrap, lane, n.toLong(), 600)
                 } }
                 workers.forEach { it.join() }

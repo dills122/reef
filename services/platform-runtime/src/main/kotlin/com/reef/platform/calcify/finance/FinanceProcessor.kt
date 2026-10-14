@@ -179,8 +179,8 @@ internal object FinanceTopology {
         val pinned = mapOf("processing.guarantee" to "exactly_once_v2", "num.stream.threads" to "1", "num.standby.replicas" to "0", "auto.offset.reset" to "earliest")
         for ((k, v) in pinned) require(props[k]?.toString() == v) { "finance Streams property $k must be $v" }
         require(props["commit.interval.ms"] != null && props["max.task.idle.ms"] != null) { "commit.interval.ms and max.task.idle.ms must be pinned" }
-        require((props["producer.batch.size"]?.toString()?.toIntOrNull() ?: 0) >= 65_536) { "producer.batch.size must be pinned at 65536 or more" }
-        require((props["producer.linger.ms"]?.toString()?.toIntOrNull() ?: -1) in 1..100) { "producer.linger.ms must be pinned between 1 and 100" }
+        require(props["producer.batch.size"]?.toString()?.toIntOrNull() == PRODUCER_BATCH_BYTES) { "producer.batch.size must be pinned at $PRODUCER_BATCH_BYTES" }
+        require(props["producer.linger.ms"]?.toString()?.toIntOrNull() == PRODUCER_LINGER_MS) { "producer.linger.ms must be pinned at $PRODUCER_LINGER_MS" }
     }
 
     fun storeBuilder(config: FinanceProcessorConfig, persistent: Boolean): StoreBuilder<KeyValueStore<String, ByteArray>> =

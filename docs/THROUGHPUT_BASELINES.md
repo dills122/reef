@@ -1721,9 +1721,11 @@ a broker with `--smp 2 --memory 2G` 10,970; two lanes 15,102 and four lanes 15,5
 with `compression.type=lz4` 30,493; sweep: 64 KiB and 5 ms 24,872, 256 KiB and 5 ms 30,432, 256 KiB and 50 ms 31,512, 1 MiB and 20 ms 35,571; with the 500 ms commit interval 28,174; with the record cache and two hot keys 31,152.
 With batching, independent lanes scale sublinearly: two lanes 41,173 in total (20.6k each), four lanes 48,935 (12.2k each).
 
+Measurement note: the clock includes the output consumer's group join (about 1 to 3 s, started after production), so the 200,000-input figures are conservative by up to a third; the 1,000,000- and 3,000,000-input figures are not materially affected.
+
 Interpretation limits: the 1,000,000-input and 3,000,000-input batched runs differ by 47 percent (23.9k against 35.0k) and the cause is not established (machine state, compaction, or run length), so the sustained claim is the lower figure. The stand-in has no ledger,
 no capture decode, no real key sizes; the real lane's puts per input are unmeasured; the projector, the Postgres write path and the lane were not run together on one machine; the arena contract's need is about 19k inputs/s (10,000 booked and 9,091 settled
-trades/s). Hosted-runner figures not taken. The change is now the production default (`FinanceTopology.PRODUCER_BATCH_BYTES`, `PRODUCER_LINGER_MS`, pinned by `verifyPinned`); the weekly workflow's Streams rows will read "improved" against the old hosted
+trades/s). Hosted-runner figures not taken. The change is now the production default (`FinanceTopology.PRODUCER_BATCH_BYTES`, `PRODUCER_LINGER_MS`, pinned to exactly these values by `verifyPinned`); the weekly workflow's Streams rows will read "improved" against the old hosted
 baseline until that baseline is re-taken. Latency cost: up to 20 ms added before a decision is visible. The finance broker, launcher, crash and projection suites passed unchanged on the new properties (0 skipped).
 ## Calcify finite finance projector capacity spike, CAL-FIN-P1 (October 13, 2026)
 

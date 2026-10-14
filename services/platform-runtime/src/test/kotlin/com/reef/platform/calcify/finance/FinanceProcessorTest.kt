@@ -282,8 +282,8 @@ class FinanceProcessorTest {
         }
         assertFailsWith<IllegalArgumentException> { FinanceTopology.verifyPinned(java.util.Properties().apply { putAll(good); remove("max.task.idle.ms") }) }
         assertEquals(262_144, good["producer.batch.size"]); assertEquals(20, good["producer.linger.ms"])
-        assertFailsWith<IllegalArgumentException>("batch too small") { FinanceTopology.verifyPinned(java.util.Properties().apply { putAll(good); put("producer.batch.size", 16_384) }) }
-        for (linger in listOf(0, 500)) assertFailsWith<IllegalArgumentException>("linger $linger") { FinanceTopology.verifyPinned(java.util.Properties().apply { putAll(good); put("producer.linger.ms", linger) }) }
+        for (batch in listOf(16_384, 262_145, 1_048_576)) assertFailsWith<IllegalArgumentException>("batch $batch") { FinanceTopology.verifyPinned(java.util.Properties().apply { putAll(good); put("producer.batch.size", batch) }) }
+        for (linger in listOf(0, 19, 21, 500)) assertFailsWith<IllegalArgumentException>("linger $linger") { FinanceTopology.verifyPinned(java.util.Properties().apply { putAll(good); put("producer.linger.ms", linger) }) }
         for (k in listOf("producer.batch.size", "producer.linger.ms")) assertFailsWith<IllegalArgumentException>("missing $k") { FinanceTopology.verifyPinned(java.util.Properties().apply { putAll(good); remove(k) }) }
     }
 
