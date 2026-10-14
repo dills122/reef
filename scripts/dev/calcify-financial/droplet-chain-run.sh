@@ -3,7 +3,8 @@
 # It provisions the existing do-benchmark stack, ships ONLY tracked files (git archive of HEAD: never .env, .planning, .mcp.json or other untracked files),
 # installs a JDK on the host, runs a short matrix, fetches the outputs, and destroys the droplet on every exit path.
 #
-#   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | smoke)
+#   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | compare | smoke | s1smoke)
+#   `compare` runs the single-thread microbenchmarks first, then lanes 1 to 4 with the projector and lanes 1 and 3 without it, all with -XX:+UseParallelGC, then the S1 shard cases.
 #
 # Needs DIGITALOCEAN_TOKEN in .env or the environment, an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
 set -euo pipefail
@@ -71,12 +72,16 @@ git -C "$ROOT_DIR" archive --format=tar HEAD | remote "mkdir -p $REMOTE_DIR && t
 log "installing a JDK and recording the host"
 remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-21-jdk-headless >/dev/null && java -version 2>&1 | head -1 && nproc && lscpu | grep -E 'Model name|^CPU\\(s\\)' && free -g | head -2 && docker --version && uptime" | tee "$OUT_DIR/host.txt"
 
+log "microbenchmarks (single thread SHA-256 and memory, then a thread-scaling loop)"
+scp -i "$KEY" -o UserKnownHostsFile="$ROOT_DIR/.tmp-do-known-hosts" "$ROOT_DIR"/scripts/dev/calcify-financial/droplet-microbench/*.java "$USER_NAME@$HOST:/tmp/" >/dev/null
+{ remote "java /tmp/Bench.java && java /tmp/Par.java"; } 2>&1 | tee "$OUT_DIR/microbench.txt" || log "microbenchmarks failed"
+
 run_case() {
   # run_case LABEL ENV...   -- each case runs the S4 test once with 100,000 trades per lane and keeps its output
   local label="$1"; shift
   if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
   log "case $label ($*)"
-  remote "cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S4_TRADES=\${S4_TRADES:-100000} S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+  remote "cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S4_TRADES=\${S4_TRADES:-100000} S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.wholeChainOnOneMachine' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
 }
 
 run_s1() {
@@ -89,6 +94,21 @@ run_s1() {
 
 : > "$OUT_DIR/matrix.txt"
 case "$MATRIX" in
+  compare)
+    PG=JAVA_TOOL_OPTIONS=-XX:+UseParallelGC
+    run_case "lanes1" $PG S4_LANES=1
+    run_case "lanes1-noproject" $PG S4_LANES=1 S4_PROJECT=false
+    run_case "lanes2" $PG S4_LANES=2
+    run_case "lanes3" $PG S4_LANES=3
+    run_case "lanes3-noproject" $PG S4_LANES=3 S4_PROJECT=false
+    run_case "lanes4" $PG S4_LANES=4
+    run_case "lanes5" $PG S4_LANES=5
+    run_case "lanes1-g1" S4_LANES=1
+    run_case "lanes1-again" $PG S4_LANES=1
+    run_s1 "s1-shards1" $PG S1_SHARDS=1
+    run_s1 "s1-shards2" $PG S1_SHARDS=2
+    run_s1 "s1-shards3" $PG S1_SHARDS=3
+    ;;
   smoke) run_case "smoke-1lane" S4_LANES=1 S4_TRADES=5000 ;;
   s1smoke) run_s1 "s1-smoke" S1_SHARDS=2 ;;
   *)
