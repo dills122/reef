@@ -20,6 +20,13 @@ internal class StaleProjectionEpoch(message: String) : IllegalStateException(mes
  * its input digest and the checkpoint continuity verify.
  */
 internal class FinanceProjector(private val ledger: FinanceLedger, private val dataSource: DataSource) {
+    companion object {
+        /** Migration 0014's bound: 128 captures + 160 settle attempts + 8 controls inside 320. Every finite binding. */
+        const val FINITE_SEQUENCE_BOUND = 320L
+        /** Migration 0016's ceiling for a capacity binding. */
+        const val MAX_SEQUENCE_BOUND = 1_000_000_000L
+    }
+
     /** The stored progress `(lastSequence, lastChain)`, or null before [open]. */
     fun checkpoint(bindingDigest: String): Pair<Long, String>? = dataSource.connection.use { c ->
         c.prepareStatement("SELECT last_sequence, last_chain FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
@@ -28,12 +35,18 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         }
     }
 
-    /** Creates the checkpoint at genesis for [bindingDigest]; repeated calls with an equal or newer epoch only advance the fence. */
-    fun open(bindingDigest: String, epoch: Long) {
+    /**
+     * Creates the checkpoint at genesis for [bindingDigest]; repeated calls with an equal or newer epoch only advance the fence. [sequenceBound] is the
+     * most decisions the projection of this binding will ever hold: 320 for a finite binding (migration 0014), larger for a capacity binding (migration 0016).
+     * It is fixed at creation, and a call that names a different bound for an existing binding is refused.
+     */
+    fun open(bindingDigest: String, epoch: Long, sequenceBound: Long = FINITE_SEQUENCE_BOUND) {
         require(epoch > 0) { "epoch must be positive" }
+        require(sequenceBound in FINITE_SEQUENCE_BOUND..MAX_SEQUENCE_BOUND) { "sequence bound must be in $FINITE_SEQUENCE_BOUND..$MAX_SEQUENCE_BOUND" }
         tx { c ->
-            c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain)
-                VALUES (?, ?, 0, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setLong(2, epoch); it.setString(3, ledger.genesisChain); it.executeUpdate() }
+            c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain, sequence_bound)
+                VALUES (?, ?, 0, ?, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setLong(2, epoch); it.setString(3, ledger.genesisChain); it.setLong(4, sequenceBound); it.executeUpdate() }
+            requireBound(c, bindingDigest, sequenceBound)
             fence(c, bindingDigest, epoch)
         }
     }
@@ -43,9 +56,11 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
      * creates the checkpoint at genesis with epoch 1; every later claim atomically raises the stored epoch by one. A process holding an older epoch
      * is refused with [StaleProjectionEpoch] on its next write, so two instances are never silent: the older one dies. (Docs: CALCIFY_FINITE_P3_OWNER_EPOCH_DESIGN.md, option B.)
      */
-    fun claim(bindingDigest: String): Long = tx { c ->
-        val created = c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain)
-            VALUES (?, 1, 0, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setString(2, ledger.genesisChain); it.executeUpdate() }
+    fun claim(bindingDigest: String, sequenceBound: Long = FINITE_SEQUENCE_BOUND): Long = tx { c ->
+        require(sequenceBound in FINITE_SEQUENCE_BOUND..MAX_SEQUENCE_BOUND) { "sequence bound must be in $FINITE_SEQUENCE_BOUND..$MAX_SEQUENCE_BOUND" }
+        val created = c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain, sequence_bound)
+            VALUES (?, 1, 0, ?, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setString(2, ledger.genesisChain); it.setLong(3, sequenceBound); it.executeUpdate() }
+        requireBound(c, bindingDigest, sequenceBound)
         if (created == 1) 1L else c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET owner_epoch = owner_epoch + 1 WHERE binding_digest = ? RETURNING owner_epoch").use { ps ->
             ps.setString(1, bindingDigest); ps.executeQuery().use { r -> check(r.next()) { "checkpoint vanished during claim" }; r.getLong(1) }
         }
@@ -72,6 +87,14 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         if (applied > 0) c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET last_sequence = ?, last_chain = ? WHERE binding_digest = ?")
             .use { it.setLong(1, lastSequence); it.setString(2, lastChain); it.setString(3, bindingDigest); it.executeUpdate() }
         applied
+    }
+
+    /** The projection of a binding keeps the sequence bound it was created with; a caller that expects another is looking at the wrong profile. */
+    private fun requireBound(c: Connection, bindingDigest: String, expected: Long) {
+        val stored = c.prepareStatement("SELECT sequence_bound FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
+            ps.setString(1, bindingDigest); ps.executeQuery().use { r -> check(r.next()) { "checkpoint vanished" }; r.getLong(1) }
+        }
+        check(stored == expected) { "the projection of this binding was created with sequence bound $stored, not $expected" }
     }
 
     private fun fence(c: Connection, bindingDigest: String, epoch: Long): Pair<Long, String> =
