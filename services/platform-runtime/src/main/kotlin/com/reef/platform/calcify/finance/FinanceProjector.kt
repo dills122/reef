@@ -19,7 +19,8 @@ internal class StaleProjectionEpoch(message: String) : IllegalStateException(mes
  * Projection only: it carries no financial authority, never re-decides, and a record is trusted only as far as its hash link,
  * its input digest and the checkpoint continuity verify.
  */
-internal class FinanceProjector(private val ledger: FinanceLedger, private val dataSource: DataSource) {
+internal class FinanceProjector(private val chain: DecisionChain, private val dataSource: DataSource) {
+    constructor(ledger: FinanceLedger, dataSource: DataSource) : this(FiniteChain(ledger), dataSource)
     companion object {
         /** Migration 0014's bound: 128 captures + 160 settle attempts + 8 controls inside 320. Every finite binding. */
         const val FINITE_SEQUENCE_BOUND = 320L
@@ -45,7 +46,7 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         require(sequenceBound in FINITE_SEQUENCE_BOUND..MAX_SEQUENCE_BOUND) { "sequence bound must be in $FINITE_SEQUENCE_BOUND..$MAX_SEQUENCE_BOUND" }
         tx { c ->
             c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain, sequence_bound)
-                VALUES (?, ?, 0, ?, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setLong(2, epoch); it.setString(3, ledger.genesisChain); it.setLong(4, sequenceBound); it.executeUpdate() }
+                VALUES (?, ?, 0, ?, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setLong(2, epoch); it.setString(3, chain.genesisChain); it.setLong(4, sequenceBound); it.executeUpdate() }
             requireBound(c, bindingDigest, sequenceBound)
             fence(c, bindingDigest, epoch)
         }
@@ -59,7 +60,7 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
     fun claim(bindingDigest: String, sequenceBound: Long = FINITE_SEQUENCE_BOUND): Long = tx { c ->
         require(sequenceBound in FINITE_SEQUENCE_BOUND..MAX_SEQUENCE_BOUND) { "sequence bound must be in $FINITE_SEQUENCE_BOUND..$MAX_SEQUENCE_BOUND" }
         val created = c.prepareStatement("""INSERT INTO boundary.calcify_finance_checkpoint(binding_digest, owner_epoch, last_sequence, last_chain, sequence_bound)
-            VALUES (?, 1, 0, ?, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setString(2, ledger.genesisChain); it.setLong(3, sequenceBound); it.executeUpdate() }
+            VALUES (?, 1, 0, ?, ?) ON CONFLICT (binding_digest) DO NOTHING""").use { it.setString(1, bindingDigest); it.setString(2, chain.genesisChain); it.setLong(3, sequenceBound); it.executeUpdate() }
         requireBound(c, bindingDigest, sequenceBound)
         if (created == 1) 1L else c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET owner_epoch = owner_epoch + 1 WHERE binding_digest = ? RETURNING owner_epoch").use { ps ->
             ps.setString(1, bindingDigest); ps.executeQuery().use { r -> check(r.next()) { "checkpoint vanished during claim" }; r.getLong(1) }
@@ -83,7 +84,7 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
             previous = decision.sequence
             require(input.digest() == decision.inputDigest) { "input does not match the decision's input digest" }
             if (decision.sequence <= lastSequence) { replays += decision; continue }
-            require(ledger.verifyLink(lastChain, lastSequence + 1, decision)) { "decision does not continue the checkpoint chain" }
+            require(chain.verifyLink(lastChain, lastSequence + 1, decision)) { "decision does not continue the checkpoint chain" }
             rows.add(decision, input)
             lastSequence = decision.sequence; lastChain = decision.checksum
         }

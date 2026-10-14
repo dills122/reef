@@ -56,8 +56,8 @@ internal class FinanceEvidenceReader(
      * P3-1 / F6). [LogReader.readAll] re-reads the whole log (the bounded finite profile's pass); [LogReader.readNext] reads only what is new.
      * Not thread-safe: the projection loop is its only user; close it after the loop has stopped.
      */
-    inner class LogReader(private val topic: String) : AutoCloseable {
-        private val tp = TopicPartition(topic, 0)
+    inner class LogReader(private val topic: String, private val partition: Int = 0) : AutoCloseable {
+        private val tp = TopicPartition(topic, partition)
         private val c = consumer().also { it.assign(listOf(tp)) }
         fun readAll(): List<Pair<ByteArray?, ByteArray?>> = drain(c, tp, topic)
 
@@ -81,7 +81,32 @@ internal class FinanceEvidenceReader(
         }
         override fun close() = c.close()
     }
-    fun logReader(topic: String): LogReader = LogReader(topic)
+    fun logReader(topic: String, partition: Int = 0): LogReader = LogReader(topic, partition)
+
+    /**
+     * The last read-committed data record of one partition, or null for an empty partition. Transaction markers occupy offsets without being records, so the read starts a
+     * little before the end and backs off until it finds a record or reaches the start; a timeout is a failure, never "empty".
+     */
+    fun lastValue(topic: String, partition: Int): ByteArray? = consumer().use { c ->
+        val tp = TopicPartition(topic, partition); c.assign(listOf(tp))
+        val start = c.beginningOffsets(listOf(tp), readTimeout).getValue(tp)
+        val end = c.endOffsets(listOf(tp), readTimeout).getValue(tp)
+        var back = 64L
+        while (end > start) {
+            val from = maxOf(start, end - back)
+            c.seek(tp, from)
+            var last: ByteArray? = null
+            val deadline = System.nanoTime() + readTimeout.toNanos()
+            while (c.position(tp, readTimeout) < end) {
+                c.poll(Duration.ofMillis(200)).forEach { last = it.value() }
+                check(System.nanoTime() < deadline) { "timed out reading the tail of $topic-$partition" }
+            }
+            if (last != null) return@use last
+            if (from == start) break
+            back *= 8
+        }
+        null
+    }
 
     /** First record a read-committed consumer sees at or after [offset], or null when there is none before the end. A timeout is a failure, never "none". */
     fun firstVisibleAtOrAfter(topic: String, offset: Long): Long? = withConsumer(topic) { c, tp ->

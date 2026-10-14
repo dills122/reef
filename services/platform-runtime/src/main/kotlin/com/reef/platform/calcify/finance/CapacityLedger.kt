@@ -46,7 +46,7 @@ internal data class CapacityOutcome(val disposition: Disposition, val decision: 
  * This commits synchronously (the root after every decision). The lagged option of design 5.6 is a separate, gated stage.
  */
 internal class CapacityLedger(val config: CapacityConfig) {
-    val genesisChain: String = Canon.sha(Canon.bytes { str("calcify-finance-genesis-v1"); str(config.digest()) })
+    val genesisChain: String = CapacityChain.genesisOf(config)
 
     private val positions = HashMap<Pair<AccountId, AssetId>, Long>()
     private val executions = HashMap<ExecutionKey, Captured>()
