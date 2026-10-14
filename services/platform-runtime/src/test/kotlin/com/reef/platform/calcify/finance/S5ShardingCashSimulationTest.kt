@@ -19,7 +19,7 @@ class S5ShardingCashSimulationTest {
 
     private fun simulate(participants: Int, instruments: Int, shards: Int, trades: Int, openingCash: Long, zipf: Boolean, refill: Boolean, seed: Long): Result {
         val rnd = Random(seed); val price = 100L
-        val cash = Array(participants) { LongArray(shards) { openingCash / shards } }
+        val cash = Array(participants) { LongArray(shards) { k -> openingCash / shards + if (k < openingCash % shards) 1 else 0 } }   // the remainder goes to the first shards, so the total is exactly openingCash
         val sec = Array(participants) { LongArray(instruments) { 1000L } }
         val weights = DoubleArray(instruments) { if (zipf) 1.0 / (it + 1) else 1.0 }; val cum = DoubleArray(instruments); var acc = 0.0
         for (i in 0 until instruments) { acc += weights[i]; cum[i] = acc }
