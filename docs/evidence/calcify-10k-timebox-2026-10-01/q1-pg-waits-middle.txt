@@ -1,5 +1,0 @@
-LWLock|WALWrite|95
-Timeout|SpinDelay|6
-||4
-Client|ClientRead|3
-IO|WALSync|1

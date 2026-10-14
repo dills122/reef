@@ -4,7 +4,7 @@
 Authorized two-hour campaign03:38:05–05:38:05UTC, October2. Target10,000 durable HTTP order commands/s through Phase1 stub verifier and Phase2 full-fact resolver. Target NOT achieved. Best full300s7,708.36/s; do not report stage-only10k contexts/s as this unit.
 
 ## Canonical Sources
-[Campaign report](../../research/CALCIFY_10K_TIMEBOX_2026-10-02.md), [throughput ledger](../../THROUGHPUT_BASELINES.md), [frozen policy/corrections/raw records](../../evidence/calcify-10k-timebox-2026-10-01/campaign-policy.json), [current work](../../WORK_PLAN.md). Read AGENTS/AI_CONTEXT before continuation; handoff is continuation context, not product truth.
+[Campaign report](../../research/CALCIFY_10K_TIMEBOX_2026-10-02.md), [throughput ledger](../../THROUGHPUT_BASELINES.md), [frozen policy/corrections/raw records](https://github.com/dills122/reef-records/blob/a1050bc104ea0b701f436c36f09b1ef5561d9b91/records/reef/docs/evidence/calcify-10k-timebox-2026-10-01/campaign-policy.json), [current work](../../WORK_PLAN.md). Read AGENTS/AI_CONTEXT before continuation; handoff is continuation context, not product truth.
 
 ## Current Repository State
 Worktree `/Users/dsteele/.codex/worktrees/calcify-phase2-experiments/reef`, branch `codex/calcify-10k-timebox`. Benchmark base037971d63ebee882799e0bd78b7dd0035af1c3a6; candidate77fe7b67. Later origin/master16e15340 merged as eb000b4e; compatibility482846d0 preserves new run-scoped/hidden-limit contracts and Phase1 retention/durability gates. Timed results do NOT transfer to integrated newer code. Primary checkout `/Users/dsteele/repos/reef` unrelated changes preserved. Campaign .planning image staging/binaries ignored from delivery; only markdown planning state retained.

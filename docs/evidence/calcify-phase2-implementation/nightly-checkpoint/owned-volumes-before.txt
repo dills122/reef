@@ -1,3 +1,0 @@
-reef-calcify-resolver-test_rp0-data
-reef-calcify-resolver-test_rp1-data
-reef-calcify-resolver-test_rp2-data

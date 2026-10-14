@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyScriptSurface } from "./lib/script-surface.mjs";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const scriptExts = new Set([".js", ".mjs", ".sh", ".ts"]);
@@ -43,9 +44,12 @@ for (const path of scriptFiles) {
   syntaxSkipped.push(path);
 }
 
-const repoFiles = walk(".")
-  .filter((path) => path !== ".")
-  .filter((path) => isReadableTextCandidate(path))
+// Ignore generated/untracked reports and local agent notes as wiring evidence.
+// Include new scripts so their own imports can be checked before staging.
+const trackedFiles = spawnSync("git", ["ls-files", "-z"], { cwd: repoRoot, encoding: "utf8" });
+if (trackedFiles.status !== 0) throw new Error("cannot enumerate tracked script references");
+const repoFiles = [...new Set([...trackedFiles.stdout.split("\0"), ...scriptFiles])]
+  .filter((path) => path && isReadableTextCandidate(path))
   .sort();
 const repoText = new Map();
 for (const path of repoFiles) {
@@ -61,40 +65,24 @@ const controlFiles = [
   "package.json",
   ...walk(".github").filter((path) => /\.(ya?ml)$/.test(path)),
 ].filter((path) => existsSync(path));
-const controlText = controlFiles.map((path) => repoText.get(path) ?? readFileSync(path, "utf8")).join("\n");
 
-const unreferencedEntrypoints = [];
-const unwiredTests = [];
-
-for (const path of scriptFiles) {
-  if (path.includes("/lib/")) continue;
-  if (path.includes("/db/migrations/")) continue;
-
-  if (path.endsWith(".test.mjs")) {
-    if (!controlText.includes(path)) {
-      unwiredTests.push(path);
-    }
-    continue;
-  }
-
-  if (!hasReference(path)) {
-    unreferencedEntrypoints.push(path);
-  }
-}
-
-if (unreferencedEntrypoints.length > 0) {
-  failures.push([
-    "script entrypoints without a Makefile/package/CI/docs/import reference:",
-    ...unreferencedEntrypoints.map((path) => `  - ${path}`),
+const surface = classifyScriptSurface(scriptFiles, repoText);
+const unsupported = surface.filter(({ category }) =>
+  ["unreferenced", "unreachable", "unwired-test"].includes(category));
+const needsReview = surface.filter(({ category }) => ["test-only", "evidence-only"].includes(category));
+if (needsReview.length > 0) {
+  console.warn([
+    "script retention review required (not proof of operational use; do not delete without owner review):",
+    ...needsReview.map(({ path, category }) => `  - ${path} [${category}]`),
   ].join("\n"));
 }
-
-if (unwiredTests.length > 0) {
+if (unsupported.length > 0) {
   failures.push([
-    "script tests not wired into Makefile, package.json, or CI:",
-    ...unwiredTests.map((path) => `  - ${path}`),
+    "scripts without maintained operational wiring (tests and historical mentions do not establish use):",
+    ...unsupported.map(({ path, category }) => `  - ${path} [${category}]`),
   ].join("\n"));
 }
+if (process.argv.includes("--inventory")) console.log(JSON.stringify(surface, null, 2));
 
 const rawInternalArenaScriptCallers = scriptFiles
   .filter((path) => !path.includes("/db/migrations/"))
@@ -164,21 +152,15 @@ if (failures.length > 0) {
 
 console.log("script surface check passed");
 console.log(`  scripts=${scriptFiles.length}`);
+for (const category of [...new Set(surface.map((row) => row.category))].sort()) {
+  console.log(`  ${category}=${surface.filter((row) => row.category === category).length}`);
+}
 console.log(`  nodeSyntaxChecked=${syntaxChecked.length}`);
 console.log(`  shellSyntaxChecked=${shellChecked.length}`);
 if (syntaxSkipped.length > 0) {
   console.log(`  syntaxSkipped=${syntaxSkipped.join(", ")}`);
 }
 console.log(`  controlFiles=${controlFiles.join(", ")}`);
-
-function hasReference(scriptPath) {
-  const localReference = `./${scriptPath.split("/").pop()}`;
-  for (const [path, text] of repoText) {
-    if (path === scriptPath) continue;
-    if (text.includes(scriptPath) || text.includes(localReference)) return true;
-  }
-  return false;
-}
 
 function runCheck(cmd, args, label) {
   const result = spawnSync(cmd, args, {

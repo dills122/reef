@@ -1,3 +1,0 @@
-LWLock|WALWrite|122
-||4
-Client|ClientRead|1
