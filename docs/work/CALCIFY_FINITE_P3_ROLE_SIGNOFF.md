@@ -45,7 +45,8 @@ All four are `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE` with secrets from a sec
 - **Decision 1, the matrices: approved.** The Kafka and Postgres matrices above are the finite P3 provisioning list.
 - **Decision 2, session timeout: decided earlier, 6,000 ms** (see below).
 - **Decision 3, transport: the proof run is a closed network.** Plaintext transport is acceptable for it. TLS is filed as a follow-up: GitHub issue 527.
-- **Decisions 4 and 5 (operator-route exposure, credential delivery and rotation): not decided.** For the closed-network local recording they are covered by construction (the routes stay local-only; the credentials are random disposable files, created and deleted by `scripts/dev/calcify-financial/finite-p3-live-fixture.sh`). They must be decided before any non-disposable deployment.
+- **Decision 4, operator-route exposure: decided 2026-10-13, defaults.** The finance read routes stay on the internal-HTTP exposure mode, local only. No deployment enables them on a reachable interface unless an authenticating proxy sits in front.
+- **Decision 5, credential delivery and rotation: decided 2026-10-13, defaults.** Credentials reach the process only as `*_FILE` secrets (never environment values or JDBC URL passwords); they are owner-only files; rotation is by restarting the process with new files (SCRAM users and Postgres login roles changed first). The disposable recording fixture remains the only automated path.
 
 ## Decisions for you (as originally posed)
 
