@@ -159,7 +159,7 @@ internal class FinanceProjector(private val ledger: FinanceLedger, private val d
         if (r.aEx.isNotEmpty()) c.prepareStatement("""INSERT INTO boundary.calcify_finance_attempt(binding_digest, run_id, venue_session_id, instrument_id, execution_id, attempt, disposition)
             SELECT ?, t.r, t.v, t.i, t.e, t.n, t.d FROM unnest(?::text[], ?::text[], ?::text[], ?::text[], ?::int[], ?::text[]) AS t(r,v,i,e,n,d)""").use {
             it.setString(1, digest); it.setArray(2, text(r.aRun)); it.setArray(3, text(r.aVen)); it.setArray(4, text(r.aIns)); it.setArray(5, text(r.aEx))
-            it.setArray(6, c.createArrayOf("int", r.aNo.toTypedArray())); it.setArray(7, text(r.aDisp)); it.executeUpdate()
+            it.setArray(6, c.createArrayOf("int4", r.aNo.toTypedArray())); it.setArray(7, text(r.aDisp)); it.executeUpdate()
         }
         if (r.uEx.isNotEmpty()) {
             val n = c.prepareStatement("""UPDATE boundary.calcify_finance_obligation o SET status = 'SETTLED', cash_residual = 0, share_residual = 0
