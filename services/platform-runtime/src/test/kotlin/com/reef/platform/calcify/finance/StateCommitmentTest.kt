@@ -47,6 +47,7 @@ class StateCommitmentTest {
     @Test fun everyGoldenCaseMatchesTheIndependentEncoder() {
         for (case in goldens["cases"]) {
             val name = case["name"].asText(); val state = stateOf(case)
+            assertEquals(case["entities"].size(), StateCommitment.entities(state).size, "$name: no golden entity was lost to a duplicate key when the state was rebuilt")
             assertEquals(case["commitment"].asText(), StateCommitment.reference(state), "$name: commitment")
             if (case.has("entityKeys")) {
                 val entities = StateCommitment.entities(state)

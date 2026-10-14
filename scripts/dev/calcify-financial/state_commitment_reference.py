@@ -42,7 +42,8 @@ def admissible(text: str) -> bool:
 
 
 def encode(types: str, fields) -> bytes:
-    assert len(types) == len(fields), "field count"
+    if len(types) != len(fields):
+        raise ValueError("field count")
     out = b""
     for t, f in zip(types, fields):
         if t == "s":
@@ -63,9 +64,11 @@ def entity_key_leaf(tag: str, key, value):
         if t != "s":
             continue
         if tag == "K" and idx == len(ktypes):
-            assert len(f) == 64 and all(c in "0123456789abcdef" for c in f), "action digest is not 64 lowercase hex: %r" % (f,)
+            if not (len(f) == 64 and all(c in "0123456789abcdef" for c in f)):
+                raise ValueError("action digest is not 64 lowercase hex: %r" % (f,))
         else:
-            assert admissible(f), "identifier not admissible: %r" % (f,)
+            if not admissible(f):
+                raise ValueError("identifier not admissible: %r" % (f,))
     k = sha(frame(KEY_LABEL), frame(tag), encode(ktypes, key))
     leaf = sha(b"\x00", k, sha(b"\x01", encode(vtypes, value)))
     return k, leaf
@@ -76,7 +79,8 @@ def trie_root(pairs):
     if not pairs:
         return sha(b"\x03")
     as_int = sorted(((int.from_bytes(k, "big"), leaf) for k, leaf in pairs), key=lambda p: p[0])
-    assert len({k for k, _ in as_int}) == len(as_int), "duplicate trie key"
+    if len({k for k, _ in as_int}) != len(as_int):
+        raise ValueError("duplicate trie key")
 
     def build(items):
         if len(items) == 1:
@@ -86,7 +90,8 @@ def trie_root(pairs):
         shift = 255 - index
         left = [p for p in items if ((p[0] >> shift) & 1) == 0]
         right = [p for p in items if ((p[0] >> shift) & 1) == 1]
-        assert left and right and len(left) + len(right) == len(items)
+        if not (left and right and len(left) + len(right) == len(items)):
+            raise ValueError("invalid trie split")
         return sha(b"\x02", struct.pack(">H", index), build(left), build(right))
 
     return build(as_int)
