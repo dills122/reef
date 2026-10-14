@@ -71,22 +71,59 @@ class S3cLedgerScaleSpikeTest {
         assertTrue(l.root().toList() != live, "a change must move the root")
     }
 
+    private fun inputsFor(rnd: Random, accounts: List<AccountId>, usd: AssetId, aapl: AssetId, trades: Int): List<FinanceInput> {
+        val out = ArrayList<FinanceInput>()
+        for (a in accounts) { out += FinanceInput.Fund(ActionKey("n", "f", "u-${a.value}"), Authority.OPERATOR, a, usd, 1_000_000); out += FinanceInput.Fund(ActionKey("n", "f", "s-${a.value}"), Authority.OPERATOR, a, aapl, 1_000) }
+        for (t in 0 until trades) {
+            val k = ExecutionKey("r", "s", "AAPL", "e$t"); val b = accounts[rnd.nextInt(accounts.size)]; var s = accounts[rnd.nextInt(accounts.size)]; if (s == b) s = accounts[(accounts.indexOf(b) + 1) % accounts.size]
+            out += FinanceInput.Capture(ActionKey("n", "c", "c$t"), k, b, s, 1, 10); out += FinanceInput.Settle(ActionKey("n", "s", "s$t"), Authority.OPERATOR, k, 1)
+        }
+        return out
+    }
+
+    /** Off-thread commitment: the digest a decision carries is the root after the batch boundary one full batch behind it, whatever the thread timing; the chain is reproducible; the final root equals a rebuild. */
+    @Test fun offThreadCommitmentCarriesTheLaggedRootDeterministically() {
+        val every = 25; val usd = AssetId("USD"); val aapl = AssetId("AAPL"); val opening = AccountId("opening")
+        val accountList = (0 until 40).map { AccountId("acct-$it") }; val accounts = accountList.toSet()
+        val inputs = inputsFor(Random(9), accountList, usd, aapl, 700)
+        val sync = ScaleLedger(accounts, usd, aapl, opening, rootEvery = every); val rootAt = HashMap<Long, String>()
+        for (i in inputs) { val r = sync.decide(i); if (r.recorded && sync.sequence % every == 0L) rootAt[sync.sequence] = hexOf(sync.root()) }
+        fun runAsync(): Triple<List<String>, String, ByteArray> {
+            val l = ScaleLedger(accounts, usd, aapl, opening, rootEvery = every, asyncCommit = true); val digests = ArrayList<String>(); var lastChain = ""
+            for (i in inputs) { val r = l.decide(i); if (r.recorded) { digests += l.lastStateDigest } }
+            lastChain = l.chain
+            return Triple(digests, lastChain, l.finalRoot()).also { assertEquals(l.entityCount().toLong(), l.trie.size) }
+        }
+        val a = runAsync(); val b = runAsync()
+        assertEquals(a.first, b.first, "digests do not depend on thread timing"); assertEquals(a.second, b.second, "the chain is reproducible")
+        var checked = 0
+        for ((index, digest) in a.first.withIndex()) {
+            val s = index + 1L; val boundary = (s / every) * every - every
+            if (boundary <= 0) assertEquals("0".repeat(64), digest, "before the first full batch a decision carries the zero digest") else { assertEquals(rootAt.getValue(boundary), digest, "decision $s carries the root at $boundary"); checked++ }
+        }
+        assertTrue(checked > 1000, "checked $checked lagged digests")
+        val rebuilt = ScaleLedger(accounts, usd, aapl, opening).also { l -> for (i in inputs) l.decide(i) }.rebuildRoot(4)
+        assertEquals(rebuilt.toList(), a.third.toList(), "the final root equals a rebuild")
+        assertTrue(a.first.toSet().size > 10)
+    }
+    private fun hexOf(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
+
     // ---- scale ----
 
     private fun heapMb(): Long { repeat(3) { System.gc() }; return (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1024 * 1024) }
     private fun gcMs() = java.lang.management.ManagementFactory.getGarbageCollectorMXBeans().sumOf { it.collectionTime }
 
     @Test fun decideRateAndHeapAsStateGrows() {
-        val commit = (System.getenv("S3C_COMMIT") ?: "true").toBoolean(); val rootEvery = (System.getenv("S3C_ROOT_EVERY") ?: "1").toInt()
+        val commit = (System.getenv("S3C_COMMIT") ?: "true").toBoolean(); val asyncCommit = (System.getenv("S3C_ASYNC") ?: "false").toBoolean(); val rootEvery = (System.getenv("S3C_ROOT_EVERY") ?: "1").toInt()
         val targets = (System.getenv("S3C_ENTITIES") ?: "100000,1000000,5000000").split(",").map { it.trim().toInt() }
         val accountCount = (System.getenv("S3C_ACCOUNTS") ?: "5000").toInt()
         val accounts = (0 until accountCount).map { AccountId("acct-$it") }.toSet(); val usd = AssetId("USD"); val aapl = AssetId("AAPL"); val opening = AccountId("opening")
         val log = StringBuilder("\nS3c ledger scale (in-memory prototype, commitment=${commit}, root every $rootEvery decisions, $accountCount accounts, 5 entities per capture+settle pair, window = 20,000 decisions)\n")
         val base = heapMb()
-        val l = ScaleLedger(accounts, usd, aapl, opening, commit = commit, rootEvery = rootEvery); val rnd = Random(11)
+        val l = ScaleLedger(accounts, usd, aapl, opening, commit = commit, rootEvery = rootEvery, asyncCommit = asyncCommit); val rnd = Random(11)
         for (a in accounts) { l.decide(FinanceInput.Fund(ActionKey("n", "f", "u-${a.value}"), Authority.OPERATOR, a, usd, 1_000_000_000_000L)); l.decide(FinanceInput.Fund(ActionKey("n", "f", "s-${a.value}"), Authority.OPERATOR, a, aapl, 1_000_000_000L)) }
         var trade = 0; val list = accounts.toList()
-        val tag = if (commit) "trie-k$rootEvery" else "nocommit"
+        val tag = if (commit) "trie-k$rootEvery" + (if (asyncCommit) "-async" else "") else "nocommit"
         for (target in targets) {
             var windowStart = System.nanoTime(); var windowDecisions = 0; var lastRate = 0.0; var worst = Double.MAX_VALUE; val gc0 = gcMs(); val t0 = System.nanoTime(); val seq0 = l.sequence
             while (l.entityCount() < target) {
@@ -98,11 +135,11 @@ class S3cLedgerScaleSpikeTest {
             }
             val secs = (System.nanoTime() - t0) / 1e9; val decisions = l.sequence - seq0; val gcShare = (gcMs() - gc0) / 1000.0
             val used = heapMb() - base
-            val r0 = System.nanoTime(); val rebuilt = if (commit && (target <= 1_000_000 || System.getenv("S3C_REBUILD") == "true")) l.rebuildRoot(5) else null; val rebuildSecs = (System.nanoTime() - r0) / 1e9
+            val r0 = System.nanoTime(); val rebuilt = if (commit && !asyncCommit && (target <= 1_000_000 || System.getenv("S3C_REBUILD") == "true")) l.rebuildRoot(5) else null; val rebuildSecs = (System.nanoTime() - r0) / 1e9
             if (rebuilt != null) assertEquals(l.root().toList(), rebuilt.toList(), "incremental root equals the rebuild at $target entities")
             S0Metrics.record("ledgerScale.$tag.entities$target.decisionsPerSec", Math.round(decisions / secs)); S0Metrics.record("ledgerScale.$tag.entities$target.worstWindowDecisionsPerSec", Math.round(worst)); S0Metrics.record("ledgerScale.$tag.entities$target.heapBytesPerEntity", used * 1024 * 1024 / l.entityCount())
-            log.append("entities=%d: %.0f decisions/s since the last step (%d decisions in %.1f s), last window %.0f, worst window %.0f, gc %.1f s of it; heap %d MB = %d bytes/entity; rebuild from tables %s\n".format(
-                l.entityCount(), decisions / secs, decisions, secs, lastRate, worst, gcShare, used, used * 1024 * 1024 / l.entityCount(), if (rebuilt != null) "%.1f s, root equal".format(rebuildSecs) else "skipped"))
+            log.append("entities=%d: %.0f decisions/s since the last step (%d decisions in %.1f s), last window %.0f, worst window %.0f, gc %.1f s of it; heap %d MB = %d bytes/entity; rebuild from tables %s; commitment thread made the decider wait %d times for %.2f s\n".format(
+                l.entityCount(), decisions / secs, decisions, secs, lastRate, worst, gcShare, used, used * 1024 * 1024 / l.entityCount(), if (rebuilt != null) "%.1f s, root equal".format(rebuildSecs) else "skipped", l.blockedCount, l.blockedNanos / 1e9))
         }
         println(log); Files.writeString(S0Metrics.file("s3c-ledger-scale-$tag.txt"), log)
     }

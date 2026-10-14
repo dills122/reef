@@ -138,18 +138,18 @@ the full engine may not be justified.
 After Decision 0 (a capacity profile is wanted), `S3cLedgerScaleSpikeTest` ([CAL-FIN-P3](../THROUGHPUT_BASELINES.md)) built a test-code prototype: the O3a semantics for capture, fund and settle with O(touched) work, aggregates and local invariants (section 5.5) in place of the
 whole-state check, and the section 4.1 trie as the commitment. It agrees with the real `FinanceLedger` on 48,000 random inputs (all dispositions, budgets, positions) and its incremental root equals a full rebuild in shuffled order at 10^5 and 10^6 entities.
 
-| Entities | Decisions/s, state digest every decision | Decisions/s, root every 100 | Heap per entity |
-| ---: | ---: | ---: | ---: |
-| 100,002 | 25,805 | 49,015 | 377 B |
-| 1,000,002 | 21,907 (worst window 20,495) | 38,293 | 369 B |
-| 5,000,002 | 18,156 (worst window 13,024) | 28,708 | 371 B |
+| Entities | Decisions/s, digest every decision (K=1) | Root every 100, same thread | Root every 100, second thread | Heap per entity |
+| ---: | ---: | ---: | ---: | ---: |
+| 100,002 | 43,615 | 54,557 | 50,710 | 366 B |
+| 1,000,002 | 37,009 | 44,517 | 45,518 | 368 B |
+| 5,000,002 | 28,325 | 31,309 | 34,343 | 371 B |
 
 What it settles and what it does not:
-- **The shape holds.** The ledger stops being the term that scales with state: 21.7k decisions/s at 10^6 entities against about 3 to 40/s for the current whole-state digest. Rate falls slowly (about 12 percent over a 5x growth), and heap is linear at about 370 bytes per entity.
-- **The commitment is the cost** (about 90 percent at 10^6 entities). A state digest in every decision is what O3a does and is what costs the margin; committing the root every K decisions (K = 100: 34.5k/s) is a Decision-D question about what a decision commits to, not an engineering detail.
-- **In the Streams lane (S3d)** the ledger and the store puts share one thread and their costs add: a state digest every decision gives about 12k to 13k inputs/s, a root every 100 decisions about 18k to 19k, and a root every 100 with the ledger rotated every 250,000 to 1,000,000 entities about 19k to 22k, against the 19k need. Ledger and puts without a commitment run at 38k, so the commitment is the remaining lever.
-- **Not shown:** the staging overlay and abort journal (section 5.3), a store-backed view, protobuf decode and the history chain in the loop, and any restore. A real lane is slower than S3d.
-- **What this says about the choices:** (1) a state digest on every decision cannot reach the goalpost on one thread (about 12k to 13k); committing every K=100 decisions can, barely. (2) Rotation helps modestly through a smaller trie and heap (about 5 percent at 1,000,000, about 15 percent at 250,000), and is still required for the 5.5 GiB a 5-minute session would otherwise hold. (3) The next lever is taking the commitment off the processing thread, for example a decision that commits to the state digest as of K decisions earlier, computed by a second thread from the touched-entity stream (deterministic, because it is a pure function of the log); it needs a design decision and was not measured.
+- **The shape holds.** The ledger stops being the term that scales with state: 37k decisions/s at 10^6 entities against about 3 to 40/s for the current whole-state digest. Rate falls slowly (about 25 percent over a 5x growth), and heap is linear at about 370 bytes per entity.
+- **In the Streams lane (S3d)** the ledger and the store puts share one thread and their costs add: a state digest every decision gives about 17k to 18k inputs/s, a root every 100 decisions on the same thread about 19k to 20k (19k to 22k with the ledger rotated every 250,000 to 1,000,000 entities), and a root every 100 decisions computed **on a second thread** about 31k to 32k (25k to 34k with rotation), against the 19k need. Ledger and puts without a commitment run at 30k to 37k, so the second thread recovers most of the available headroom.
+- **Taking the commitment off the thread is therefore worth it** (about 1.5x to 1.8x in the lane, 1.3x to 1.7x above the need), but it changes what a decision commits to: decision s carries the root at the last batch boundary at least K behind it, so a decision attests a state K to 2K decisions older than its own. The chain still covers every decision's input, legs and sequence; the digest is a pure function of the log, so replay reproduces it whatever the thread timing (tested); a checkpoint at a boundary is verifiable against the digest carried K to 2K decisions later; audit and restore rules must be written for that. It also needs a second core and a rule for when the commitment thread falls behind (the decider waits, as measured: never at K=1,000, rarely at K=100, constantly at 5x10^6 entities where the trie is the bottleneck at about 34k decisions/s).
+- **Rotation** helps little on speed once the commitment is off the thread (the lane figures with and without it overlap) and is still required for memory: 15 million entities per 5-minute session is about 5.5 GiB in one ledger.
+- **Not shown:** the staging overlay and abort journal (section 5.3), a store-backed view, protobuf decode and the history chain in the loop, and any restore. A real lane is slower than S3d. Earlier versions of this table came from slower prototype code (see the CAL-FIN-P3 corrections) and are superseded.
 
 ## 2. Requirements
 
@@ -523,6 +523,8 @@ changes the economics, stop after S2 and revisit the entity model. If no capacit
 **Decision 0 outcome, 2026-10-13: a capacity profile IS wanted** (owner: "2, open Decision 0 and go after the projector throughput"). Target for the work that follows: the arena contract's 10,000 booked trades/s (20,000 decisions/s, 5-minute session), no date set. This supersedes the "not now" recommendation above; the remaining questions in this section (rotation, lane, authenticity, restore, audit) are still open and are taken in order as the measurements demand. First result: [CAL-FIN-P1](../THROUGHPUT_BASELINES.md) shows the projector's database cost is not the blocker it looked like (about 12.5k decisions/s as-written-schema with set-based writes, about 17k to 21k with the redundant keys removed, one connection, laptop), so the Streams lane stand-in (about 11k inputs/s) is the binding term next.
 
 **Owner direction, 2026-10-13 ("go, do 1 plus 2"):** the capacity profile is to (1) commit to the state only every K decisions instead of in every decision (K to be set from measurement; 100 is the figure measured in [CAL-FIN-P3](../THROUGHPUT_BASELINES.md) and section 1.5) and (2) rotate the ledger per slice with a sealing cut, as Decision 1 already recommended. Both are direction for the next measurements and for the profile spec, not acceptance of this design, which stays DRAFT and unreviewed past round 2.
+
+**Owner direction, 2026-10-13 ("go after taking the commitment off the thread"):** the K-cadence commitment is to be computed on a second thread with a lag of one batch (section 1.5, measured). Still direction for measurements and the profile spec, not acceptance; the audit and restore rules for a lagged digest are unwritten.
 
 1. **Run duration and rotation (D7, replaces the earlier lifetime-or-retirement question).** Recommended: **rotation**, one ledger per session or slice,
    sealed by a cut (final decision, `C(S)`, chain head) that the next ledger's genesis references. The goalpost's entity growth (50,000/s; 15 million per 5-minute session)

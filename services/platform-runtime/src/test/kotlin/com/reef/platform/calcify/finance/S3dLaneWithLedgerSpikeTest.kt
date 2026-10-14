@@ -33,16 +33,17 @@ import kotlin.test.Test
 class S3dLaneWithLedgerSpikeTest {
     private val usd = AssetId("USD"); private val aapl = AssetId("AAPL"); private val opening = AccountId("opening")
 
-    private class Variant(val label: String, val ledger: Boolean = true, val commit: Boolean = true, val rootEvery: Int = 1, val rotateAt: Int = Int.MAX_VALUE)
+    private class Variant(val label: String, val ledger: Boolean = true, val commit: Boolean = true, val rootEvery: Int = 1, val rotateAt: Int = Int.MAX_VALUE, val async: Boolean = false)
 
     private inner class LedgerProcessor(private val v: Variant, private val accounts: List<AccountId>, private val storeName: String) : Processor<ByteArray, ByteArray, String, ByteArray> {
         private lateinit var ctx: ProcessorContext<String, ByteArray>
         private lateinit var kv: KeyValueStore<String, ByteArray>
         private lateinit var ledger: ScaleLedger
-        private var epoch = 0; private var n = 0L; private var trade = 0L; private var position = 0L; var rotations = 0
+        private var epoch = 0; private var n = 0L; private var trade = 0L; private var position = 0L; var rotations = 0; private var blockedNanos = 0L; private var blockedCount = 0L
+        val totalBlockedCount get() = blockedCount + (if (::ledger.isInitialized) ledger.blockedCount else 0L); val totalBlockedNanos get() = blockedNanos + (if (::ledger.isInitialized) ledger.blockedNanos else 0L)
         private val accountSet = accounts.toSet()
         private val history = ByteArray(150); private val head = ByteArray(300); private val meta = ByteArray(100); private val output = ByteArray(250)
-        private fun newLedger() = ScaleLedger(accountSet, usd, aapl, opening, commit = v.commit, rootEvery = v.rootEvery)
+        private fun newLedger() = ScaleLedger(accountSet, usd, aapl, opening, commit = v.commit, rootEvery = v.rootEvery, asyncCommit = v.async)
         private fun persist() {
             for ((k, value) in ledger.touched) kv.put("e$epoch/$k", value.toByteArray())
             position++; kv.put("h/$position", history); kv.put("head", head); kv.put("meta", meta)
@@ -52,6 +53,7 @@ class S3dLaneWithLedgerSpikeTest {
             for (a in accounts) { ledger.decide(FinanceInput.Fund(ActionKey("n", "f", "u-${a.value}"), Authority.OPERATOR, a, usd, 1_000_000_000_000L)); ledger.decide(FinanceInput.Fund(ActionKey("n", "f", "s-${a.value}"), Authority.OPERATOR, a, aapl, 1_000_000_000L)) }
         }
         private fun rotate() {
+            if (v.async) { blockedNanos += ledger.blockedNanos; blockedCount += ledger.blockedCount; ledger.finalRoot() }   // the seal: wait for the commitment thread to finish the closing state
             val closing = ledger.positions.entries.filter { it.key.first != opening }.map { it.key to it.value }
             epoch++; rotations++; ledger = newLedger()
             for ((key, amount) in closing) {
@@ -101,6 +103,10 @@ class S3dLaneWithLedgerSpikeTest {
         Variant("k1-rotate1m", rootEvery = 1, rotateAt = 1_000_000),
         Variant("k100-rotate1m", rootEvery = 100, rotateAt = 1_000_000),
         Variant("k100-rotate250k", rootEvery = 100, rotateAt = 250_000),
+        Variant("k100-async", rootEvery = 100, async = true),
+        Variant("k100-async-rotate1m", rootEvery = 100, rotateAt = 1_000_000, async = true),
+        Variant("k100-async-rotate250k", rootEvery = 100, rotateAt = 250_000, async = true),
+        Variant("k1000-async-rotate250k", rootEvery = 1000, rotateAt = 250_000, async = true),
     )
 
     @Test fun combinedRate() {
@@ -119,15 +125,15 @@ class S3dLaneWithLedgerSpikeTest {
                 val deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos()
                 while (streams.state() != KafkaStreams.State.RUNNING && System.nanoTime() < deadline) Thread.sleep(50)
                 check(streams.state() == KafkaStreams.State.RUNNING) { "streams not running: ${streams.state()}" }
-                val t0 = System.nanoTime()
+                val gc0 = java.lang.management.ManagementFactory.getGarbageCollectorMXBeans().sumOf { it.collectionTime }; val t0 = System.nanoTime()
                 val producer = FinanceBrokerFixture.producer(rp.bootstrap)
                 try { repeat(n) { producer.send(ProducerRecord("S3D_IN", 0, ByteArray(0), ByteArray(16))) }; producer.flush() } finally { producer.close() }
                 val seen = countOutput(rp.bootstrap, n.toLong(), 900)
                 val secs = (System.nanoTime() - t0) / 1e9
-                val rotations = processors.sumOf { it.rotations }
+                val gcSecs = (java.lang.management.ManagementFactory.getGarbageCollectorMXBeans().sumOf { it.collectionTime } - gc0) / 1000.0; val rotations = processors.sumOf { it.rotations }; val waited = processors.sumOf { it.totalBlockedCount }; val waitedSecs = processors.sumOf { it.totalBlockedNanos } / 1e9
                 streams.close(Duration.ofSeconds(30))
                 S0Metrics.record("laneWithLedger.${v.label}.inputsPerSec", Math.round(seen / secs))
-                log.append("%-16s processed=%d in %.1f s = %.0f inputs/s (rotations %d)\n".format(v.label, seen, secs, seen / secs, rotations))
+                log.append("%-16s processed=%d in %.1f s = %.0f inputs/s (rotations %d, commitment thread waited for %d times, %.2f s; gc %.1f s)\n".format(v.label, seen, secs, seen / secs, rotations, waited, waitedSecs, gcSecs))
                 check(seen == n.toLong()) { "${v.label}: processed $seen of $n" }
             }
         }

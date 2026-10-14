@@ -8,9 +8,10 @@ import java.util.Random
  * Research prototype shared by the S3c and S3d spikes (test code, not product code): an in-memory O3a-semantics ledger with O(touched) decide, aggregates and local
  * invariants, and a path-compressed binary trie over SHA-256 of the entity key as the incremental commitment. See S3cLedgerScaleSpikeTest for what it is and is not.
  */
-private fun scaleSha(vararg parts: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").also { d -> parts.forEach(d::update) }.digest()
+private val scaleDigest = ThreadLocal.withInitial { MessageDigest.getInstance("SHA-256") }
+private fun scaleSha(vararg parts: ByteArray): ByteArray = scaleDigest.get().also { d -> d.reset(); parts.forEach(d::update) }.digest()
 private fun scaleFrame(s: String): ByteArray { val b = s.toByteArray(); return java.nio.ByteBuffer.allocate(4 + b.size).putInt(b.size).put(b).array() }
-private fun scaleHex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
+private fun scaleHex(b: ByteArray): String = java.util.HexFormat.of().formatHex(b)
 
 /** Path-compressed binary trie over the 256-bit key hash; the leaf digest is the node hash; shape depends only on the key set. */
 internal class ScaleTrie {
@@ -22,7 +23,7 @@ internal class ScaleTrie {
     private fun bit(k: ByteArray, i: Int) = (k[i ushr 3].toInt() ushr (7 - (i and 7))) and 1
     private fun firstDiff(a: ByteArray, b: ByteArray): Int { for (i in 0 until 32) { val x = (a[i].toInt() xor b[i].toInt()) and 0xff; if (x != 0) return i * 8 + Integer.numberOfLeadingZeros(x) - 24 }; return -1 }
     /** Hashes are computed lazily: a put only marks the path dirty, and [rootHash] rehashes each dirty branch once, so puts that share a path (and decisions between roots) share the work. */
-    private fun settle(n: N) { if (n is Branch && n.dirty) { settle(n.left); settle(n.right); n.hash = MessageDigest.getInstance("SHA-256").digest(byteArrayOf(2, (n.bit ushr 8).toByte(), n.bit.toByte()) + n.left.hash + n.right.hash); n.dirty = false } }
+    private fun settle(n: N) { if (n is Branch && n.dirty) { settle(n.left); settle(n.right); n.hash = scaleDigest.get().let { d -> d.reset(); d.update(2); d.update((n.bit ushr 8).toByte()); d.update(n.bit.toByte()); d.update(n.left.hash); d.update(n.right.hash); d.digest() }; n.dirty = false } }
     fun put(key: ByteArray, leaf: ByteArray) { root = insert(root, key, leaf) }
     private fun insert(n: N?, key: ByteArray, leaf: ByteArray): N {
         if (n == null) { size++; return Leaf(key, leaf) }
@@ -43,7 +44,7 @@ internal class ScalePlan(val updated: Map<Pair<AccountId, AssetId>, Long>, val l
 
 internal class ScaleBudgets(val captures: Int = Int.MAX_VALUE, val obligations: Int = Int.MAX_VALUE, val attempts: Int = Int.MAX_VALUE, val controls: Int = Int.MAX_VALUE)
 
-internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val security: AssetId, val opening: AccountId, val budgets: ScaleBudgets = ScaleBudgets(), val commit: Boolean = true, val rootEvery: Int = 1) {
+internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val security: AssetId, val opening: AccountId, val budgets: ScaleBudgets = ScaleBudgets(), val commit: Boolean = true, val rootEvery: Int = 1, val asyncCommit: Boolean = false) {
     val positions = HashMap<Pair<AccountId, AssetId>, Long>()
     val executions = HashMap<ExecutionKey, Captured>(); val obligations = HashMap<ExecutionKey, Obligation>()
     val attempts = HashMap<Pair<ExecutionKey, Int>, Disposition>(); val actions = HashMap<ActionKey, ActionRecord>()
@@ -60,11 +61,35 @@ internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val 
     private fun put(tag: String, key: String, value: String) {
         touchedLastDecision++; touched += key to value
         if (!commit) return
-        if (rootEvery > 1) pending[key] = tag to value else applyToTrie(tag, key, value)
+        if (rootEvery > 1 || asyncCommit) pending[key] = tag to value else applyToTrie(tag, key, value)
     }
     private fun applyToTrie(tag: String, key: String, value: String) { val k = scaleSha(key.toByteArray()); trie.put(k, scaleSha(byteArrayOf(0), k, scaleSha(scaleFrame(tag), scaleFrame(key), scaleFrame(value)))) }
     /** The commitment root after every write so far. */
     fun root(): ByteArray { if (pending.isNotEmpty()) { for ((key, tv) in pending) applyToTrie(tv.first, key, tv.second); pending.clear() }; return trie.rootHash() }
+
+    // ---- off-thread commitment (S3e): decision s commits to the state as of the last batch boundary that is at least one full batch behind it ----
+    private val worker = if (asyncCommit) java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "scale-commit").also { it.isDaemon = true } } else null
+    private val futures = HashMap<Long, java.util.concurrent.Future<ByteArray>>()
+    /** Time the deciding thread spent waiting for the commitment thread, in nanoseconds (zero means the worker kept up). */
+    var blockedNanos = 0L; var blockedCount = 0L
+    /** The state digest the last recorded decision carried (tests). */
+    var lastStateDigest = ""
+
+    private fun submitBatch(boundary: Long) {
+        val batch = LinkedHashMap(pending); pending.clear()
+        futures[boundary] = worker!!.submit<ByteArray> { for ((key, tv) in batch) applyToTrie(tv.first, key, tv.second); trie.rootHash() }
+    }
+    /** The digest a decision at [seq] commits to: the root after the batch ending at the last multiple of K that is at least K behind it (genesis-zero before the first). */
+    private fun laggedDigest(seq: Long): String {
+        val boundary = (seq / rootEvery) * rootEvery - rootEvery
+        if (boundary <= 0) return "0".repeat(64)
+        val f = futures.getValue(boundary)
+        if (!f.isDone) { val t = System.nanoTime(); val r = f.get(); blockedNanos += System.nanoTime() - t; blockedCount++; futures.remove(boundary - rootEvery); return scaleHex(r) }
+        futures.remove(boundary - rootEvery)
+        return scaleHex(f.get())
+    }
+    /** Waits for every submitted batch, applies the remainder, and returns the root of the full state (tests and shutdown only). */
+    fun finalRoot(): ByteArray { check(asyncCommit); submitBatch(sequence + 1_000_000_000_000L); val r = futures.getValue(sequence + 1_000_000_000_000L).get(); worker!!.shutdown(); return r }
     private fun ek(k: ExecutionKey) = "${k.runId}\u0000${k.venueSessionId}\u0000${k.instrumentId}\u0000${k.executionId}"
     private fun pos(a: AccountId, s: AssetId) = positions[a to s] ?: 0L
 
@@ -101,7 +126,9 @@ internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val 
         actions[input.action] = ActionRecord(digest, disposition)
         put("A", "a/${input.action.namespace}\u0000${input.action.domain}\u0000${input.action.actionId}", digest + disposition.name)
         // rootEvery > 1 models a decision that commits to the state only every K decisions (a design change, not O3a): the chain still covers every decision.
-        val stateDigest = if (commit && sequence % rootEvery == 0L) scaleHex(root()) else "0".repeat(64)
+        if (asyncCommit && commit && sequence % rootEvery == 0L) submitBatch(sequence)
+        val stateDigest = if (asyncCommit) (if (commit) laggedDigest(sequence) else "0".repeat(64)) else if (commit && sequence % rootEvery == 0L) scaleHex(root()) else "0".repeat(64)
+        lastStateDigest = stateDigest
         val bytes = Canon.bytes { str("calcify-finance-decision-v1"); str(chain); long(sequence); str(stateDigest); str(input.action.namespace); str(input.action.domain); str(input.action.actionId); str(digest); str(disposition.name); int(legs.size); legs.forEach { leg(it) } }
         chain = Canon.sha(bytes)
         // Local invariants and counters in place of the whole-state check (design 5.5).
