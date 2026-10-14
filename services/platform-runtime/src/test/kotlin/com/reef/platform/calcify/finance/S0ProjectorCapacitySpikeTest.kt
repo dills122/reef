@@ -98,7 +98,9 @@ class S0ProjectorCapacitySpikeTest {
         val cm = c.unwrap(PGConnection::class.java).copyAPI
         fun load(table: String, ddl: String, rows: Sequence<String>) {
             c.createStatement().use { it.execute("CREATE TEMP TABLE $table ($ddl) ON COMMIT DROP") }
-            cm.copyIn("COPY $table FROM STDIN", java.io.StringReader(rows.joinToString("") { it + "\n" }))
+            // COPY text format treats tab, newline and backslash specially; the synthetic ids never contain them, and this makes a future change that adds one fail loudly instead of corrupting rows.
+            val lines = rows.toList(); require(lines.none { l -> l.contains('\\') || l.contains('\r') || l.contains('\n') }) { "COPY row contains an escape character" }
+            cm.copyIn("COPY $table FROM STDIN", java.io.StringReader(lines.joinToString("") { it + "\n" }))
         }
         load("st_dec", "s bigint, n text, d text, a text, p text, g text, r text, k text",
             b.seq.indices.asSequence().map { listOf(b.seq[it], b.ns[it], b.dom[it], b.aid[it], b.disp[it], b.digest[it], b.prior[it], b.sum[it]).joinToString("\t") })
@@ -118,8 +120,10 @@ class S0ProjectorCapacitySpikeTest {
     @Test
     fun capacityByWriteStrategy() {
         val name = "s0-pgcap-${System.nanoTime().toString(36)}"; val port = java.net.ServerSocket(0).use { it.localPort }
-        val migration = Files.readString(Path.of(System.getenv("S0_MIGRATION") ?: "../../scripts/dev/db/migrations/boundary/0014_calcify_finance_projection.sql"))
-            .replace("BETWEEN 0 AND 320", ">= 0").replace("BETWEEN 1 AND 320", ">= 1")
+        val original = Files.readString(Path.of(System.getenv("S0_MIGRATION") ?: "../../scripts/dev/db/migrations/boundary/0014_calcify_finance_projection.sql"))
+        // Deliberate and the point of the spike: a capacity run cannot fit the product's 320-sequence cap, so the two bounds are lifted. Both must be present, so a migration change cannot make this a silent no-op.
+        require(original.contains("BETWEEN 0 AND 320") && original.contains("BETWEEN 1 AND 320")) { "migration 0014 no longer carries the 320 bounds this spike lifts" }
+        val migration = original.replace("BETWEEN 0 AND 320", ">= 0").replace("BETWEEN 1 AND 320", ">= 1")
         val totalTrades = (System.getenv("S0_CAP_TRADES") ?: "30000").toInt(); val accounts = (System.getenv("S0_CAP_ACCOUNTS") ?: "1000").toInt()
         sh("docker", "run", "-d", "--rm", "--name", name, "-e", "POSTGRES_PASSWORD=s0", "-e", "POSTGRES_DB=reef", "-p", "$port:5432", "postgres:16-alpine", *(System.getenv("S0_CAP_PG_ARGS") ?: "").split(" ").filter { it.isNotBlank() }.toTypedArray())
         try {
