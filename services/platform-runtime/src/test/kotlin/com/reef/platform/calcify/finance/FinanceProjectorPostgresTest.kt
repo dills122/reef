@@ -197,6 +197,36 @@ class FinanceProjectorPostgresTest {
         assertProjectionEquals(real, binding, state, "after a transient failure")
     }
 
+    private fun hex64() = (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "").take(64)
+    private fun insertRawDecisions(ds: PGSimpleDataSource, binding: String, from: Int, to: Int) = ds.connection.use { c ->
+        c.prepareStatement("INSERT INTO boundary.calcify_finance_decision(binding_digest, sequence, action_namespace, action_domain, action_id, disposition, input_digest, prior_chain, checksum) VALUES (?, ?, 'n', 'd', ?, 'FUNDED', ?, ?, ?)").use { ps ->
+            for (i in from..to) { ps.setString(1, binding); ps.setLong(2, i.toLong()); ps.setString(3, "raw-$i"); ps.setString(4, hex64()); ps.setString(5, hex64()); ps.setString(6, hex64()); ps.addBatch() }
+            ps.executeBatch()
+        }
+    }
+    private fun sqlState(block: () -> Unit): String? = try { block(); null } catch (e: java.sql.SQLException) { e.sqlState } catch (e: java.sql.BatchUpdateException) { e.sqlState }
+
+    @Test fun aBindingKeepsTheSequenceBoundItWasCreatedWithAndTheDatabaseEnforcesIt() {
+        val ds = dataSource(); val projector = FinanceProjector(ledger, ds)
+        val finite = digest(); projector.open(finite, 1)
+        insertRawDecisions(ds, finite, 1, 320)
+        assertEquals("23514", sqlState { insertRawDecisions(ds, finite, 321, 321) }, "a finite binding refuses row 321 as migration 0014 did")
+        val capacity = digest(); projector.open(capacity, 1, sequenceBound = 400)
+        insertRawDecisions(ds, capacity, 1, 400)
+        assertEquals("23514", sqlState { insertRawDecisions(ds, capacity, 401, 401) }, "and a capacity binding refuses its own bound plus one")
+        ds.connection.use { c ->
+            fun update(sql: String, binding: String) = sqlState { c.prepareStatement(sql).use { ps -> ps.setString(1, binding); ps.executeUpdate() } }
+            assertEquals("23514", update("UPDATE boundary.calcify_finance_checkpoint SET last_sequence = 401 WHERE binding_digest = ?", capacity), "the checkpoint cannot pass the bound")
+            assertEquals("23514", update("UPDATE boundary.calcify_finance_checkpoint SET sequence_bound = 1000 WHERE binding_digest = ?", capacity), "the bound cannot be changed afterwards")
+            assertEquals("23514", update("UPDATE boundary.calcify_finance_checkpoint SET sequence_bound = 320 WHERE binding_digest = ?", capacity), "not even lowered")
+        }
+        assertFailsWith<IllegalStateException>("an existing binding reopened with a different bound") { projector.open(capacity, 1, sequenceBound = 320) }
+        assertFailsWith<IllegalStateException>("a claim that names a different bound") { projector.claim(capacity, sequenceBound = 500) }
+        assertEquals(2L, projector.claim(capacity, sequenceBound = 400), "a claim that names the stored bound raises the epoch as before")
+        assertFailsWith<IllegalArgumentException>("a bound below the finite one") { projector.open(digest(), 1, sequenceBound = 100) }
+        assertFailsWith<IllegalArgumentException>("a bound above the ceiling") { projector.open(digest(), 1, sequenceBound = 2_000_000_000L) }
+    }
+
     /** The projector is the only writer of the projection and must hold nothing else (docs/work/CALCIFY_FINITE_P3_DB_ROLES.md, O4 projection role). */
     @Test fun theProjectorRoleCannotDeleteTruncateOrTouchTheIngressTablesAndFunctions() {
         dataSource().connection.use { c ->
