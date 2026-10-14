@@ -63,7 +63,12 @@ internal class CapacityLedger(val config: CapacityConfig) {
 
     // ---- entity writes: the maps hold the state, the trie holds its commitment ----
 
-    private fun commit(e: StateCommitment.Entity) { val k = StateCommitment.keyOf(e); trie.put(k, StateCommitment.leafOf(e, k)) }
+    private val writes = ArrayList<StateCommitment.Entity>()
+
+    /** The entities the last recorded decision wrote, in write order (an entity written twice appears twice; the last one wins). Empty after a refusal. A caller that persists the ledger stores exactly these. */
+    val lastWrites: List<StateCommitment.Entity> get() = writes
+
+    private fun commit(e: StateCommitment.Entity) { writes += e; val k = StateCommitment.keyOf(e); trie.put(k, StateCommitment.leafOf(e, k)) }
     private fun commitPosition(k: Pair<AccountId, AssetId>, v: Long) = commit(StateCommitment.Entity("P", Canon.bytes { str(k.first.value); str(k.second.value) }, Canon.bytes { long(v) }))
     private fun commitExecution(k: ExecutionKey, c: Captured) = commit(StateCommitment.Entity("X", Canon.bytes { execution(k) }, Canon.bytes { str(c.buyer.value); str(c.seller.value); long(c.quantity); long(c.priceNanos) }))
     private fun commitObligation(k: ExecutionKey, o: Obligation) = commit(StateCommitment.Entity("O", Canon.bytes { execution(k) }, Canon.bytes { str(o.status.name); long(o.cashResidual); long(o.shareResidual) }))
@@ -93,6 +98,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
     }
 
     fun decide(input: FinanceInput): CapacityOutcome {
+        writes.clear()
         val digest = input.digest()
         actions[input.action]?.let { prior -> return refused(if (prior.digest == digest) Disposition.PRIOR_RESULT else Disposition.ACTION_CONFLICT) }
         return when (input) {
@@ -108,11 +114,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
         val rec = ActionRecord(digest, disposition); actions[input.action] = rec; commitAction(input.action, rec)
         val stateDigest = StateCommitment.commitment(sequence, controls, trie.root())
         val priorChain = chain
-        val bytes = Canon.bytes {
-            str("calcify-finance-decision-v1"); str(priorChain); long(sequence); str(stateDigest)
-            str(input.action.namespace); str(input.action.domain); str(input.action.actionId); str(digest); str(disposition.name); int(legs.size); legs.forEach { leg(it) }
-        }
-        chain = Canon.sha(bytes)
+        chain = checksumOf(sequence, input.action, digest, disposition, legs, priorChain, stateDigest)
         // Local invariants in place of the whole-state check (design 5.5).
         var cash = BigInteger.ZERO; var security = BigInteger.ZERO
         for (l in legs) if (l.asset == config.cashAsset) cash += BigInteger.valueOf(l.amount) else security += BigInteger.valueOf(l.amount)
@@ -169,5 +171,80 @@ internal class CapacityLedger(val config: CapacityConfig) {
         attempts[attemptKey] = Disposition.SETTLED; commitAttempt(i.execution, i.attempt, Disposition.SETTLED)
         val settled = Obligation(ObligationStatus.SETTLED, 0, 0); obligations[i.execution] = settled; commitObligation(i.execution, settled)
         return record(i, digest, Disposition.SETTLED, applied)
+    }
+
+    companion object {
+        /** The decision checksum (the same layout as [FinanceLedger]'s, so the finite chain verifier accepts capacity decisions). */
+        fun checksumOf(sequence: Long, action: ActionKey, inputDigest: String, disposition: Disposition, legs: List<Leg>, priorChain: String, stateDigest: String): String = Canon.sha(Canon.bytes {
+            str("calcify-finance-decision-v1"); str(priorChain); long(sequence); str(stateDigest)
+            str(action.namespace); str(action.domain); str(action.actionId); str(inputDigest); str(disposition.name); int(legs.size); legs.forEach { leg(it) }
+        })
+
+        /**
+         * Rebuilds a ledger from its entity set and scalars (restore): decodes each entity by class, rebuilds the maps and the trie, and refuses anything that is not
+         * a well-formed, duplicate-free state. It does NOT decide that the state is the one a decision committed to: the caller compares
+         * [commitment] with the head decision's `stateDigest` and the chain head with the head decision's checksum (see [CapacityStore]).
+         */
+        fun restore(config: CapacityConfig, entities: Iterable<StateCommitment.Entity>, sequence: Long, controls: Int, chain: String): CapacityLedger {
+            require(sequence >= 0 && controls >= 0) { "negative scalar" }
+            val ledger = CapacityLedger(config)
+            for (e in entities) ledger.load(e)
+            require(ledger.actions.size.toLong() == sequence) { "action count differs from sequence" }
+            require(ledger.actions.values.count { it.disposition == Disposition.FUNDED } == controls) { "funded action count differs from controls" }
+            require(ledger.executions.keys == ledger.obligations.keys) { "an execution without an obligation or the reverse" }
+            ledger.sequence = sequence; ledger.controls = controls; ledger.chain = chain
+            ledger.checkRestoredPositions()
+            return ledger
+        }
+    }
+
+    /** `C(S)` of the current state (the value the head decision's `stateDigest` must equal in the synchronous profile). */
+    fun commitment(): String = StateCommitment.commitment(sequence, controls, trie.root())
+
+    private fun load(e: StateCommitment.Entity) {
+        val key = DecodedFields(e.keyBytes); val value = DecodedFields(e.valueBytes)
+        fun execution() = ExecutionKey(key.text(), key.text(), key.text(), key.text())
+        val before = trie.size
+        when (e.tag) {
+            "P" -> { val k = AccountId(key.text()) to AssetId(key.text()); key.end(); positions[k] = value.long().also { value.end() } }
+            "X" -> { val k = execution(); key.end(); executions[k] = Captured(AccountId(value.text()), AccountId(value.text()), value.long(), value.long()).also { value.end() } }
+            "O" -> { val k = execution(); key.end(); obligations[k] = Obligation(ObligationStatus.valueOf(value.text()), value.long(), value.long()).also { value.end() } }
+            "A" -> { val k = execution() to key.int(); key.end(); attempts[k] = Disposition.valueOf(value.text()).also { value.end() } }
+            "K" -> {
+                val k = ActionKey(key.text(), key.text(), key.text()); key.end()
+                val digest = value.text(); require(Regex("^[0-9a-f]{64}$").matches(digest)) { "action digest is not 64 lowercase hex" }
+                actions[k] = ActionRecord(digest, Disposition.valueOf(value.text())).also { value.end() }
+            }
+            else -> throw IllegalArgumentException("unknown entity class ${e.tag}")
+        }
+        val k = StateCommitment.keyOf(e)
+        require(trie.get(k) == null) { "two entities have the same trie key" }
+        trie.put(k, StateCommitment.leafOf(e, k))
+        require(trie.size == before + 1) { "entity not added" }
+    }
+
+    private fun checkRestoredPositions() {
+        var cash = BigInteger.ZERO; var security = BigInteger.ZERO
+        for ((k, v) in positions) {
+            require(k.first == config.openingAccount || v >= 0) { "negative non-opening position" }
+            require(k.first != config.openingAccount || v <= 0) { "opening account position is positive" }
+            require(k.first == config.openingAccount || k.first in config.accounts) { "position for an unknown account" }
+            when (k.second) { config.cashAsset -> cash += BigInteger.valueOf(v); config.securityAsset -> security += BigInteger.valueOf(v); else -> throw IllegalArgumentException("position in an unknown asset") }
+        }
+        require(cash.signum() == 0 && security.signum() == 0) { "positions do not balance per asset" }
+    }
+
+    /** Strict reader of the Canon framing: text is int32 length plus strict UTF-8, integers are big-endian; trailing bytes are an error. */
+    private class DecodedFields(bytes: ByteArray) {
+        private val buffer = java.nio.ByteBuffer.wrap(bytes)
+        fun text(): String {
+            require(buffer.remaining() >= 4) { "truncated entity" }
+            val n = buffer.int; require(n in 0..4096 && buffer.remaining() >= n) { "corrupt frame" }
+            val raw = ByteArray(n); buffer.get(raw)
+            return java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(raw)).toString()
+        }
+        fun long(): Long { require(buffer.remaining() >= 8) { "truncated entity" }; return buffer.long }
+        fun int(): Int { require(buffer.remaining() >= 4) { "truncated entity" }; return buffer.int }
+        fun end() { require(!buffer.hasRemaining()) { "trailing entity bytes" } }
     }
 }
