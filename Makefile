@@ -38,7 +38,7 @@ test: test-go test-simulator test-platform-runtime test-bot-sdk test-dev-tooling
 # Local macOS live-harness checks for Calcify finite O2. The harness pins /private/tmp lease roots, so these
 # are not run in Linux CI; run them before touching scripts/dev/calcify-financial/finite-o2*.
 test-finite-o2-harness: check-bun-runtime
-	bun test scripts/dev/calcify-financial/finite-o2-engine-adverse.test.mjs scripts/dev/calcify-financial/finite-o2-proof.test.mjs scripts/dev/calcify-financial/finite-o2-resource-monitor.test.mjs
+	bun test scripts/dev/calcify-financial/finite-o2-engine-adverse.test.mjs scripts/dev/calcify-financial/finite-o2-proof.test.mjs scripts/dev/calcify-financial/finite-o2-resource-monitor.test.mjs scripts/dev/calcify-financial/finite-o2-build-inputs.test.mjs
 
 test-dev-tooling:
 	node scripts/dev/doctor.test.mjs
@@ -47,6 +47,7 @@ test-dev-tooling:
 	node scripts/dev/smoke-identity.test.mjs
 	node scripts/dev/ci-pr-change-scope.test.mjs
 	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
+	node --test scripts/dev/lib/benchmark-runtime-signature.test.mjs scripts/dev/lib/cohort-residence.test.mjs scripts/dev/lib/downstream-cohort.test.mjs scripts/dev/lib/downstream-freshness.test.mjs scripts/dev/lib/downstream-sampler.test.mjs scripts/dev/lib/instrumentation-perturbation.test.mjs scripts/dev/lib/run-profile-roles.test.mjs scripts/dev/lib/source-cohort.test.mjs scripts/dev/lib/stream-profile-guard.test.mjs scripts/dev/lib/script-surface.test.mjs
 	node --test scripts/dev/downstream-state-reference.test.mjs scripts/dev/full-projection-headroom.test.mjs scripts/dev/isolated-downstream-capacity.test.mjs
 	node scripts/dev/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs
@@ -187,9 +188,7 @@ test-bot-sdk:
 	bun scripts/dev/lib/telemetry-probes.test.mjs
 	bun scripts/dev/lib/projection-drain-report.test.mjs
 	bun scripts/dev/do-benchmark-check.test.mjs
-	bun scripts/dev/do-materializer-10k-gate.test.mjs
-	bun scripts/dev/do-materializer-scaling-gate.test.mjs
-	bun scripts/dev/do-projection-freshness-gate.test.mjs
+	bun scripts/dev/do-gate.test.mjs
 	bun test scripts/dev/projection-replay-proof.test.mjs
 	bun scripts/dev/scenario-drift.test.mjs
 	bun scripts/dev/scenario-golden.test.mjs
@@ -621,13 +620,13 @@ do-benchmark:
 	./scripts/dev/do-benchmark-host.sh $(ARGS)
 
 do-materializer-10k-gate:
-	./scripts/dev/do-materializer-10k-gate.sh $(or $(ARGS),plan)
+	$(JS_RUNTIME) scripts/dev/do-gate.mjs materializer-10k $(or $(ARGS),plan)
 
 do-materializer-scaling-gate:
-	./scripts/dev/do-materializer-scaling-gate.sh $(or $(ARGS),plan)
+	$(JS_RUNTIME) scripts/dev/do-gate.mjs materializer-scaling $(or $(ARGS),plan)
 
 do-projection-freshness-gate:
-	./scripts/dev/do-projection-freshness-gate.sh $(or $(ARGS),plan)
+	$(JS_RUNTIME) scripts/dev/do-gate.mjs projection-freshness $(or $(ARGS),plan)
 
 do-arena-pacing-lag-gate:
 	./scripts/dev/do-arena-pacing-lag-gate.sh $(or $(ARGS),plan)

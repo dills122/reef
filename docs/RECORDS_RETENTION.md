@@ -28,9 +28,9 @@ If current work needs a durable lesson, add concise verified fact to current own
 
 - Current code, tests, scenario definitions, contracts, accepted decisions, steering and operational runbooks.
 - Active execution in `WORK_PLAN.md`, Calcify overview/discovery/current Phase 2 implementation plan and current handoff; latest October 1 architecture reviews.
-- Latest Phase 1 evidence for 300-pair pacing, corrected 5k and 7.5k runs with reconciliation companions, and 10k calibration.
-- Phase 2 implementation: latest corrected broker fault cohort `broker-a9bc0494`; latest multi-shape short cohort `capacity-0ccfefa6`; last candidate `capacity-156d616c` and last producer-batch comparison `capacity-4c565d6d`; latest sustained attempt `sustained-8ea6c8ce`; latest large recovery `recovery-5545850c`; full-path and nightly-checkpoint bundles. Latest failed attempts remain failures; retention does not upgrade their qualification.
-- Latest master Calcify direct-throughput and joined-10k campaign bundles, including failed attempts, corrections, source manifests and current handoff. These are separate profiles from earlier phase diagnostics; campaign outcomes retain their recorded scope.
+- Focused Phase 1 evidence for 300-pair pacing, corrected 5k and 7.5k runs with reconciliation companions, and 10k calibration; current raw selection remains governed by retained inventory.
+- Phase 2 implementation: latest corrected broker fault cohort `broker-a9bc0494`; latest multi-shape short cohort `capacity-0ccfefa6`; last candidate `capacity-156d616c` and last producer-batch comparison `capacity-4c565d6d`; latest sustained attempt `sustained-8ea6c8ce`; latest large recovery `recovery-5545850c`; full-path and nightly-checkpoint bundles. Complete raw selections moved to Records October 13; [local checkpoint](evidence/calcify-phase2-implementation/README.md), executable paired fixture and original checksum list remain. Latest failed attempts remain failures; retention does not upgrade their qualification.
+- Concise [direct-throughput](evidence/calcify-direct-throughput-2026-10-02/README.md) and [joined-10k](evidence/calcify-10k-timebox-2026-10-01/README.md) checkpoints. Complete raw campaign bundles, including failures/corrections/source manifests, moved to Records October 13. Profiles remain distinct; recorded scope unchanged.
 - Complete terminal-retention red/green proof and latest PR review pass2.
 - [Runtime order identity](evidence/runtime-order-identity/README.md): final R08 local/real-DB/reviewer verification and CI follow-up with correction companions.
 - [Finite Calcify P3 O1](evidence/calcify-finite-p3/README.md): accepted optional lifecycle/capture model, complete failure/correction/review history in pinned Records proof; live O2 and financial gates remain open.
@@ -118,3 +118,21 @@ fixtures/owner summary remain local; active O2/preflight/O3/session planning sta
 local. No automatic ignored-data cleanup or other-topic sweep. Final delivery
 integration/Reef PR/OCR/Reef hosted CI pending; live binding/ingress/isolation/restore and
 financial authority/capacity remain unqualified.
+
+## October 13 raw campaign cleanup
+
+[Records PR #13](https://github.com/dills122/reef-records/pull/13) merged at
+`94da685a33d9249fc11a71a25944e9575b026184`; immutable import
+`a1050bc104ea0b701f436c36f09b1ef5561d9b91` preserves 296 exact files/11,794,694 bytes
+from Reef `150c6d6f20fd53341a29eee5d8ee1a79a98fce1c`. Fresh remote clone verified
+every imported byte count and SHA-256 before local removal; independent review
+compared all 296 source/archive blobs. Hosted integrity, hygiene, four tests and
+append-only checks passed before merge.
+
+[Relocation inventory](records/2026-10-13-raw-campaign-migration.json) records
+292 removals/11,427,127 bytes from Phase 2 implementation, direct-throughput and
+joined/timebox raw campaigns. Four copied fixture/checksum/config companions
+remain local, plus concise checkpoints and repaired immutable links. Prior
+archived README revision unchanged; source checkpoint links preserve later context.
+Active finite-P3/finance code, contracts and harnesses, Claude work and all ignored
+local data excluded. No runtime, authority or performance claim changed.

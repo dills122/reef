@@ -115,6 +115,16 @@ make dev-smoke-bot-sdk-hosted-live-container
 
 That smoke builds the simple market maker artifact, starts a local HTTP venue stub, and runs the hosted worker inside Docker with `--read-mode=live`, `--isolation=container`, and `--container-network=bridge`. It skips cleanly when Docker is unavailable. When Docker is running, host reachability and live read/submit behavior are enforced.
 
+The phase-1 `arena:local-run` command was retired during the October 13, 2026
+script cleanup. It wrapped pool smoke output in synthetic action-count and
+latency-based equity scores. Use `bun run arena:local-tick-run` for mode-defined
+tick sessions, or `bun run arena:runner-pool-smoke` for worker-pool diagnostics.
+The tick runner emits `reef.arena.localTickRun.v0`, not the retired
+`reef.arena.localRun.v0`; its mode, policy and scheduling options replace the old
+wrapper's iteration and threshold flags. This is an explicit migration, not a
+compatible command alias. The current `score-v0` fixture policy remains supported;
+see [scoring status](BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md#current-state).
+
 For arena local tick runs, combine SES with an outer container worker boundary:
 
 ```bash

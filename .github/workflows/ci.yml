@@ -339,6 +339,16 @@ jobs:
             scripts/dev/lib/dev-stack.test.mjs \
             scripts/dev/lib/dev-profiles.test.mjs \
             scripts/dev/lib/stress-success-guardrail.test.mjs \
+            scripts/dev/lib/benchmark-runtime-signature.test.mjs \
+            scripts/dev/lib/cohort-residence.test.mjs \
+            scripts/dev/lib/downstream-cohort.test.mjs \
+            scripts/dev/lib/downstream-freshness.test.mjs \
+            scripts/dev/lib/downstream-sampler.test.mjs \
+            scripts/dev/lib/instrumentation-perturbation.test.mjs \
+            scripts/dev/lib/run-profile-roles.test.mjs \
+            scripts/dev/lib/source-cohort.test.mjs \
+            scripts/dev/lib/stream-profile-guard.test.mjs \
+            scripts/dev/lib/script-surface.test.mjs \
             scripts/dev/ci-workflow-hardening.test.mjs \
             scripts/dev/ci-pr-change-scope.test.mjs \
             scripts/ci/check-required-results.test.mjs \
