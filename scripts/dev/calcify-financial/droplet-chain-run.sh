@@ -67,9 +67,18 @@ run_case() {
   remote "cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S4_TRADES=\${S4_TRADES:-100000} S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
 }
 
+run_s1() {
+  # run_s1 LABEL ENV...   -- the S1 instrument-shard prototype (ample cash, so no cross-shard cash moves), 300,000 trades over 1,000 participants
+  local label="$1"; shift
+  if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
+  log "case $label ($*)"
+  remote "cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S1_PARTICIPANTS=1000 S1_TRADES=300000 S1_CASH_TRADES=1000 timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.shardedByInstrument' -i --no-daemon 2>&1 | grep -E '^ +S1 |planned:|lanes:|moves planned|machine load|FAILED|AssertionFailed|BUILD' ; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+}
+
 : > "$OUT_DIR/matrix.txt"
 case "$MATRIX" in
   smoke) run_case "smoke-1lane" S4_LANES=1 S4_TRADES=5000 ;;
+  s1smoke) run_s1 "s1-smoke" S1_SHARDS=2 ;;
   *)
     run_case "lanes1-a" S4_LANES=1
     run_case "lanes2-a" S4_LANES=2
@@ -80,6 +89,10 @@ case "$MATRIX" in
     run_case "lanes3-b" S4_LANES=3
     run_case "lanes3-smp2" S4_LANES=3 S4_SMP=2 S4_BROKER_MEM=2G
     run_case "lanes2-free" S4_LANES=2 S4_FREE=true S4_VERIFY_ASYNC=true
+    run_s1 "s1-shards1" S1_SHARDS=1
+    run_s1 "s1-shards2" S1_SHARDS=2
+    run_s1 "s1-shards3" S1_SHARDS=3
+    run_s1 "s1-shards4" S1_SHARDS=4
     ;;
 esac
 
