@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/IBM/sarama"
+
 	"github.com/dills122/reef/services/matching-engine/internal/app"
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
 )
@@ -72,6 +74,33 @@ type Processor struct {
 	now                  func() time.Time
 	lifecycleError       error
 	lifecycleProfileHash string
+
+	// batchLimit is how many commands one fetch may take. It starts at
+	// config.BatchSize, halves when an event batch exceeds the producer message
+	// limit, and doubles back after fullBatchesBeforeGrowth full batches publish.
+	// Only the processing goroutine touches it; Stats carries the published copy.
+	batchLimit  int
+	fullBatches int
+}
+
+// fullBatchesBeforeGrowth is how many consecutive full-size batches must
+// publish before a halved batch limit doubles again.
+const fullBatchesBeforeGrowth = 64
+
+// EventBatchTooLargeError reports an event batch that cannot be sent as one
+// producer message. It is raised before any broker transaction is opened.
+type EventBatchTooLargeError struct {
+	Bytes int
+	Limit int
+}
+
+func (e *EventBatchTooLargeError) Error() string {
+	return fmt.Sprintf("venue event batch is %d bytes, over the producer message limit of %d", e.Bytes, e.Limit)
+}
+
+func isEventBatchTooLarge(err error) bool {
+	var tooLarge *EventBatchTooLargeError
+	return errors.As(err, &tooLarge) || errors.Is(err, sarama.ErrMessageSizeTooLarge)
 }
 
 type ProcessorConfig struct {
@@ -105,6 +134,8 @@ type Stats struct {
 	LastBatchID         atomic.Value
 	LastFetchedSequence atomic.Uint64
 	LastAckedSequence   atomic.Uint64
+	BatchLimit          atomic.Int64
+	BatchSplits         atomic.Uint64
 }
 
 type Snapshot struct {
@@ -128,6 +159,8 @@ type Snapshot struct {
 	LastAckedSequence   uint64 `json:"lastAckedSequence"`
 	LastBatchID         string `json:"lastBatchId"`
 	AckLag              uint64 `json:"ackLag"`
+	BatchLimit          int    `json:"batchLimit"`
+	BatchSplits         uint64 `json:"batchSplits"`
 }
 
 type VenueEventBatch struct {
@@ -190,6 +223,8 @@ func NewProcessor(service *app.Service, source CommandSource, publisher EventBat
 		stats:     stats,
 		now:       time.Now,
 	}
+	processor.batchLimit = config.BatchSize
+	stats.BatchLimit.Store(int64(config.BatchSize))
 	processor.lifecycleError = validateCalcifyLifecycle(service, config.CalcifyLifecycleEnabled, config.CalcifyFiniteBindingDigest, config.BatchSize)
 	if config.CalcifyLifecycleEnabled && processor.lifecycleError == nil {
 		processor.lifecycleProfileHash = service.CalcifySourceProfileHash()
@@ -221,6 +256,8 @@ func (p *Processor) Stats() Snapshot {
 		LastAckedSequence:   lastAckedSequence,
 		LastBatchID:         p.stats.LastBatchID.Load().(string),
 		AckLag:              sequenceLag(lastFetchedSequence, lastAckedSequence),
+		BatchLimit:          int(p.stats.BatchLimit.Load()),
+		BatchSplits:         p.stats.BatchSplits.Load(),
 	}
 }
 
@@ -269,7 +306,7 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 			return 0, &fatalProcessorError{cause: err}
 		}
 	}
-	deliveries, err := p.source.Fetch(ctx, p.config.BatchSize, p.config.FetchTimeout)
+	deliveries, err := p.source.Fetch(ctx, p.batchLimit, p.config.FetchTimeout)
 	if err != nil {
 		return 0, err
 	}
@@ -298,10 +335,11 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 			}
 			rollback.Rollback()
 			p.nakAll(ackable)
-			return len(deliveries), err
+			return len(deliveries), p.afterPublishFailure(err, len(deliveries))
 		}
 		rollback.Commit()
 		p.recordPublishedAndAcked(batch, ackable, acked)
+		p.afterPublishSuccess(len(deliveries))
 		return len(deliveries), nil
 	}
 	if err := p.publisher.PublishEventBatch(ctx, batch); err != nil {
@@ -313,15 +351,50 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 		// restart scenario 3).
 		rollback.Rollback()
 		p.nakAll(ackable)
-		return len(deliveries), err
+		return len(deliveries), p.afterPublishFailure(err, len(deliveries))
 	}
 	rollback.Commit()
+	p.afterPublishSuccess(len(deliveries))
 	p.stats.Published.Add(uint64(len(batch.Outcomes)))
 	p.stats.LastBatchID.Store(batch.BatchID)
 	if err := p.ackAll(ackable); err != nil && p.config.StopAfterAckFail {
 		return len(deliveries), err
 	}
 	return len(deliveries), nil
+}
+
+// afterPublishFailure adapts the fetch size to an oversize event batch so the
+// same commands are not redelivered at the same size forever. The batch was
+// already rolled back and nak'd. One command that still cannot fit stops the
+// lane: no batch size can fix it and retrying would only spin.
+func (p *Processor) afterPublishFailure(err error, fetched int) error {
+	if !isEventBatchTooLarge(err) {
+		return err
+	}
+	if fetched <= 1 {
+		return &fatalProcessorError{cause: fmt.Errorf("one command's event batch exceeds the producer message limit; raise MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES and the event topic max.message.bytes together: %w", err)}
+	}
+	p.batchLimit = fetched / 2
+	p.fullBatches = 0
+	p.stats.BatchLimit.Store(int64(p.batchLimit))
+	p.stats.BatchSplits.Add(1)
+	return err
+}
+
+func (p *Processor) afterPublishSuccess(fetched int) {
+	if p.batchLimit >= p.config.BatchSize || fetched < p.batchLimit {
+		return
+	}
+	p.fullBatches++
+	if p.fullBatches < fullBatchesBeforeGrowth {
+		return
+	}
+	p.fullBatches = 0
+	p.batchLimit *= 2
+	if p.batchLimit > p.config.BatchSize {
+		p.batchLimit = p.config.BatchSize
+	}
+	p.stats.BatchLimit.Store(int64(p.batchLimit))
 }
 
 // RestoreCommitted rebuilds the in-memory matching state from the canonical

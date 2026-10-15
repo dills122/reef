@@ -52,6 +52,11 @@ type KafkaEventBatchPublisher struct {
 	producer sarama.SyncProducer
 	source   *KafkaCommandSource
 
+	// maxMessageBytes is the producer's per-message limit; 0 disables the
+	// pre-send check. The check turns an oversize batch into a typed error
+	// before any transaction is opened.
+	maxMessageBytes int
+
 	beforeOffsetCommit func() error
 }
 
@@ -142,7 +147,8 @@ func NewKafkaEventBatchPublisher(config KafkaConfig) (*KafkaEventBatchPublisher,
 	if config.Finite != nil {
 		return nil, fmt.Errorf("finite source requires owned transactional publisher")
 	}
-	client, err := sarama.NewClient(kafkaBrokers(config), newKafkaClientConfig("reef-matching-engine-direct-producer"))
+	clientConfig := newKafkaClientConfig("reef-matching-engine-direct-producer")
+	client, err := sarama.NewClient(kafkaBrokers(config), clientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -152,9 +158,10 @@ func NewKafkaEventBatchPublisher(config KafkaConfig) (*KafkaEventBatchPublisher,
 		return nil, err
 	}
 	return &KafkaEventBatchPublisher{
-		config:   config,
-		client:   client,
-		producer: producer,
+		config:          config,
+		client:          client,
+		producer:        producer,
+		maxMessageBytes: clientConfig.Producer.MaxMessageBytes,
 	}, nil
 }
 
@@ -180,10 +187,11 @@ func NewKafkaTransactionalEventBatchPublisher(config KafkaConfig, source *KafkaC
 		return nil, fmt.Errorf("kafka producer %s is not transactional", transactionalID)
 	}
 	return &KafkaEventBatchPublisher{
-		config:   config,
-		client:   client,
-		producer: producer,
-		source:   source,
+		config:          config,
+		client:          client,
+		producer:        producer,
+		source:          source,
+		maxMessageBytes: clientConfig.Producer.MaxMessageBytes,
 	}, nil
 }
 
@@ -552,12 +560,22 @@ func (p *KafkaEventBatchPublisher) PublishEventBatchAndAck(ctx context.Context, 
 	return len(deliveries), nil
 }
 
+const producerRecordFramingMargin = 128
+
 func (p *KafkaEventBatchPublisher) eventBatchMessage(batch VenueEventBatch) (*sarama.ProducerMessage, error) {
 	payload, err := json.Marshal(batch)
 	if err != nil {
 		return nil, err
 	}
 	subject := fmt.Sprintf("%s.%s.%s", trimDot(p.config.EventSubjectPrefix), PartitionToken(p.config.PartitionCount, batch.Partition), "VenueEventBatch")
+	if p.maxMessageBytes > 0 {
+		// The producer compares the uncompressed record (key, value, headers and
+		// the record's own framing) with the limit; the margin covers the framing.
+		size := len(payload) + len(batch.BatchID) + len(kafkaStreamSubjectHeader) + len(subject) + producerRecordFramingMargin
+		if size > p.maxMessageBytes {
+			return nil, &EventBatchTooLargeError{Bytes: size, Limit: p.maxMessageBytes}
+		}
+	}
 	timestamp := time.Now().UTC()
 	if parsed, parseErr := time.Parse(time.RFC3339Nano, batch.CreatedAt); parseErr == nil {
 		timestamp = parsed
