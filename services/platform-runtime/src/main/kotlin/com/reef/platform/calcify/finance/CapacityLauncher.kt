@@ -47,7 +47,7 @@ internal class CapacityLauncher(
         private val streams: KafkaStreams, private val loops: List<Thread>, private val failure: AtomicReference<Throwable?>,
         private val streamsFailed: AtomicBoolean, private val closing: AtomicBoolean, private val logs: List<AutoCloseable>,
         /** Nanoseconds the projection threads spent reading and decoding the decision logs (`readNanos`) and in the projector's apply (`applyNanos`), summed over lanes. */
-        val readNanos: java.util.concurrent.atomic.AtomicLong, val applyNanos: () -> Long,
+        val readNanos: java.util.concurrent.atomic.AtomicLong, val applyNanos: () -> Long, val projectorNanos: () -> Pair<Long, Long> = { 0L to 0L },
     ) : AutoCloseable {
         fun projectionFailure(): Throwable? = failure.get()
         fun streamsState(): KafkaStreams.State = streams.state()
@@ -75,11 +75,12 @@ internal class CapacityLauncher(
         val logs = ArrayList<AutoCloseable>()
         val readNanos = java.util.concurrent.atomic.AtomicLong()
         val runners: List<FinanceProjectionRunner>
+        val projectors = ArrayList<FinanceProjector>()
         val streams: KafkaStreams
         try {
             runners = (0 until lanes).map { lane ->
                 val digest = plan.bindingDigest(lane)
-                val projector = FinanceProjector(CapacityChain(plan.capacity(lane)), dataSource)
+                val projector = FinanceProjector(CapacityChain(plan.capacity(lane)), dataSource).also { projectors += it }
                 val epoch = projector.claim(digest, plan.sequenceBound)
                 val log = reader.logReader(topics.decisions, lane).also { logs += it }
                 FinanceProjectionRunner.tailing({ val s = System.nanoTime(); FinanceProjectionRunner.decode(log.readNext()).also { readNanos.addAndGet(System.nanoTime() - s) } }, projector, digest, epoch, maxApply = maxApply, sequenceBound = plan.sequenceBound).also { it.open() }
@@ -108,7 +109,7 @@ internal class CapacityLauncher(
                     }
                 }.apply { isDaemon = true; name = "capacity-projection-$lane"; start() }
             }
-            return Running(streams, loops, failure, streamsFailed, closing, logs, readNanos) { runners.sumOf { it.applyNanos.get() } }
+            return Running(streams, loops, failure, streamsFailed, closing, logs, readNanos, { runners.sumOf { it.applyNanos.get() } }, { projectors.sumOf { it.verifyNanos.get() } to projectors.sumOf { it.sqlNanos.get() } })
         } catch (e: Throwable) {
             runCatching { FinanceTopology.closeLeavingGroup(streams, java.time.Duration.ofSeconds(10)) }
             logs.forEach { runCatching { it.close() } }
