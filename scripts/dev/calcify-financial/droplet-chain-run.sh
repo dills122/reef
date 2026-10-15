@@ -4,7 +4,7 @@
 # installs a JDK on the host, runs a short matrix, fetches the outputs, and destroys the droplet on every exit path.
 #
 #   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | compare | tmpfs | baseline | smoke | s1smoke)
-#   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then one finance lane with its projector on tmpfs stores; `capmini` is only the finance cases (one hot lane twice, four lanes); `lanesmoke` is the same at a few seconds each and `enginesmoke` is only its engine case.
+#   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then one finance lane with its projector on tmpfs stores; `capmode` runs the finance cases in both decision modes; `capmini` is only the finance cases (one hot lane twice, four lanes); `lanesmoke` is the same at a few seconds each and `enginesmoke` is only its engine case.
 #   `compare` runs the single-thread microbenchmarks first, then lanes 1 to 4 with the projector and lanes 1 and 3 without it, all with -XX:+UseParallelGC, then the S1 shard cases.
 #
 # Needs DIGITALOCEAN_TOKEN in .env or the environment, an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
@@ -193,6 +193,16 @@ case "$MATRIX" in
       run_cap "cap-hot-lane-apply8000-$r" CAP_LANES=1 CAP_TRADES=600000 CAP_MAX_APPLY=8000
     done
     run_cap "cap-4lanes" CAP_LANES=4 CAP_TRADES=1200000
+    ;;
+  capmode)
+    # CAL-FIN-P25: the same finance cases in both decision modes on one host (hot lane twice per mode, then the uniform lanes once per mode unless REEF_CAP_SKIP_4LANES=1).
+    for mode in two-step capture-settle-v1; do
+      run_cap "cap-hot-$mode-1" CAP_LANES=1 CAP_TRADES=600000 CAP_DECISION_MODE=$mode
+      run_cap "cap-hot-$mode-2" CAP_LANES=1 CAP_TRADES=600000 CAP_DECISION_MODE=$mode
+    done
+    if [ "${REEF_CAP_SKIP_4LANES:-0}" != 1 ]; then
+      for mode in two-step capture-settle-v1; do run_cap "cap-4lanes-$mode" CAP_LANES=4 CAP_TRADES=${REEF_CAP_4LANE_TRADES:-1200000} CAP_DECISION_MODE=$mode; done
+    fi
     ;;
   capmini)
     # The finance lane only (CAL-FIN-P25): one hot lane twice and four uniform lanes, to compare hosts and code versions cheaply (about 20 minutes after bootstrap).
