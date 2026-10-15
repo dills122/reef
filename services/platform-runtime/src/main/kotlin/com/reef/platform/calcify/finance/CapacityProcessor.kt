@@ -75,6 +75,7 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
     private lateinit var ledger: CapacityLedger
     private var lane = 0
     private lateinit var laneSpec: CapacityLaneSpec
+    private lateinit var configDigest: String
     private lateinit var context: ProcessorContext<String, ByteArray>
     private lateinit var kv: StreamsLifecycleKv
 
@@ -88,6 +89,7 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
         lane = context.taskId().partition()
         require(lane in 0 until config.lanes) { "partition $lane is outside the ${config.lanes} configured lanes" }
         laneSpec = config.spec(lane)
+        configDigest = laneSpec.capacity.digest()      // fixed for the run: not recomputed (sorting and hashing the account and security sets) for every record
         ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest) ?: CapacityLedger(laneSpec.capacity)
         config.logHead?.let { head ->
             val expected = head(lane)
@@ -104,7 +106,7 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
         val items = decoder.decode(role, metadata.partition(), metadata.offset(), record.value() ?: ByteArray(0))
         val writes = LinkedHashMap<String, ByteArray>()
         val forwards = ArrayList<Pair<String, ByteArray>>()
-        var head: Decision? = null
+        var head: ByteArray? = null
         for (item in items) {
             when (item) {
                 is CapacityItem.Skip -> Unit
@@ -125,14 +127,17 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
                         continue
                     }
                     for (e in ledger.lastWrites) writes[CapacityStore.entityKey(e)] = CapacityStore.entityValue(e)
-                    forwards += LaneByKey.key(lane, d.sequence) to FinanceWire.toProto(d, item.input).toByteArray()
-                    head = d
+                    // The decision is encoded once: those bytes are the store's head record if this is the record's last decision, and the published record is them plus the input.
+                    // `d` was made from `item.input` a moment ago, so the published record does not hash the input again to check it.
+                    val bytes = FinanceWire.encode(d)
+                    forwards += LaneByKey.key(lane, d.sequence) to FinanceWire.withInput(bytes, item.input)
+                    head = bytes
                 }
             }
         }
         head?.let {
-            writes[CapacityStore.HEAD] = FinanceWire.toProto(it).toByteArray()
-            writes[CapacityStore.META] = CapacityStore.Meta(laneSpec.bindingDigest, laneSpec.capacity.digest(), ledger.sequence, ledger.chain, ledger.controls).bytes()
+            writes[CapacityStore.HEAD] = it
+            writes[CapacityStore.META] = CapacityStore.Meta(laneSpec.bindingDigest, configDigest, ledger.sequence, ledger.chain, ledger.controls).bytes()
             kv.apply(writes)
         }
         forwards.forEach { (key, value) -> context.forward(record.withKey(key).withValue(value)) }
@@ -165,7 +170,19 @@ internal object CapacityTopology {
 
 /** Decision keys are `<lane>/<sequence>`; the decision log partition is the lane, so each lane's log is read, projected and replayed on its own. */
 internal object LaneByKey : org.apache.kafka.streams.processor.StreamPartitioner<String, ByteArray> {
-    fun key(lane: Int, sequence: Long): String = "${lane.toString().padStart(4, '0')}/${sequence.toString().padStart(20, '0')}"
+    /** `%04d/%020d` of lane and sequence (zero padded to at least that width; longer numbers are not truncated), built in one pass. */
+    fun key(lane: Int, sequence: Long): String {
+        if (lane < 0 || sequence < 0) return "${lane.toString().padStart(4, '0')}/${sequence.toString().padStart(20, '0')}"
+        val laneWidth = maxOf(4, digits(lane.toLong())); val sequenceWidth = maxOf(20, digits(sequence))
+        val out = ByteArray(laneWidth + 1 + sequenceWidth); java.util.Arrays.fill(out, '0'.code.toByte())
+        var n = lane; var at = laneWidth - 1
+        while (n > 0) { out[at--] = ('0'.code + n % 10).toByte(); n /= 10 }
+        out[laneWidth] = '/'.code.toByte()
+        var s = sequence; at = out.size - 1
+        while (s > 0) { out[at--] = ('0'.code + (s % 10).toInt()).toByte(); s /= 10 }
+        return String(out, java.nio.charset.StandardCharsets.ISO_8859_1)
+    }
+    private fun digits(v: Long): Int { var n = 1; var x = v; while (x >= 10) { x /= 10; n++ }; return n }
     fun laneOf(key: String): Int = key.substring(0, key.indexOf('/')).toInt()
     override fun partitions(topic: String, key: String, value: ByteArray, numPartitions: Int): java.util.Optional<Set<Int>> =
         java.util.Optional.of(setOf(laneOf(key)))

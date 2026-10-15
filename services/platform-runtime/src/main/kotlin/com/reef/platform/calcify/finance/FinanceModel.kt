@@ -22,6 +22,20 @@ private fun strictUtf8(value: String): ByteArray {
     return ByteArray(buffer.remaining()).also(buffer::get)
 }
 private fun boundedText(value: String): Boolean {
+    // Every id is validated on every construction (decoders, entity keys, settle inputs), so the common ASCII case must not allocate: for ASCII the UTF-8 size is the
+    // length, a control character is below 0x20 or 0x7f, and the only blank ASCII text without a control character is spaces alone (the other ASCII whitespace is control).
+    val length = value.length
+    if (length == 0) return false
+    var allSpaces = true
+    for (i in 0 until length) {
+        val c = value[i].code
+        if (c >= 0x80) return boundedTextGeneral(value)
+        if (c < 0x20 || c == 0x7f) return false
+        if (c != 0x20) allSpaces = false
+    }
+    return !allSpaces && length <= 128
+}
+private fun boundedTextGeneral(value: String): Boolean {
     if (value.isBlank() || value.any { it.isISOControl() }) return false
     return try { strictUtf8(value).size <= 128 } catch (_: IllegalArgumentException) { false }
 }
@@ -31,11 +45,21 @@ private fun boundedText(value: String): Boolean {
 
 /** Business execution identity; physical source provenance is audit data and never part of this key. */
 internal data class ExecutionKey(val runId: String, val venueSessionId: String, val instrumentId: String, val executionId: String) {
-    init { require(listOf(runId, venueSessionId, instrumentId, executionId).all(::boundedText)) { "invalid execution key" } }
+    init { require(boundedText(runId) && boundedText(venueSessionId) && boundedText(instrumentId) && boundedText(executionId)) { "invalid execution key" } }
+
+    // A trade's key is framed up to six times (capture input, settle input, three entity keys, the attempt): the framed fields are remembered from the second use on.
+    // Not part of equality (it is a pure function of the four fields); a key used once never pays for the copy.
+    private var seenOnce = false
+    private var framed: ByteArray? = null
+    internal fun cachedFrame(): ByteArray? {
+        framed?.let { return it }
+        if (!seenOnce) { seenOnce = true; return null }
+        return Canon.Writer().also { it.str(runId); it.str(venueSessionId); it.str(instrumentId); it.str(executionId) }.toByteArray().also { framed = it }
+    }
 }
 
 internal data class ActionKey(val namespace: String, val domain: String, val actionId: String) {
-    init { require(listOf(namespace, domain, actionId).all(::boundedText)) { "invalid action key" } }
+    init { require(boundedText(namespace) && boundedText(domain) && boundedText(actionId)) { "invalid action key" } }
 }
 
 internal data class Leg(val account: AccountId, val asset: AssetId, val amount: Long)
@@ -59,14 +83,24 @@ internal sealed interface FinanceInput {
     val action: ActionKey
 
     data class Capture(override val action: ActionKey, val execution: ExecutionKey, val buyer: AccountId, val seller: AccountId,
-                       val quantity: Long, val priceNanos: Long) : FinanceInput
+                       val quantity: Long, val priceNanos: Long) : FinanceInput {
+        private var digestMemo: String? = null
+        override fun digest(): String = digestMemo ?: super.digest().also { digestMemo = it }
+    }
     data class Fund(override val action: ActionKey, val authority: Authority, val account: AccountId, val asset: AssetId,
-                    val amount: Long) : FinanceInput
+                    val amount: Long) : FinanceInput {
+        private var digestMemo: String? = null
+        override fun digest(): String = digestMemo ?: super.digest().also { digestMemo = it }
+    }
     /** Repair is an operator control (D4): [authority] must be OPERATOR, so trading principals cannot burn the attempt budget.
      *  [attempt] is a caller-chosen ordinal; each (execution, attempt) is evaluated at most once. */
-    data class Settle(override val action: ActionKey, val authority: Authority, val execution: ExecutionKey, val attempt: Int) : FinanceInput
+    data class Settle(override val action: ActionKey, val authority: Authority, val execution: ExecutionKey, val attempt: Int) : FinanceInput {
+        private var digestMemo: String? = null
+        override fun digest(): String = digestMemo ?: super.digest().also { digestMemo = it }
+    }
 
-    fun canonical(): ByteArray = Canon.bytes {
+    fun canonical(): ByteArray = Canon.bytes { writeCanonical(this) }
+    private fun writeCanonical(w: Canon.Writer) = w.run {
         str("calcify-finance-input-v1")
         str(action.namespace); str(action.domain); str(action.actionId)
         when (val i = this@FinanceInput) {
@@ -75,7 +109,8 @@ internal sealed interface FinanceInput {
             is Settle -> { str("SETTLE"); str(i.authority.name); execution(i.execution); int(i.attempt) }
         }
     }
-    fun digest(): String = Canon.sha(canonical())
+    /** SHA-256 of [canonical] as 64 hex. Inputs are immutable, so each variant remembers its digest: a lane computes it once to decide, a projector verifies it twice (decode, apply). */
+    fun digest(): String = Canon.digestHex { writeCanonical(this) }
 }
 
 /** Length-framed canonical encoding; never delimiter concatenation. */
@@ -114,13 +149,39 @@ internal object Canon {
         private fun putInt(v: Int) { buffer[size++] = (v ushr 24).toByte(); buffer[size++] = (v ushr 16).toByte(); buffer[size++] = (v ushr 8).toByte(); buffer[size++] = v.toByte() }
         fun long(v: Long) { room(8); putInt((v ushr 32).toInt()); putInt(v.toInt()) }
         fun int(v: Int) { room(4); putInt(v) }
-        fun execution(k: ExecutionKey) { str(k.runId); str(k.venueSessionId); str(k.instrumentId); str(k.executionId) }
+        fun execution(k: ExecutionKey) {
+            val frame = k.cachedFrame()
+            if (frame != null) raw(frame) else { str(k.runId); str(k.venueSessionId); str(k.instrumentId); str(k.executionId) }
+        }
         fun leg(l: Leg) { str(l.account.value); str(l.asset.value); long(l.amount) }
+        /** Appends bytes that are already canonical (a cached prefix or a field encoded earlier), verbatim. */
+        fun raw(bytes: ByteArray) { room(bytes.size); System.arraycopy(bytes, 0, buffer, size, bytes.size); size += bytes.size }
         internal fun toByteArray(): ByteArray = buffer.copyOf(size)
+        internal fun reset() { size = 0; if (buffer.size > 1 shl 16) buffer = ByteArray(160) }
+        internal fun updateDigest(md: MessageDigest) = md.update(buffer, 0, size)
     }
-    fun bytes(block: Writer.() -> Unit): ByteArray = Writer().also(block).toByteArray()
-    private val digests = ThreadLocal.withInitial { MessageDigest.getInstance("SHA-256") }
-    fun sha(bytes: ByteArray): String = HexFormat.of().formatHex(digests.get().digest(bytes))
+
+    /** One thread's scratch: a reusable [Writer] (so an encoding costs only its result array), a digest and a 32 byte output. A lane is one thread. */
+    internal class Scratch { val writer = Writer(); var busy = false; val md: MessageDigest = MessageDigest.getInstance("SHA-256"); val out = ByteArray(32) }
+    private val scratch = ThreadLocal.withInitial { Scratch() }
+    /** The calling thread's reusable digest, reset. */
+    internal fun digest(): MessageDigest = scratch.get().md.also { it.reset() }
+
+    /** Runs [block] on the thread's reusable writer; a nested call (a block that itself encodes) gets a fresh one, never the busy one. */
+    private inline fun <T> withWriter(block: Writer.() -> Unit, finish: (Scratch, Writer) -> T): T {
+        val s = scratch.get()
+        if (s.busy) { val w = Writer(); w.block(); return finish(s, w) }
+        s.busy = true
+        val w = s.writer; w.reset()
+        try { w.block(); return finish(s, w) } finally { s.busy = false }
+    }
+    fun bytes(block: Writer.() -> Unit): ByteArray = withWriter(block) { _, w -> w.toByteArray() }
+    /** `SHA-256` of the canonical encoding [block] writes, as 64 lowercase hex, without materialising the encoding. */
+    fun digestHex(block: Writer.() -> Unit): String = withWriter(block) { s, w -> s.md.reset(); w.updateDigest(s.md); s.md.digest(s.out, 0, 32); HEX.formatHex(s.out) }
+    /** `SHA-256` of the canonical encoding [block] writes followed by [tail] (the state commitment hashes its framed header, then the trie digest), as 32 bytes. */
+    fun digestBytes(tail: ByteArray? = null, block: Writer.() -> Unit): ByteArray = withWriter(block) { s, w -> s.md.reset(); w.updateDigest(s.md); if (tail != null) s.md.update(tail); s.md.digest() }
+    private val HEX = HexFormat.of()
+    fun sha(bytes: ByteArray): String = HEX.formatHex(digest().digest(bytes))
 }
 
 internal data class Captured(val buyer: AccountId, val seller: AccountId, val quantity: Long, val priceNanos: Long)
