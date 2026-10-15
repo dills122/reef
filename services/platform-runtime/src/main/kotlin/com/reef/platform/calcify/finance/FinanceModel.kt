@@ -1,7 +1,5 @@
 package com.reef.platform.calcify.finance
 
-import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
 import java.nio.CharBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -14,6 +12,11 @@ import java.util.HexFormat
  */
 /** Strict UTF-8: unpaired surrogates are an error, never silently replaced (two distinct strings must not share bytes). */
 private fun strictUtf8(value: String): ByteArray {
+    // ASCII is its own UTF-8 and cannot be malformed: the common case needs no encoder.
+    val length = value.length
+    var ascii = true
+    for (i in 0 until length) if (value[i].code >= 0x80) { ascii = false; break }
+    if (ascii) { val out = ByteArray(length); for (i in 0 until length) out[i] = value[i].code.toByte(); return out }
     val encoder = Charsets.UTF_8.newEncoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
     val buffer = try { encoder.encode(CharBuffer.wrap(value)) } catch (e: CharacterCodingException) { throw IllegalArgumentException("invalid UTF-16 text", e) }
     return ByteArray(buffer.remaining()).also(buffer::get)
@@ -88,19 +91,36 @@ internal object Canon {
         }
         0
     }
-    class Writer(private val out: DataOutputStream) {
-        fun str(v: String) { val b = strictUtf8(v); out.writeInt(b.size); out.write(b) }
-        fun long(v: Long) = out.writeLong(v)
-        fun int(v: Int) = out.writeInt(v)
+    /** Appends the canonical encoding (big-endian ints and longs, length-framed strict UTF-8) to one growing array. */
+    class Writer internal constructor() {
+        private var buffer = ByteArray(160)
+        private var size = 0
+        private fun room(extra: Int) {
+            val needed = Math.addExact(size, extra)
+            if (needed > buffer.size) buffer = buffer.copyOf(maxOf(if (buffer.size <= Int.MAX_VALUE / 2) buffer.size * 2 else Int.MAX_VALUE, needed))
+        }
+        fun str(v: String) {
+            val length = v.length
+            var ascii = true
+            for (i in 0 until length) if (v[i].code >= 0x80) { ascii = false; break }
+            if (ascii) {
+                room(4 + length); putInt(length)
+                for (i in 0 until length) buffer[size++] = v[i].code.toByte()
+            } else {
+                val b = strictUtf8(v); room(4 + b.size); putInt(b.size)
+                System.arraycopy(b, 0, buffer, size, b.size); size += b.size
+            }
+        }
+        private fun putInt(v: Int) { buffer[size++] = (v ushr 24).toByte(); buffer[size++] = (v ushr 16).toByte(); buffer[size++] = (v ushr 8).toByte(); buffer[size++] = v.toByte() }
+        fun long(v: Long) { room(8); putInt((v ushr 32).toInt()); putInt(v.toInt()) }
+        fun int(v: Int) { room(4); putInt(v) }
         fun execution(k: ExecutionKey) { str(k.runId); str(k.venueSessionId); str(k.instrumentId); str(k.executionId) }
         fun leg(l: Leg) { str(l.account.value); str(l.asset.value); long(l.amount) }
+        internal fun toByteArray(): ByteArray = buffer.copyOf(size)
     }
-    fun bytes(block: Writer.() -> Unit): ByteArray {
-        val buffer = ByteArrayOutputStream()
-        DataOutputStream(buffer).use { Writer(it).block() }
-        return buffer.toByteArray()
-    }
-    fun sha(bytes: ByteArray): String = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
+    fun bytes(block: Writer.() -> Unit): ByteArray = Writer().also(block).toByteArray()
+    private val digests = ThreadLocal.withInitial { MessageDigest.getInstance("SHA-256") }
+    fun sha(bytes: ByteArray): String = HexFormat.of().formatHex(digests.get().digest(bytes))
 }
 
 internal data class Captured(val buyer: AccountId, val seller: AccountId, val quantity: Long, val priceNanos: Long)
