@@ -32,8 +32,8 @@ class CapacityFootprintCompatibilityTest {
     }
 
     @Test fun decisionsAndStoreWritesMatchFrozenBaseBytes() {
-        assertEquals("31496a49ed4ef202ae67e14e0ec7dade572f4082f51d5231e9775a827a86c650", footprintByteProbe(DecisionMode.TWO_STEP))
-        assertEquals("6e3589b2b9467b97af1c6e9f7271a34a0bd9bea119f9e2c21e8810fbd1964695", footprintByteProbe(DecisionMode.CAPTURE_SETTLE))
+        assertEquals("94a435bfb7837d7e5fd8b65374a50f304393ae0f026fe6b335aeea4a06fcb598", footprintByteProbe(DecisionMode.TWO_STEP))
+        assertEquals("a87df51318bec9af86dcdf240821ddc08b56975c40292d5b639e2e365589f0b0", footprintByteProbe(DecisionMode.CAPTURE_SETTLE))
     }
 }
 
@@ -49,7 +49,7 @@ internal fun footprintByteProbe(mode: DecisionMode): String {
         val result = ledger.decide(input)
         md.update(Canon.bytes { str(result.disposition.name) })
         result.decision?.let { decision ->
-            md.update(FinanceWire.encode(decision))
+            md.update(FinanceWire.withInput(FinanceWire.encode(decision), input))
             val writes = CapacityStore.writes(ledger, decision, "b".repeat(64))
             for ((key, value) in writes.toSortedMap()) { md.update(Canon.bytes { str(key); int(value.size) }); md.update(value) }
             kv.apply(writes)
