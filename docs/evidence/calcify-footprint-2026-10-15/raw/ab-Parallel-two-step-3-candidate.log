@@ -1,0 +1,4 @@
+HEAP-CONFIG impl=current mode=two-step accounts=200 instruments=64 maxHeap=10923 MiB gc=PS MarkSweep+PS Scavenge jvm=21+35-LTS-2513 compressedOops=true
+HEAP-BASELINE after funding: used=10256 KiB entities=26065
+HEAP-POINT impl=current mode=two-step trades=250000 entities=1276065 live=355 MiB perTrade=1489.6 B | interval thread CPU 35.32 us/trade (decide + input construction), wall 9.1 s
+HEAP-POINT impl=current mode=two-step trades=500000 entities=2526065 live=710 MiB perTrade=1490.2 B | interval thread CPU 41.22 us/trade (decide + input construction), wall 10.7 s

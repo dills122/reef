@@ -1,0 +1,46 @@
+HEAP-CONFIG impl=current mode=capture-settle-v1 accounts=200 instruments=64 maxHeap=25486 MiB gc=PS MarkSweep+PS Scavenge jvm=21+35-LTS-2513 compressedOops=true
+HEAP-BASELINE after funding: used=10255 KiB entities=26065
+HEAP-TRIE trades=9000000 payloadBytes=3024093184 payloadPerTrade=336.01035377777777
+HEAP-POINT impl=current mode=capture-settle-v1 trades=9000000 entities=27026065 live=8157 MiB perTrade=950.4 B | interval thread CPU 34.17 us/trade (decide + input construction), wall 322.9 s
+HEAP-CLASS trades=9000000 [B                                               instances/trade=6.007 bytes/trade=536.9
+HEAP-CLASS trades=9000000 java.lang.String                                 instances/trade=5.006 bytes/trade=120.1
+HEAP-CLASS trades=9000000 java.util.HashMap$Node                           instances/trade=3.003 bytes/trade=96.1
+HEAP-CLASS trades=9000000 [I                                               instances/trade=0.001 bytes/trade=48.1
+HEAP-CLASS trades=9000000 com.reef.platform.calcify.finance.Captured       instances/trade=1.000 bytes/trade=40.0
+HEAP-CLASS trades=9000000 com.reef.platform.calcify.finance.ExecutionKey   instances/trade=1.000 bytes/trade=40.0
+HEAP-CLASS trades=9000000 com.reef.platform.calcify.finance.ActionKey      instances/trade=1.001 bytes/trade=24.0
+HEAP-CLASS trades=9000000 com.reef.platform.calcify.finance.ActionRecord   instances/trade=1.001 bytes/trade=24.0
+HEAP-CLASS trades=9000000 [Ljava.util.HashMap$Node;                        instances/trade=0.000 bytes/trade=22.4
+HEAP-CLASS trades=9000000 java.util.HashMap$TreeNode                       instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=9000000 java.lang.Long                                   instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=9000000 java.lang.Class                                  instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=9000000 kotlin.Pair                                      instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=9000000 [Ljava.lang.Object;                              instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=9000000 com.reef.platform.calcify.finance.AccountId      instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=9000000 com.reef.platform.calcify.finance.AssetId        instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=9000000 java.util.concurrent.ConcurrentHashMap$Node      instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=9000000 [C                                               instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=9000000 [[B                                              instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=9000000 java.lang.reflect.Method                         instances/trade=0.000 bytes/trade=0.0
+HEAP-TRIE trades=18000000 payloadBytes=6047727616 payloadPerTrade=335.9848675555556
+HEAP-POINT impl=current mode=capture-settle-v1 trades=18000000 entities=54026065 live=16318 MiB perTrade=950.6 B | interval thread CPU 43.18 us/trade (decide + input construction), wall 415.3 s
+HEAP-CLASS trades=18000000 [B                                               instances/trade=6.004 bytes/trade=536.4
+HEAP-CLASS trades=18000000 java.lang.String                                 instances/trade=5.003 bytes/trade=120.1
+HEAP-CLASS trades=18000000 java.util.HashMap$Node                           instances/trade=3.001 bytes/trade=96.0
+HEAP-CLASS trades=18000000 [I                                               instances/trade=0.001 bytes/trade=48.1
+HEAP-CLASS trades=18000000 com.reef.platform.calcify.finance.Captured       instances/trade=1.000 bytes/trade=40.0
+HEAP-CLASS trades=18000000 com.reef.platform.calcify.finance.ExecutionKey   instances/trade=1.000 bytes/trade=40.0
+HEAP-CLASS trades=18000000 com.reef.platform.calcify.finance.ActionKey      instances/trade=1.001 bytes/trade=24.0
+HEAP-CLASS trades=18000000 com.reef.platform.calcify.finance.ActionRecord   instances/trade=1.001 bytes/trade=24.0
+HEAP-CLASS trades=18000000 [Ljava.util.HashMap$Node;                        instances/trade=0.000 bytes/trade=22.4
+HEAP-CLASS trades=18000000 java.util.HashMap$TreeNode                       instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=18000000 java.lang.Long                                   instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=18000000 java.lang.Class                                  instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=18000000 kotlin.Pair                                      instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=18000000 [Ljava.lang.Object;                              instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=18000000 com.reef.platform.calcify.finance.AccountId      instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=18000000 com.reef.platform.calcify.finance.AssetId        instances/trade=0.001 bytes/trade=0.0
+HEAP-CLASS trades=18000000 [[B                                              instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=18000000 java.util.concurrent.ConcurrentHashMap$Node      instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=18000000 [C                                               instances/trade=0.000 bytes/trade=0.0
+HEAP-CLASS trades=18000000 [[I                                              instances/trade=0.000 bytes/trade=0.0

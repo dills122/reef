@@ -1,0 +1,10 @@
+Environment readiness, 2026-10-15
+Worktree /Users/dsteele/.codex/worktrees/10c2/reef; branch codex/footprint-investigations.
+make dev-bootstrap installed locked root/arena/docs dependencies, created missing .env from template; secrets never inspected.
+make dev-doctor ARGS=--full passed. make test-dev-tooling:71 passed.
+Go upgraded1.26.5 to1.27.2 via Homebrew. Bun1.3.14, Node22.22.1/npm10.9.4, Docker29.7.2/Compose5.4. JDK21 toolchain available; shell default Java25. Experiments explicitly JDK21.
+Pinned documentation dependencies report18 npm vulnerabilities (11moderate,7high); no unrequested lockfile/security upgrades.
+Serena1.7.1.dev0 Kotlin server262.9593.0 expired (startup says build expired). Latest official Kotlin LSP release263.6379.0, published2026-10-03, already installed. Ignored .serena/project.yml now pins263.6379.0. Active MCP server caches failed old instance; project override is ignored for untrusted projects. Scoped runtime activation also used expired server. Global ls_specific_settings.kotlin.kotlin_lsp_version now pins263.6379.0. Standalone JSON-RPC initialize returned capabilities within45s; owned probe terminated. Existing MCP connection still needs reconnect to load updated global pin. No trust policy changed.
+https://github.com/Kotlin/kotlin-lsp/releases/tag/kotlin-lsp%2Fv263.6379.0
+Codebase-memory project reef-footprint indexed and structural reads used; cited partial coverage read directly.
+No cloud resources. Default dev-up/smoke not needed for finance investigation: actual broker/Postgres tests exercise required Docker stack.

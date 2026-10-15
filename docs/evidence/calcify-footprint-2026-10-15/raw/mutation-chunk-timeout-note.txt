@@ -1,0 +1,1 @@
+First chunk accessor mutant changed meta lookup shift12 to16. Test worker PID21681 consumed ~90% CPU for >2min without completion; explicitly terminated owned worker after bounded diagnostic window. Counts as detected nontermination, not assertion kill. Other mutants continue. Follow-up accessor out-of-range mutation planned to prove immediate assertion/error sensitivity.

@@ -1,0 +1,49 @@
+[0.005s][info][gc] Using Parallel
+[0.291s][info][gc] GC(0) Pause Young (System.gc()) 67M->14M(981M) 2.955ms
+[0.301s][info][gc] GC(1) Pause Full (System.gc()) 14M->13M(981M) 10.468ms
+[0.453s][info][gc] GC(2) Pause Young (System.gc()) 24M->14M(981M) 0.257ms
+[0.463s][info][gc] GC(3) Pause Full (System.gc()) 14M->13M(981M) 9.881ms
+[0.616s][info][gc] GC(4) Pause Young (System.gc()) 19M->13M(981M) 0.193ms
+[0.625s][info][gc] GC(5) Pause Full (System.gc()) 13M->13M(981M) 8.113ms
+[0.776s][info][gc] GC(6) Pause Young (System.gc()) 19M->13M(981M) 0.200ms
+[0.784s][info][gc] GC(7) Pause Full (System.gc()) 13M->13M(981M) 8.210ms
+[1.955s][info][gc] GC(8) Pause Young (Allocation Failure) 269M->61M(981M) 12.471ms
+[3.066s][info][gc] GC(9) Pause Young (Allocation Failure) 317M->114M(1237M) 44.207ms
+[5.464s][info][gc] GC(10) Pause Young (Allocation Failure) 626M->216M(1237M) 58.772ms
+[6.341s][info][gc] GC(11) Pause Young (System.gc()) 393M->246M(1749M) 26.705ms
+[6.470s][info][gc] GC(12) Pause Full (System.gc()) 246M->245M(1749M) 128.769ms
+[6.625s][info][gc] GC(13) Pause Young (System.gc()) 266M->245M(1749M) 0.426ms
+[6.692s][info][gc] GC(14) Pause Full (System.gc()) 245M->245M(1749M) 67.344ms
+[6.848s][info][gc] GC(15) Pause Young (System.gc()) 266M->245M(1749M) 0.407ms
+[6.910s][info][gc] GC(16) Pause Full (System.gc()) 245M->245M(1749M) 61.958ms
+[7.156s][info][gc] GC(17) Pause Young (Heap Inspection Initiated GC) 276M->249M(1749M) 1.076ms
+[7.231s][info][gc] GC(18) Pause Full (Heap Inspection Initiated GC) 249M->249M(1749M) 74.888ms
+[12.199s][info][gc] GC(19) Pause Young (Allocation Failure) 1273M->448M(1611M) 80.160ms
+[13.365s][info][gc] GC(20) Pause Young (System.gc()) 695M->496M(1749M) 20.297ms
+[13.562s][info][gc] GC(21) Pause Full (System.gc()) 496M->488M(1749M) 196.664ms
+[13.718s][info][gc] GC(22) Pause Young (System.gc()) 511M->488M(2907M) 0.632ms
+[13.846s][info][gc] GC(23) Pause Full (System.gc()) 488M->488M(2907M) 128.363ms
+[14.001s][info][gc] GC(24) Pause Young (System.gc()) 527M->488M(2731M) 1.227ms
+[14.122s][info][gc] GC(25) Pause Full (System.gc()) 488M->488M(2731M) 121.051ms
+[14.276s][info][gc] GC(26) Pause Young (Heap Inspection Initiated GC) 527M->488M(2894M) 0.711ms
+[14.403s][info][gc] GC(27) Pause Full (Heap Inspection Initiated GC) 488M->488M(2894M) 126.993ms
+[25.769s][info][gc] GC(28) Pause Young (Allocation Failure) 2536M->902M(2950M) 226.664ms
+[26.171s][info][gc] GC(29) Pause Full (Ergonomics) 902M->889M(3558M) 401.674ms
+[28.329s][info][gc] GC(30) Pause Young (System.gc()) 1249M->959M(4109M) 97.445ms
+[28.748s][info][gc] GC(31) Pause Full (System.gc()) 959M->958M(4109M) 418.802ms
+[28.906s][info][gc] GC(32) Pause Young (System.gc()) 1011M->958M(4039M) 2.693ms
+[29.249s][info][gc] GC(33) Pause Full (System.gc()) 958M->958M(4039M) 342.544ms
+[29.409s][info][gc] GC(34) Pause Young (System.gc()) 1011M->958M(4039M) 2.198ms
+[29.710s][info][gc] GC(35) Pause Full (System.gc()) 958M->958M(4039M) 300.696ms
+[29.872s][info][gc] GC(36) Pause Young (Heap Inspection Initiated GC) 1011M->958M(4298M) 1.321ms
+[30.218s][info][gc] GC(37) Pause Full (Heap Inspection Initiated GC) 958M->958M(4298M) 346.245ms
+[49.390s][info][gc] GC(38) Pause Young (Allocation Failure) 3656M->1504M(4171M) 298.594ms
+[50.155s][info][gc] GC(39) Pause Full (Ergonomics) 1504M->1487M(5189M) 764.556ms
+[65.839s][info][gc] GC(40) Pause Young (System.gc()) 3561M->1909M(5351M) 268.487ms
+[66.662s][info][gc] GC(41) Pause Full (System.gc()) 1909M->1892M(5351M) 823.827ms
+[66.822s][info][gc] GC(42) Pause Young (System.gc()) 1943M->1892M(5917M) 4.273ms
+[67.404s][info][gc] GC(43) Pause Full (System.gc()) 1892M->1892M(5917M) 581.735ms
+[67.562s][info][gc] GC(44) Pause Young (System.gc()) 1951M->1892M(5902M) 4.053ms
+[68.258s][info][gc] GC(45) Pause Full (System.gc()) 1892M->1892M(5902M) 696.030ms
+[68.424s][info][gc] GC(46) Pause Young (Heap Inspection Initiated GC) 1951M->1892M(5953M) 7.905ms
+[69.145s][info][gc] GC(47) Pause Full (Heap Inspection Initiated GC) 1892M->1892M(5953M) 721.215ms

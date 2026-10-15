@@ -1,0 +1,4 @@
+HEAP-CONFIG impl=current mode=capture-settle-v1 accounts=200 instruments=64 maxHeap=10923 MiB gc=PS MarkSweep+PS Scavenge jvm=21+35-LTS-2513 compressedOops=true
+HEAP-BASELINE after funding: used=10256 KiB entities=26065
+HEAP-POINT impl=current mode=capture-settle-v1 trades=250000 entities=776065 live=227 MiB perTrade=952.9 B | interval thread CPU 23.34 us/trade (decide + input construction), wall 8.3 s
+HEAP-POINT impl=current mode=capture-settle-v1 trades=500000 entities=1526065 live=454 MiB perTrade=953.5 B | interval thread CPU 28.43 us/trade (decide + input construction), wall 10.9 s

@@ -2143,3 +2143,39 @@ The lane gain on the real stack (1.33 to 1.39 times CPU, 1.25 to 1.39 times proc
 
 Correctness: the combined mode's differential test (160 seeds x 2 account modes x 140 steps) shows equal state, equal dispositions and a state digest equal to the reference commitment after every decision; the broker-backed `CapacityEndToEndTest` runs it for both capture sources, with shortfalls and operator repairs, clean restart and wiped-state restart, logs and projections equal to independent replays and the projection tables equal to a two-step shadow oracle.
 
+
+## Finance footprint pickup, CAL-FIN-P27 (October 15, 2026)
+
+Baseline handoff `f09f20c7e9699dcb4156fe67eaeaa19b009452ae` (includes opt-in combined
+mode, lacks later PR571 lz4 default); production prototype `447e5ea1e`, probes
+`359fdf0ea`. Apple M1 Max/JDK21, shared laptop, no cloud. [Heap investigation](work/CALCIFY_HEAP_FOOTPRINT_SPIKE.md)
+and [byte inventory](work/CALCIFY_BYTES_FOOTPRINT_SPIKE.md) own complete definitions,
+ranges, configurations, failures/corrections and budgets; [verification](evidence/calcify-footprint-2026-10-15/README.md)
+owns proof lookup. No hardware or integrated capacity qualification.
+
+No broker: forced-GC checkpoints250k/500k/1M/2M in both modes and collectors.
+At2M with `-Xmx12g`, G1 live bytes/trade fall1859.6→1520.4 two-step and1191.6→975.1
+combined; Parallel1521.7→1491.9 and985.1→955.2. Smaller4096-node trie chunks and
+shared immutable settled values preserve decision/state/store bytes. Three
+interleaved pairs per mode/collector show overlapping CPU ranges, no clear
+regression. Actual combined G1 `-Xmx28g`:9M963.0B/trade,18M960.6B/trade; live state
+8.67/17.29GB, excluding native state/buffers/reserve. Full-GC max2.82s; ordinary
+pause max365.6ms. Parallel session-sized probe reported in owner note.
+
+Real Docker broker/Postgres:1lane,300k trades,200accounts,64instruments,resolved input.
+Exact logical capture+decision+changelog payload2914.789B/trade two-step and2167.844
+combined; changelog11/9 records. None/lz4/zstd measured in both modes with24h
+compaction lag solely to count emitted history. Combined/zstd+WALlz4/default
+compaction measured together; PG~1528B/trade. Full allocated three-topic footprint
+plus PG gives~2199B/trade conservative sample amortization; with fixed broker
+allocation, planning~22/42GB at9M/18M before retained WAL/RocksDB/reserve. This is
+not a measured18M disk run. WAL generated~2109B/trade versus~2127 with compression
+off; unlogged~0.1B/trade is soak-only crash-loss behavior. Fillfactor90 gives no
+compelling gain;16MiB/10s segments compact more records but allocate more disk.
+
+Corrections preserved: first default-compaction pilot counted retained history,
+not emitted puts; later scans delayed compaction. Zero compressed-capture disk
+growth used preallocated space, so planning uses full allocation rather than zero.
+Generated WAL and retained directory size remain separate. Handoff1.2KB/trade
+heap estimate is not universal upper bound. Contract-changing raw/omitted fields,
+binary store keys, v2/checkpoints, spill/rotation and retention remain owner gates.

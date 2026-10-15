@@ -1,0 +1,101 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :verifyRuntimeOrderIdentityMigration
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :verifyNoTestSourceExclusions
+> Task :compileTestKotlin
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:230:60 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:231:80 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:429:61 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:464:61 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/application/OrderApplicationServiceTest.kt:465:83 Unnecessary safe call on a non-null receiver of type 'EngineOrderRejected'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/CalcifyResolverBrokerProbe.kt:263:32 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteCaptureProofTest.kt:27:37 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FiniteLifecycleStateV1'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteCaptureProofTest.kt:27:99 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FiniteLifecycleStateV1'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteManagedStateTransportProbe.kt:153:90 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ConsumerRecord<ByteArray, ByteArray>'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteManagedStateTransportProbeTest.kt:109:134 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FiniteLifecycleStateV1'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteManagedStateTransportProbeTest.kt:109:178 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FiniteLifecycleStateV1'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteManagedStateTransportProbeTest.kt:112:33 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FiniteLifecycleStateV1'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteManagedStateTransportProbeTest.kt:112:79 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FiniteLifecycleStateV1'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteManagedStateTransportProbeTest.kt:112:119 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FiniteLifecycleStateV1'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/FiniteManagedStateTransportProbeTest.kt:125:209 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FiniteLifecycleStateV1'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityLaneCostTest.kt:75:108 'val id: Long' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityLaneCostTest.kt:80:108 'val id: Long' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityLaneThroughputTest.kt:138:91 'val id: Long' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityReencodingCostTest.kt:28:41 'val id: Long' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacitySoakTest.kt:119:41 'fun close(p0: Duration!): Unit' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CaptureSettleDecisionTest.kt:118:144 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Decision'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CommitmentOptionsBenchTest.kt:348:45 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ByteArray'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CommitmentOptionsBenchTest.kt:377:41 'val id: Long' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceLedgerTest.kt:65:40 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Decision'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceLedgerTest.kt:66:40 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Decision'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceLedgerTest.kt:196:91 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Decision'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceLedgerTest.kt:444:57 Unchecked cast of 'Any' to 'Map<Pair<AccountId, AssetId>, Long>'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceLedgerTest.kt:445:55 Unchecked cast of 'Any' to 'Map<Pair<ExecutionKey, Int>, Disposition>'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceLedgerTest.kt:446:53 Unchecked cast of 'Any' to 'Map<ActionKey, ActionRecord>'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceWireTest.kt:118:85 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Decision'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceWireTest.kt:120:113 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Decision'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FiniteFinanceLauncherBrokerTest.kt:29:34 'fun listConsumerGroups(): ListConsumerGroupsResult!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FiniteFinanceLauncherBrokerTest.kt:45:56 'fun listConsumerGroups(): ListConsumerGroupsResult!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FiniteFinanceRuntimeBrokerTest.kt:77:58 'fun listConsumerGroups(): ListConsumerGroupsResult!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FiniteFinanceRuntimeBrokerTest.kt:94:54 'fun listConsumerGroups(): ListConsumerGroupsResult!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/ReencodingMicroCostTest.kt:24:41 'val id: Long' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:121:36 'fun close(p0: KafkaStreams.CloseOptions!): Boolean' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:121:55 'constructor(): KafkaStreams.CloseOptions' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:121:70 'fun timeout(p0: Duration!): KafkaStreams.CloseOptions!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:121:102 'fun leaveGroup(p0: Boolean): KafkaStreams.CloseOptions!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:126:21 'fun close(p0: KafkaStreams.CloseOptions!): Boolean' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:126:40 'constructor(): KafkaStreams.CloseOptions' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:126:55 'fun timeout(p0: Duration!): KafkaStreams.CloseOptions!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:126:87 'fun leaveGroup(p0: Boolean): KafkaStreams.CloseOptions!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:155:25 'fun close(p0: KafkaStreams.CloseOptions!): Boolean' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:155:44 'constructor(): KafkaStreams.CloseOptions' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:155:59 'fun timeout(p0: Duration!): KafkaStreams.CloseOptions!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0EndToEndCostSpikeTest.kt:155:91 'fun leaveGroup(p0: Boolean): KafkaStreams.CloseOptions!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/ContentionSqlProbe.kt:102:101 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FinancialKernel'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/ContentionSqlProbe.kt:103:124 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FinancialKernel'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/ContentionSqlProbe.kt:104:33 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FinancialKernel'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/ContentionSqlProbe.kt:104:122 Unnecessary non-null assertion (!!) on a non-null receiver of type 'FinancialKernel'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialBrokerProbe.kt:495:75 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialCanonicalLeafOwner.kt:14:17 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialCanonicalLeafOwner.kt:18:27 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialCanonicalLeafOwner.kt:75:25 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialOracle.kt:78:30 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialOracleTest.kt:28:34 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialOracleTest.kt:443:31 Cast is redundant.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt:46:25 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt:55:46 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt:128:37 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt:768:173 Cast is redundant.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt:839:53 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ObjectNode'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt:881:590 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Pair<Long, Long>'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateProbe.kt:881:612 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Pair<Long, Long>'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:119:141 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:120:171 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:121:157 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:122:155 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:123:224 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:124:243 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:125:156 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:126:80 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:127:88 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/FinancialRateReferenceTest.kt:128:94 Expression is unused.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/test/kotlin/com/reef/platform/infrastructure/engine/EngineTransportTest.kt:64:54 Unnecessary non-null assertion (!!) on a non-null receiver of type 'EngineOrderAccepted'.
+
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+> Task :test
+> Task :jacocoTestReport
+> Task :jacocoTestCoverageVerification
+
+[Incubating] Problems report is available at: file:///private/tmp/reef-footprint-ci/services/platform-runtime/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 5m 59s
+11 actionable tasks: 6 executed, 5 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.0/userguide/configuration_cache_enabling.html

@@ -1,0 +1,47 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :verifyRuntimeOrderIdentityMigration
+> Task :processResources UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :verifyNoTestSourceExclusions
+> Task :compileKotlin
+> Task :compileJava UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar
+> Task :compileTestKotlin UP-TO-DATE
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+
+FlatStateTrieTest > goldensMatchInAnyInsertionOrder() FAILED
+    java.lang.NullPointerException at FlatStateTrieTest.kt:64
+
+FlatStateTrieTest > aLargeStateAcrossChunkBoundariesAgrees() FAILED
+    java.lang.NullPointerException at FlatStateTrieTest.kt:72
+
+FlatStateTrieTest > inputsAreCopied() FAILED
+    java.lang.NullPointerException at FlatStateTrieTest.kt:97
+
+FlatStateTrieTest > aCaterpillarCostsOneHashPerLevel() FAILED
+    java.lang.NullPointerException at FlatStateTrieTest.kt:86
+
+FlatStateTrieTest > tenThousandRandomSchedulesAgreeWithTheLinkedTrieAndTheReference() FAILED
+    java.lang.NullPointerException at FlatStateTrieTest.kt:48
+
+6 tests completed, 5 failed
+
+> Task :test FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///private/tmp/reef-footprint-ci/services/platform-runtime/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 19s
+9 actionable tasks: 5 executed, 4 up-to-date

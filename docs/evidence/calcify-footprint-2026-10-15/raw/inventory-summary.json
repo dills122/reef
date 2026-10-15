@@ -1,0 +1,212 @@
+{
+  "inventory-capture-settle-v1-lz4": {
+    "baseline": {
+      "calcify_finance_attempt": 16384,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 8667136,
+      "calcify_finance_obligation": 16384,
+      "calcify_finance_position": 3915776
+    },
+    "final": {
+      "calcify_finance_attempt": 114769920,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 228696064,
+      "calcify_finance_obligation": 122667008,
+      "calcify_finance_position": 4898816
+    },
+    "pg_B_trade": 1528.05376,
+    "wal_B_trade": 2124.443546666667,
+    "topics": {
+      "RATE_CAPTURE": {
+        "allocated_before": 33570816,
+        "allocated_after": 33570816,
+        "delta_B_trade": 0.0
+      },
+      "RATE_DECISIONS": {
+        "allocated_before": 33570816,
+        "allocated_after": 100679680,
+        "delta_B_trade": 223.69621333333333
+      },
+      "capacity-rate-capacity-finance-changelog": {
+        "allocated_before": 33574912,
+        "allocated_after": 167796736,
+        "delta_B_trade": 447.40608
+      }
+    }
+  },
+  "inventory-capture-settle-v1-none": {
+    "baseline": {
+      "calcify_finance_attempt": 16384,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 8667136,
+      "calcify_finance_obligation": 16384,
+      "calcify_finance_position": 3915776
+    },
+    "final": {
+      "calcify_finance_attempt": 114778112,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 228696064,
+      "calcify_finance_obligation": 122675200,
+      "calcify_finance_position": 4939776
+    },
+    "pg_B_trade": 1528.2449066666666,
+    "wal_B_trade": 2127.79752,
+    "topics": {
+      "RATE_CAPTURE": {
+        "allocated_before": 33570816,
+        "allocated_after": 67125248,
+        "delta_B_trade": 111.84810666666667
+      },
+      "RATE_DECISIONS": {
+        "allocated_before": 33570816,
+        "allocated_after": 196730880,
+        "delta_B_trade": 543.86688
+      },
+      "capacity-rate-capacity-finance-changelog": {
+        "allocated_before": 33574912,
+        "allocated_after": 482607104,
+        "delta_B_trade": 1496.7739733333333
+      }
+    }
+  },
+  "inventory-capture-settle-v1-zstd": {
+    "baseline": {
+      "calcify_finance_attempt": 16384,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 8667136,
+      "calcify_finance_obligation": 16384,
+      "calcify_finance_position": 3907584
+    },
+    "final": {
+      "calcify_finance_attempt": 114769920,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 228696064,
+      "calcify_finance_obligation": 122667008,
+      "calcify_finance_position": 4710400
+    },
+    "pg_B_trade": 1527.4530133333333,
+    "wal_B_trade": 2126.856906666667,
+    "topics": {
+      "RATE_CAPTURE": {
+        "allocated_before": 33570816,
+        "allocated_after": 33570816,
+        "delta_B_trade": 0.0
+      },
+      "RATE_DECISIONS": {
+        "allocated_before": 33570816,
+        "allocated_after": 67125248,
+        "delta_B_trade": 111.84810666666667
+      },
+      "capacity-rate-capacity-finance-changelog": {
+        "allocated_before": 33574912,
+        "allocated_after": 100683776,
+        "delta_B_trade": 223.69621333333333
+      }
+    }
+  },
+  "inventory-two-step-lz4": {
+    "baseline": {
+      "calcify_finance_attempt": 16384,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 8667136,
+      "calcify_finance_obligation": 16384,
+      "calcify_finance_position": 3907584
+    },
+    "final": {
+      "calcify_finance_attempt": 114769920,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 422846464,
+      "calcify_finance_obligation": 122675200,
+      "calcify_finance_position": 4546560
+    },
+    "pg_B_trade": 2174.1021866666665,
+    "wal_B_trade": 2956.258586666667,
+    "topics": {
+      "RATE_CAPTURE": {
+        "allocated_before": 33570816,
+        "allocated_after": 33570816,
+        "delta_B_trade": 0.0
+      },
+      "RATE_DECISIONS": {
+        "allocated_before": 33570816,
+        "allocated_after": 167735296,
+        "delta_B_trade": 447.2149333333333
+      },
+      "capacity-rate-capacity-finance-changelog": {
+        "allocated_before": 33574912,
+        "allocated_after": 201351168,
+        "delta_B_trade": 559.2541866666667
+      }
+    }
+  },
+  "inventory-two-step-none": {
+    "baseline": {
+      "calcify_finance_attempt": 16384,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 8667136,
+      "calcify_finance_obligation": 16384,
+      "calcify_finance_position": 3907584
+    },
+    "final": {
+      "calcify_finance_attempt": 114769920,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 422846464,
+      "calcify_finance_obligation": 122667008,
+      "calcify_finance_position": 4628480
+    },
+    "pg_B_trade": 2174.3479466666668,
+    "wal_B_trade": 2953.544986666667,
+    "topics": {
+      "RATE_CAPTURE": {
+        "allocated_before": 33570816,
+        "allocated_after": 67125248,
+        "delta_B_trade": 111.84810666666667
+      },
+      "RATE_DECISIONS": {
+        "allocated_before": 33570816,
+        "allocated_after": 312393728,
+        "delta_B_trade": 929.4097066666667
+      },
+      "capacity-rate-capacity-finance-changelog": {
+        "allocated_before": 33574912,
+        "allocated_after": 603746304,
+        "delta_B_trade": 1900.5713066666667
+      }
+    }
+  },
+  "inventory-two-step-zstd": {
+    "baseline": {
+      "calcify_finance_attempt": 16384,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 8667136,
+      "calcify_finance_obligation": 16384,
+      "calcify_finance_position": 3907584
+    },
+    "final": {
+      "calcify_finance_attempt": 114769920,
+      "calcify_finance_checkpoint": 32768,
+      "calcify_finance_decision": 422846464,
+      "calcify_finance_obligation": 122667008,
+      "calcify_finance_position": 4481024
+    },
+    "pg_B_trade": 2173.8564266666667,
+    "wal_B_trade": 2953.36472,
+    "topics": {
+      "RATE_CAPTURE": {
+        "allocated_before": 33570816,
+        "allocated_after": 33570816,
+        "delta_B_trade": 0.0
+      },
+      "RATE_DECISIONS": {
+        "allocated_before": 33570816,
+        "allocated_after": 100679680,
+        "delta_B_trade": 223.69621333333333
+      },
+      "capacity-rate-capacity-finance-changelog": {
+        "allocated_before": 33574912,
+        "allocated_after": 134242304,
+        "delta_B_trade": 335.55797333333334
+      }
+    }
+  }
+}

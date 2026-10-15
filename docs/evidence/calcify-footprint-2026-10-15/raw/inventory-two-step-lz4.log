@@ -1,0 +1,212 @@
+Initialized native services in: /Users/dsteele/.gradle/native
+Initialized jansi services in: /Users/dsteele/.gradle/native
+The client will now receive all logging from the daemon (pid: 77396). The daemon log file: /Users/dsteele/.gradle/daemon/9.8.0/daemon-77396.out.log
+Starting 8th build in daemon [uptime: 14 mins 20.981 secs, performance: 100%, GC rate: 0.00/s, heap usage: 2% of 512 MiB, non-heap usage: 28% of 384 MiB]
+Using 10 worker leases.
+Operational build model parameters: {cachingModelBuilding=false, configurationCache=false, configurationCacheDisabledReason=null, configurationCacheParallelLoad=false, configurationCacheParallelStore=false, configureOnDemand=false, invalidateCoupledProjects=false, isolatedProjects=false, isolatedProjectsDiagnostics=false, isolatedProjectsDangerouslyIgnoreProblems=false, modelAsProjectDependency=false, modelBuilding=false, parallelModelBuilding=false, parallelProjectConfiguration=false, parallelProjectExecution=false, vintage=true}
+Now considering [/Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime, /Users/dsteele/repos/reef/.claude/worktrees/agent-a8c516325b8cd8376/services/platform-runtime] as hierarchies to watch
+Watching the file system is configured to be enabled if available
+File system watching is active
+Starting Build
+Settings evaluated using settings file '/Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/settings.gradle.kts'.
+Projects loaded. Root project using build file '/Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build.gradle.kts'.
+Included projects: [root project 'platform-runtime']
+
+> Configure project :
+Evaluating root project 'platform-runtime' using build file '/Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.jvm', version: '2.4.20']
+Resolved plugin [id: 'org.gradle.application']
+Resolved plugin [id: 'org.gradle.jacoco']
+Build 57d1ba1e-1f83-4329-9374-20a7dc7933f0 is started
+Using Kotlin Gradle Plugin gradle96 variant
+kotlin scripting plugin: created the scripting discovery configuration: kotlinScriptDef
+kotlin scripting plugin: created the scripting discovery configuration: testKotlinScriptDef
+All projects evaluated.
+Task name matched 'cleanTest'
+Task name matched 'test'
+Selected primary task 'cleanTest' from project :
+Selected primary task 'test' from project :
+Starting process 'command '/usr/libexec/java_home''. Working directory: /Users/dsteele/.gradle/daemon/9.8.0 Command: /usr/libexec/java_home -V
+Successfully started process 'command '/usr/libexec/java_home''
+Tasks to be executed: [task ':cleanTest', task ':checkKotlinGradlePluginConfigurationErrors', task ':compileKotlin', task ':compileJava', task ':verifyRuntimeOrderIdentityMigration', task ':processResources', task ':classes', task ':jar', task ':compileTestKotlin', task ':compileTestJava', task ':processTestResources', task ':testClasses', task ':verifyNoTestSourceExclusions', task ':test', task ':jacocoTestReport']
+Tasks that were excluded: []
+Resolve mutations for :cleanTest (Thread[#577,Execution worker,5,main]) started.
+:cleanTest (Thread[#577,Execution worker,5,main]) started.
+destroyer locations for task group 0 (Thread[#576,included builds,5,main]) started.
+
+> Task :cleanTest
+Caching disabled for task ':cleanTest' because:
+  Build cache is disabled
+Task ':cleanTest' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Resolve mutations for :checkKotlinGradlePluginConfigurationErrors (Thread[#577,Execution worker,5,main]) started.
+:checkKotlinGradlePluginConfigurationErrors (Thread[#577,Execution worker,5,main]) started.
+
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+Skipping task ':checkKotlinGradlePluginConfigurationErrors' as task onlyIf 'errorDiagnostics are present' is false.
+Resolve mutations for :compileKotlin (Thread[#577,Execution worker,5,main]) started.
+:compileKotlin (Thread[#577,Execution worker,5,main]) started.
+
+> Task :compileKotlin UP-TO-DATE
+Caching disabled for task ':compileKotlin' because:
+  Build cache is disabled
+Skipping task ':compileKotlin' as it is up-to-date.
+Resolve mutations for :compileJava (Thread[#577,Execution worker,5,main]) started.
+:compileJava (Thread[#577,Execution worker,5,main]) started.
+
+> Task :compileJava UP-TO-DATE
+Caching disabled for task ':compileJava' because:
+  Build cache is disabled
+Skipping task ':compileJava' as it is up-to-date.
+No compile result for :compileJava
+No compile result for :compileJava
+Resolve mutations for :verifyRuntimeOrderIdentityMigration (Thread[#577,Execution worker,5,main]) started.
+:verifyRuntimeOrderIdentityMigration (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :verifyRuntimeOrderIdentityMigration
+Caching disabled for task ':verifyRuntimeOrderIdentityMigration' because:
+  Build cache is disabled
+Task ':verifyRuntimeOrderIdentityMigration' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Resolve mutations for :processResources (Thread[#582,Execution worker Thread 6,5,main]) started.
+:processResources (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :processResources UP-TO-DATE
+Caching disabled for task ':processResources' because:
+  Build cache is disabled
+  Not worth caching
+Skipping task ':processResources' as it is up-to-date.
+Resolve mutations for :classes (Thread[#582,Execution worker Thread 6,5,main]) started.
+:classes (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :classes UP-TO-DATE
+Skipping task ':classes' as it has no actions.
+Resolve mutations for :jar (Thread[#582,Execution worker Thread 6,5,main]) started.
+:jar (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :jar UP-TO-DATE
+Caching disabled for task ':jar' because:
+  Build cache is disabled
+  Not worth caching
+Skipping task ':jar' as it is up-to-date.
+Resolve mutations for :compileTestKotlin (Thread[#582,Execution worker Thread 6,5,main]) started.
+:compileTestKotlin (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :compileTestKotlin UP-TO-DATE
+Caching disabled for task ':compileTestKotlin' because:
+  Build cache is disabled
+Skipping task ':compileTestKotlin' as it is up-to-date.
+Resolve mutations for :compileTestJava (Thread[#582,Execution worker Thread 6,5,main]) started.
+:compileTestJava (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :compileTestJava NO-SOURCE
+Skipping task ':compileTestJava' as it has no source files and no previous output files.
+Resolve mutations for :processTestResources (Thread[#582,Execution worker Thread 6,5,main]) started.
+:processTestResources (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :processTestResources UP-TO-DATE
+Caching disabled for task ':processTestResources' because:
+  Build cache is disabled
+  Not worth caching
+Skipping task ':processTestResources' as it is up-to-date.
+Resolve mutations for :testClasses (Thread[#582,Execution worker Thread 6,5,main]) started.
+:testClasses (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :testClasses UP-TO-DATE
+Skipping task ':testClasses' as it has no actions.
+Resolve mutations for :verifyNoTestSourceExclusions (Thread[#582,Execution worker Thread 6,5,main]) started.
+:verifyNoTestSourceExclusions (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :verifyNoTestSourceExclusions
+Caching disabled for task ':verifyNoTestSourceExclusions' because:
+  Build cache is disabled
+Task ':verifyNoTestSourceExclusions' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Resolve mutations for :test (Thread[#582,Execution worker Thread 6,5,main]) started.
+:test (Thread[#582,Execution worker Thread 6,5,main]) started.
+Gradle Test Executor 6 started executing tests.
+
+> Task :test
+Custom actions are attached to task ':test'.
+Caching disabled for task ':test' because:
+  Build cache is disabled
+Task ':test' is not up-to-date because:
+  Output property 'binaryResultsDirectory' file /Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build/test-results/test/binary has been removed.
+  Output property 'binaryResultsDirectory' file /Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build/test-results/test/binary/output-events.bin has been removed.
+  Output property 'binaryResultsDirectory' file /Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build/test-results/test/binary/results-generic.bin has been removed.
+  and more...
+file or directory '/Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build/classes/java/test', not found
+Starting process 'Gradle Test Executor 6'. Working directory: /Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime Command: /Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java -Dorg.gradle.internal.worker.tmpdir=/Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build/tmp/test/work @/Users/dsteele/.gradle/.tmp/gradle-worker-classpath15997268627544119991txt -Xmx12g -Dfile.encoding=UTF-8 -Duser.country=US -Duser.language=en -Duser.variant -ea worker.org.gradle.process.internal.worker.GradleWorkerMain 'Gradle Test Executor 6'
+Successfully started process 'Gradle Test Executor 6'
+
+CapacityLaneThroughputTest > projectedDecisionsPerSecondOnTheProductPath() STANDARD_ERROR
+    SLF4J(W): No SLF4J providers were found.
+    SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+    SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+
+CapacityLaneThroughputTest > projectedDecisionsPerSecondOnTheProductPath() STANDARD_OUT
+    BYTE-PG phase=baseline table=calcify_finance_attempt heap=0 table_with_aux=8192 indexes=8192 toast=8192 total=16384 rows=0
+    BYTE-PG phase=baseline table=calcify_finance_checkpoint heap=8192 table_with_aux=16384 indexes=16384 toast=8192 total=32768 rows=1
+    BYTE-PG phase=baseline table=calcify_finance_decision heap=4440064 table_with_aux=4481024 indexes=4186112 toast=8192 total=8667136 rows=13000
+    BYTE-PG phase=baseline table=calcify_finance_obligation heap=0 table_with_aux=8192 indexes=8192 toast=8192 total=16384 rows=0
+    BYTE-PG phase=baseline table=calcify_finance_position heap=1540096 table_with_aux=1581056 indexes=2326528 toast=8192 total=3907584 rows=13065
+    BYTE-INDEX phase=baseline index=calcify_finance_attempt_pkey bytes=8192
+    BYTE-INDEX phase=baseline index=calcify_finance_checkpoint_pkey bytes=16384
+    BYTE-INDEX phase=baseline index=calcify_finance_decision_binding_digest_action_namespace_ac_key bytes=2793472
+    BYTE-INDEX phase=baseline index=calcify_finance_decision_pkey bytes=1392640
+    BYTE-INDEX phase=baseline index=calcify_finance_obligation_pkey bytes=8192
+    BYTE-INDEX phase=baseline index=calcify_finance_position_pkey bytes=2326528
+    BYTE-DISK phase=baseline broker_kib=1917732	/var/lib/redpanda/data
+    BYTE-DISK phase=baseline topic=RATE_CAPTURE kib=32784	/var/lib/redpanda/data/kafka/RATE_CAPTURE
+    BYTE-DISK phase=baseline topic=RATE_CONTROL kib=32784	/var/lib/redpanda/data/kafka/RATE_CONTROL
+    BYTE-DISK phase=baseline topic=RATE_DECISIONS kib=32784	/var/lib/redpanda/data/kafka/RATE_DECISIONS
+    BYTE-DISK phase=baseline topic=capacity-rate-capacity-finance-changelog kib=32788	/var/lib/redpanda/data/kafka/capacity-rate-capacity-finance-changelog
+    BYTE-DISK phase=baseline postgres_kib=76000	/var/lib/postgresql/data
+    BYTE-SETTINGS phase=baseline [fsync, on], [full_page_writes, on], [synchronous_commit, on], [wal_compression, off]
+    CAPACITY-CPU cpu_seconds projection=3.7 streams=26.0 kafka-clients=0.1 read_s=81.8 apply_s=71.7 verify_s=0.9 sql_s=51.6 wall=55.5 cores=10
+    CAPACITY-LANES trades_per_lane=[300000] instruments_per_lane=[64]
+    CAPACITY-RATE mode=two-step source=resolved lanes=1 trades=300000 decisions=600000 processed_in=39.0s processed_decisions_per_s=15366 processed_trades_per_s=7683 sent_in=0.7s projected_in=55.5s projected_decisions_per_s=10808 projected_trades_per_s=5404 verify_digest=true
+    BYTE-WAL trades=300000 generated_bytes=886877576 bytes_per_trade=2956.258586666667
+    BYTE-PG phase=final table=calcify_finance_attempt heap=43900928 table_with_aux=43941888 indexes=70828032 toast=8192 total=114769920 rows=300000
+    BYTE-PG phase=final table=calcify_finance_checkpoint heap=8192 table_with_aux=16384 indexes=16384 toast=8192 total=32768 rows=1
+    BYTE-PG phase=final table=calcify_finance_decision heap=218144768 table_with_aux=218234880 indexes=204611584 toast=8192 total=422846464 rows=613000
+    BYTE-PG phase=final table=calcify_finance_obligation heap=54616064 table_with_aux=54657024 indexes=68018176 toast=8192 total=122675200 rows=300000
+    BYTE-PG phase=final table=calcify_finance_position heap=2170880 table_with_aux=2211840 indexes=2334720 toast=8192 total=4546560 rows=13065
+    BYTE-INDEX phase=final index=calcify_finance_attempt_pkey bytes=70828032
+    BYTE-INDEX phase=final index=calcify_finance_checkpoint_pkey bytes=16384
+    BYTE-INDEX phase=final index=calcify_finance_decision_binding_digest_action_namespace_ac_key bytes=139984896
+    BYTE-INDEX phase=final index=calcify_finance_decision_pkey bytes=64626688
+    BYTE-INDEX phase=final index=calcify_finance_obligation_pkey bytes=68018176
+    BYTE-INDEX phase=final index=calcify_finance_position_pkey bytes=2334720
+    BYTE-DISK phase=final broker_kib=2212596	/var/lib/redpanda/data
+    BYTE-DISK phase=final topic=RATE_CAPTURE kib=32784	/var/lib/redpanda/data/kafka/RATE_CAPTURE
+    BYTE-DISK phase=final topic=RATE_CONTROL kib=32784	/var/lib/redpanda/data/kafka/RATE_CONTROL
+    BYTE-DISK phase=final topic=RATE_DECISIONS kib=163804	/var/lib/redpanda/data/kafka/RATE_DECISIONS
+    BYTE-DISK phase=final topic=capacity-rate-capacity-finance-changelog kib=196632	/var/lib/redpanda/data/kafka/capacity-rate-capacity-finance-changelog
+    BYTE-DISK phase=final postgres_kib=1581328	/var/lib/postgresql/data
+    BYTE-SETTINGS phase=final [fsync, on], [full_page_writes, on], [synchronous_commit, on], [wal_compression, off]
+    BYTE-TOPIC topic=RATE_CAPTURE trades=300000 records=300000 keys=0 values=48774582 records_per_trade=1.0 payload_per_trade=162.58194
+    BYTE-TOPIC topic=RATE_CONTROL trades=300000 records=0 keys=0 values=0 records_per_trade=0.0 payload_per_trade=0.0
+    BYTE-TOPIC topic=RATE_DECISIONS trades=300000 records=600000 keys=15000000 values=268754223 records_per_trade=2.0 payload_per_trade=945.84741
+    BYTE-TOPIC topic=capacity-rate-capacity-finance-changelog trades=300000 records=3300000 keys=192102976 values=349805013 records_per_trade=11.0 payload_per_trade=1806.3599633333333
+
+Gradle Test Executor 6 finished executing tests.
+
+> Task :test
+Generating HTML test report...
+Finished generating test html results (0.003 secs) into: /Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build/reports/tests/test
+Finished generating test XML results (0.0 secs) into: /Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build/test-results/test
+Resolve mutations for :jacocoTestReport (Thread[#582,Execution worker Thread 6,5,main]) started.
+:jacocoTestReport (Thread[#582,Execution worker Thread 6,5,main]) started.
+
+> Task :jacocoTestReport UP-TO-DATE
+Invalidating in-memory cache of /Users/dsteele/.gradle/caches/journal-1/file-access.bin
+Caching disabled for task ':jacocoTestReport' because:
+  Build cache is disabled
+Skipping task ':jacocoTestReport' as it is up-to-date.
+Build 57d1ba1e-1f83-4329-9374-20a7dc7933f0 is closed
+
+BUILD SUCCESSFUL in 2m 48s
+11 actionable tasks: 4 executed, 7 up-to-date
+Watched directory hierarchies: [/Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime, /Users/dsteele/repos/reef/.claude/worktrees/agent-a8c516325b8cd8376/services/platform-runtime]
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.0/userguide/configuration_cache_enabling.html

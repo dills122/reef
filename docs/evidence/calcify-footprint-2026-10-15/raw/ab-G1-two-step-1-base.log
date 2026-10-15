@@ -1,0 +1,4 @@
+HEAP-CONFIG impl=current mode=two-step accounts=200 instruments=64 maxHeap=12288 MiB gc=G1 Young Generation+G1 Concurrent GC+G1 Old Generation jvm=21+35-LTS-2513 compressedOops=true
+HEAP-BASELINE after funding: used=18383 KiB entities=26065
+HEAP-POINT impl=current mode=two-step trades=250000 entities=1276065 live=442 MiB perTrade=1857.6 B | interval thread CPU 36.08 us/trade (decide + input construction), wall 11.2 s
+HEAP-POINT impl=current mode=two-step trades=500000 entities=2526065 live=898 MiB perTrade=1883.6 B | interval thread CPU 41.41 us/trade (decide + input construction), wall 10.6 s

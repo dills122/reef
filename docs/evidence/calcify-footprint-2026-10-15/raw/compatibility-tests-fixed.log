@@ -1,0 +1,34 @@
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :verifyRuntimeOrderIdentityMigration
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :verifyNoTestSourceExclusions
+> Task :resolverProbeDependencies UP-TO-DATE
+
+> Task :compileTestKotlin FAILED
+e: file:///Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityFootprintCompatibilityTest.kt:30:104 Unresolved reference 'copy' on receiver of type 'StateCommitment.Entity'.
+
+[Incubating] Problems report is available at: file:///Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileTestKotlin' (registered by plugin 'org.jetbrains.kotlin.jvm').
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+   > Kotlin compiler: UNRESOLVED_REFERENCE
+       Kotlin compiler error
+         Unresolved reference 'copy' on receiver of type 'StateCommitment.Entity'.
+         Location: /Users/dsteele/.codex/worktrees/10c2/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityFootprintCompatibilityTest.kt:30
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2s
+9 actionable tasks: 3 executed, 6 up-to-date

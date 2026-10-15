@@ -1,0 +1,1314 @@
+node scripts/dev/doctor.test.mjs
+developer doctor tests ok
+node scripts/dev/lib/dev-links.test.mjs
+TAP version 13
+# Subtest: AI Central defaults to the user profile checkout
+ok 1 - AI Central defaults to the user profile checkout
+  ---
+  duration_ms: 1.610583
+  type: 'test'
+  ...
+# Subtest: AI_CENTRAL_HOME accepts either the checkout or templates directory
+ok 2 - AI_CENTRAL_HOME accepts either the checkout or templates directory
+  ---
+  duration_ms: 0.199583
+  type: 'test'
+  ...
+# Subtest: Codex refresh synchronizes Reef's curated bundle selection
+ok 3 - Codex refresh synchronizes Reef's curated bundle selection
+  ---
+  duration_ms: 0.082875
+  type: 'test'
+  ...
+# Subtest: managed-link containment does not accept siblings or the root itself
+ok 4 - managed-link containment does not accept siblings or the root itself
+  ---
+  duration_ms: 0.265459
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7.315292
+node scripts/dev/onboarding-links.test.mjs
+onboarding links ok (8 documents)
+node scripts/dev/smoke-identity.test.mjs
+smoke identity tests ok
+node scripts/dev/ci-pr-change-scope.test.mjs
+CI pull request change-scope checks passed
+node --test scripts/dev/lib/stress-success-guardrail.test.mjs
+TAP version 13
+# Subtest: end-to-end guardrail includes expected business rejects
+ok 1 - end-to-end guardrail includes expected business rejects
+  ---
+  duration_ms: 0.485375
+  type: 'test'
+  ...
+# Subtest: valid-intent guardrail excludes expected business rejects
+ok 2 - valid-intent guardrail excludes expected business rejects
+  ---
+  duration_ms: 0.075083
+  type: 'test'
+  ...
+# Subtest: valid-intent guardrail still exposes system failures
+ok 3 - valid-intent guardrail still exposes system failures
+  ---
+  duration_ms: 0.058541
+  type: 'test'
+  ...
+# Subtest: end-to-end guardrail supports older reports without quality metrics
+ok 4 - end-to-end guardrail supports older reports without quality metrics
+  ---
+  duration_ms: 0.055334
+  type: 'test'
+  ...
+# Subtest: rejects unknown guardrail metrics
+ok 5 - rejects unknown guardrail metrics
+  ---
+  duration_ms: 0.636833
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 51.375916
+node --test scripts/dev/lib/benchmark-runtime-signature.test.mjs scripts/dev/lib/cohort-residence.test.mjs scripts/dev/lib/downstream-cohort.test.mjs scripts/dev/lib/downstream-freshness.test.mjs scripts/dev/lib/downstream-sampler.test.mjs scripts/dev/lib/instrumentation-perturbation.test.mjs scripts/dev/lib/run-profile-roles.test.mjs scripts/dev/lib/source-cohort.test.mjs scripts/dev/lib/stream-profile-guard.test.mjs scripts/dev/lib/script-surface.test.mjs
+TAP version 13
+# Subtest: hashes effective config without secrets and excludes only instrumentation toggle
+ok 1 - hashes effective config without secrets and excludes only instrumentation toggle
+  ---
+  duration_ms: 12.258625
+  type: 'test'
+  ...
+# Subtest: runtime changes affect fingerprint
+ok 2 - runtime changes affect fingerprint
+  ---
+  duration_ms: 2.334791
+  type: 'test'
+  ...
+# Subtest: missing roles or database settings fail closed without leaking errors
+ok 3 - missing roles or database settings fail closed without leaking errors
+  ---
+  duration_ms: 0.426208
+  type: 'test'
+  ...
+# Subtest: direct venue-core profile does not require stream-ack workers
+ok 4 - direct venue-core profile does not require stream-ack workers
+  ---
+  duration_ms: 0.253584
+  type: 'test'
+  ...
+# Subtest: host and effective database changes reject equality
+ok 5 - host and effective database changes reject equality
+  ---
+  duration_ms: 0.839833
+  type: 'test'
+  ...
+# Subtest: mount order is irrelevant but mount source and permissions remain authoritative
+ok 6 - mount order is irrelevant but mount source and permissions remain authoritative
+  ---
+  duration_ms: 10.1365
+  type: 'test'
+  ...
+# Subtest: bind permutation is stable while every bind path option and other resource stays significant
+ok 7 - bind permutation is stable while every bind path option and other resource stays significant
+  ---
+  duration_ms: 10.067
+  type: 'test'
+  ...
+# Subtest: bind absent null and empty retain distinct signatures and malformed values fail closed
+ok 8 - bind absent null and empty retain distinct signatures and malformed values fail closed
+  ---
+  duration_ms: 1.746625
+  type: 'test'
+  ...
+# Subtest: reconciles every source member and includes early commands in downstream residence bounds
+ok 9 - reconciles every source member and includes early commands in downstream residence bounds
+  ---
+  duration_ms: 2.255333
+  type: 'test'
+  ...
+# Subtest: rejects incomplete residence authority: gap
+ok 10 - rejects incomplete residence authority: gap
+  ---
+  duration_ms: 0.217542
+  type: 'test'
+  ...
+# Subtest: rejects incomplete residence authority: duplicate
+ok 11 - rejects incomplete residence authority: duplicate
+  ---
+  duration_ms: 0.1165
+  type: 'test'
+  ...
+# Subtest: rejects incomplete residence authority: restart
+ok 12 - rejects incomplete residence authority: restart
+  ---
+  duration_ms: 0.071167
+  type: 'test'
+  ...
+# Subtest: rejects incomplete residence authority: drop
+ok 13 - rejects incomplete residence authority: drop
+  ---
+  duration_ms: 0.284583
+  type: 'test'
+  ...
+# Subtest: rejects incomplete residence authority: missingClock
+ok 14 - rejects incomplete residence authority: missingClock
+  ---
+  duration_ms: 0.111792
+  type: 'test'
+  ...
+# Subtest: rejects incomplete residence authority: missingMarker
+ok 15 - rejects incomplete residence authority: missingMarker
+  ---
+  duration_ms: 0.13625
+  type: 'test'
+  ...
+# Subtest: rejects incomplete residence authority: preCommitMarker
+ok 16 - rejects incomplete residence authority: preCommitMarker
+  ---
+  duration_ms: 0.08425
+  type: 'test'
+  ...
+# Subtest: rejects incomplete residence authority: corruptCounter
+ok 17 - rejects incomplete residence authority: corruptCounter
+  ---
+  duration_ms: 0.322083
+  type: 'test'
+  ...
+# Subtest: excludes pre-window records without losing exact cohort membership
+ok 18 - excludes pre-window records without losing exact cohort membership
+  ---
+  duration_ms: 0.460666
+  type: 'test'
+  ...
+# Subtest: mixed or absent database generations invalidate residence
+ok 19 - mixed or absent database generations invalidate residence
+  ---
+  duration_ms: 0.160208
+  type: 'test'
+  ...
+# Subtest: reconciles lifecycle and market covering markers to the exclusive source cohort
+ok 20 - reconciles lifecycle and market covering markers to the exclusive source cohort
+  ---
+  duration_ms: 2.625084
+  type: 'test'
+  ...
+# Subtest: uses exact composite sequences for nonzero partitions
+ok 21 - uses exact composite sequences for nonzero partitions
+  ---
+  duration_ms: 0.29525
+  type: 'test'
+  ...
+# Subtest: rejects mismatched lifecycle and market marker identities
+ok 22 - rejects mismatched lifecycle and market marker identities
+  ---
+  duration_ms: 0.450167
+  type: 'test'
+  ...
+# Subtest: rejects missing post-commit authority and hidden active callers
+ok 23 - rejects missing post-commit authority and hidden active callers
+  ---
+  duration_ms: 0.229417
+  type: 'test'
+  ...
+# Subtest: rejects diagnostic sampling gaps beyond the one-second tolerance
+ok 24 - rejects diagnostic sampling gaps beyond the one-second tolerance
+  ---
+  duration_ms: 0.214833
+  type: 'test'
+  ...
+# Subtest: sampler authority keeps frozen cadence and gap limits despite caller configuration
+ok 25 - sampler authority keeps frozen cadence and gap limits despite caller configuration
+  ---
+  duration_ms: 2.506209
+  type: 'test'
+  ...
+# Subtest: sampler authority requires every metric explicitly valid
+ok 26 - sampler authority requires every metric explicitly valid
+  ---
+  duration_ms: 4.545334
+  type: 'test'
+  ...
+# Subtest: sampler accepts exact gap boundary but rejects failed samples and over-boundary gap
+ok 27 - sampler accepts exact gap boundary but rejects failed samples and over-boundary gap
+  ---
+  duration_ms: 0.222792
+  type: 'test'
+  ...
+# Subtest: accepts either ordering for independently sampled stage observations
+ok 28 - accepts either ordering for independently sampled stage observations
+  ---
+  duration_ms: 0.53
+  type: 'test'
+  ...
+# Subtest: drain authority waits for idle callers and matching full-frontier markers
+ok 29 - drain authority waits for idle callers and matching full-frontier markers
+  ---
+  duration_ms: 0.48375
+  type: 'test'
+  ...
+# Subtest: lightweight queue markers prove drain without claiming exact counts
+ok 30 - lightweight queue markers prove drain without claiming exact counts
+  ---
+  duration_ms: 0.151125
+  type: 'test'
+  ...
+# Subtest: drain authority rejects partial-partition markers
+ok 31 - drain authority rejects partial-partition markers
+  ---
+  duration_ms: 0.059083
+  type: 'test'
+  ...
+# Subtest: rejects absent or invalid required queue/failure/clock metrics: undefined
+ok 32 - rejects absent or invalid required queue/failure/clock metrics: undefined
+  ---
+  duration_ms: 0.451625
+  type: 'test'
+  ...
+# Subtest: rejects absent or invalid required queue/failure/clock metrics: null
+ok 33 - rejects absent or invalid required queue/failure/clock metrics: null
+  ---
+  duration_ms: 0.647458
+  type: 'test'
+  ...
+# Subtest: rejects absent or invalid required queue/failure/clock metrics: garbage
+ok 34 - rejects absent or invalid required queue/failure/clock metrics: garbage
+  ---
+  duration_ms: 0.318083
+  type: 'test'
+  ...
+# Subtest: rejects absent or invalid required queue/failure/clock metrics: -1
+ok 35 - rejects absent or invalid required queue/failure/clock metrics: -1
+  ---
+  duration_ms: 0.373375
+  type: 'test'
+  ...
+# Subtest: rejects absent or invalid required queue/failure/clock metrics: 0.5
+ok 36 - rejects absent or invalid required queue/failure/clock metrics: 0.5
+  ---
+  duration_ms: 0.335917
+  type: 'test'
+  ...
+# Subtest: rejects absent or invalid required queue/failure/clock metrics: 
+ok 37 - rejects absent or invalid required queue/failure/clock metrics: 
+  ---
+  duration_ms: 7.584459
+  type: 'test'
+  ...
+# Subtest: rejects absent or invalid required queue/failure/clock metrics: NaN
+ok 38 - rejects absent or invalid required queue/failure/clock metrics: NaN
+  ---
+  duration_ms: 2.499709
+  type: 'test'
+  ...
+# Subtest: database generation changes or missing guards invalidate cohort
+ok 39 - database generation changes or missing guards invalidate cohort
+  ---
+  duration_ms: 0.358417
+  type: 'test'
+  ...
+# Subtest: inclusive frozen observation bounds pass for complete weighted cohort
+ok 40 - inclusive frozen observation bounds pass for complete weighted cohort
+  ---
+  duration_ms: 1.457042
+  type: 'test'
+  ...
+# Subtest: any stage exceeding any threshold fails regardless of caller options
+ok 41 - any stage exceeding any threshold fails regardless of caller options
+  ---
+  duration_ms: 3.613125
+  type: 'test'
+  ...
+# Subtest: missing malformed unordered or incomplete residence fails closed
+ok 42 - missing malformed unordered or incomplete residence fails closed
+  ---
+  duration_ms: 3.229417
+  type: 'test'
+  ...
+# Subtest: authority checks final queues idle callers and scheduled demand are mandatory
+ok 43 - authority checks final queues idle callers and scheduled demand are mandatory
+  ---
+  duration_ms: 0.434042
+  type: 'test'
+  ...
+# Subtest: sustained gate rejects short missing or fabricated duration evidence
+ok 44 - sustained gate rejects short missing or fabricated duration evidence
+  ---
+  duration_ms: 0.455375
+  type: 'test'
+  ...
+# Subtest: five-minute boundary and submillisecond Go duration precision are accepted
+ok 45 - five-minute boundary and submillisecond Go duration precision are accepted
+  ---
+  duration_ms: 0.150416
+  type: 'test'
+  ...
+# Subtest: market read metadata binds to canonical and both covering marker source namespaces
+ok 46 - market read metadata binds to canonical and both covering marker source namespaces
+  ---
+  duration_ms: 0.195375
+  type: 'test'
+  ...
+# Subtest: matching explicit nondefault namespace remains valid
+ok 47 - matching explicit nondefault namespace remains valid
+  ---
+  duration_ms: 0.076167
+  type: 'test'
+  ...
+# Subtest: summarizes successful one-second downstream diagnostic coverage
+ok 48 - summarizes successful one-second downstream diagnostic coverage
+  ---
+  duration_ms: 0.933667
+  type: 'test'
+  ...
+# Subtest: counts failed probes and uncovered tail time
+ok 49 - counts failed probes and uncovered tail time
+  ---
+  duration_ms: 0.169875
+  type: 'test'
+  ...
+# Subtest: accepts matched three-sample arms within the one-percent limit
+ok 50 - accepts matched three-sample arms within the one-percent limit
+  ---
+  duration_ms: 6.362584
+  type: 'test'
+  ...
+# Subtest: fails closed on excessive perturbation and missing cohort authority
+ok 51 - fails closed on excessive perturbation and missing cohort authority
+  ---
+  duration_ms: 6.565708
+  type: 'test'
+  ...
+# Subtest: fails closed when the arms do not use the same workload
+ok 52 - fails closed when the arms do not use the same workload
+  ---
+  duration_ms: 0.771208
+  type: 'test'
+  ...
+# Subtest: matches configured duration instead of measured wall-clock jitter
+ok 53 - matches configured duration instead of measured wall-clock jitter
+  ---
+  duration_ms: 0.891042
+  type: 'test'
+  ...
+# Subtest: does not treat an unobserved instrumentation state as a valid control
+ok 54 - does not treat an unobserved instrumentation state as a valid control
+  ---
+  duration_ms: 0.819917
+  type: 'test'
+  ...
+# Subtest: rejects an arm with recovered projector retries
+ok 55 - rejects an arm with recovered projector retries
+  ---
+  duration_ms: 1.107083
+  type: 'test'
+  ...
+# Subtest: rejects historical reports without runtime evidence
+ok 56 - rejects historical reports without runtime evidence
+  ---
+  duration_ms: 0.593416
+  type: 'test'
+  ...
+# Subtest: cannot relax frozen one-percent or three-sample gates
+ok 57 - cannot relax frozen one-percent or three-sample gates
+  ---
+  duration_ms: 3.867708
+  type: 'test'
+  ...
+# Subtest: different or changing effective runtime rejects comparison
+ok 58 - different or changing effective runtime rejects comparison
+  ---
+  duration_ms: 2.054334
+  type: 'test'
+  ...
+# Subtest: rejects two individually valid runs with different runtime settings
+ok 59 - rejects two individually valid runs with different runtime settings
+  ---
+  duration_ms: 1.823834
+  type: 'test'
+  ...
+# Subtest: missing or malformed health counters fail closed in either arm
+ok 60 - missing or malformed health counters fail closed in either arm
+  ---
+  duration_ms: 82.271417
+  type: 'test'
+  ...
+# Subtest: matches complete workload, session content, and diagnostic settings
+ok 61 - matches complete workload, session content, and diagnostic settings
+  ---
+  duration_ms: 3.847875
+  type: 'test'
+  ...
+# Subtest: requires explicit valid schedule evidence and at least 99 percent completion
+ok 62 - requires explicit valid schedule evidence and at least 99 percent completion
+  ---
+  duration_ms: 46.963541
+  type: 'test'
+  ...
+# Subtest: control legacy downstream counters prove successful work and drained tails
+ok 63 - control legacy downstream counters prove successful work and drained tails
+  ---
+  duration_ms: 18.891708
+  type: 'test'
+  ...
+# Subtest: precise scheduler overshoot is valid when deficits clamp at zero
+ok 64 - precise scheduler overshoot is valid when deficits clamp at zero
+  ---
+  duration_ms: 0.521875
+  type: 'test'
+  ...
+# Subtest: missing workload/session/diagnostic evidence fails closed even across identical arms
+ok 65 - missing workload/session/diagnostic evidence fails closed even across identical arms
+  ---
+  duration_ms: 2.478333
+  type: 'test'
+  ...
+# Subtest: invalid schedule mode/rate and incomplete legacy snapshots fail closed
+ok 66 - invalid schedule mode/rate and incomplete legacy snapshots fail closed
+  ---
+  duration_ms: 2.468792
+  type: 'test'
+  ...
+# Subtest: any dropped scheduled request fails despite complete target demand
+ok 67 - any dropped scheduled request fails despite complete target demand
+  ---
+  duration_ms: 0.826125
+  type: 'test'
+  ...
+# ok - control room materializer profile treats projectors as optional
+# ok - stress metadata expected roles keep stable string shape
+# Subtest: scripts/dev/lib/run-profile-roles.test.mjs
+ok 7 - scripts/dev/lib/run-profile-roles.test.mjs
+  ---
+  duration_ms: 50.817375
+  type: 'test'
+  ...
+# Subtest: control commands root script imports, resolving paths against importer
+ok 69 - control commands root script imports, resolving paths against importer
+  ---
+  duration_ms: 1.001375
+  type: 'test'
+  ...
+# Subtest: workflow ./scripts paths are repository relative
+ok 70 - workflow ./scripts paths are repository relative
+  ---
+  duration_ms: 0.153917
+  type: 'test'
+  ...
+# Subtest: tests and historical evidence do not establish operational use
+ok 71 - tests and historical evidence do not establish operational use
+  ---
+  duration_ms: 0.853542
+  type: 'test'
+  ...
+# Subtest: operational docs require invocation, not a catalog mention
+ok 72 - operational docs require invocation, not a catalog mention
+  ---
+  duration_ms: 0.184083
+  type: 'test'
+  ...
+# Subtest: orphan import cycles, comments and package metadata cannot establish use
+ok 73 - orphan import cycles, comments and package metadata cannot establish use
+  ---
+  duration_ms: 0.179833
+  type: 'test'
+  ...
+# Subtest: library tests are checked, and test imports do not wire another test
+ok 74 - library tests are checked, and test imports do not wire another test
+  ---
+  duration_ms: 0.080625
+  type: 'test'
+  ...
+# Subtest: builds an exclusive accepted-to-canonical cohort with exact offset joins
+ok 75 - builds an exclusive accepted-to-canonical cohort with exact offset joins
+  ---
+  duration_ms: 1.307542
+  type: 'test'
+  ...
+# Subtest: rejects an accepted frontier containing an interleaved source record
+ok 76 - rejects an accepted frontier containing an interleaved source record
+  ---
+  duration_ms: 2.309542
+  type: 'test'
+  ...
+# Subtest: rejects missing source timing and clock guard failures
+ok 77 - rejects missing source timing and clock guard failures
+  ---
+  duration_ms: 0.258
+  type: 'test'
+  ...
+# Subtest: rejects a partial Kafka source commit even when batch counts match
+ok 78 - rejects a partial Kafka source commit even when batch counts match
+  ---
+  duration_ms: 0.13275
+  type: 'test'
+  ...
+# Subtest: rejects a duplicate plus missing canonical source offset with balanced count and bounds
+ok 79 - rejects a duplicate plus missing canonical source offset with balanced count and bounds
+  ---
+  duration_ms: 0.26925
+  type: 'test'
+  ...
+# Subtest: merges materializer source frontiers without lossy composite sequence math
+ok 80 - merges materializer source frontiers without lossy composite sequence math
+  ---
+  duration_ms: 0.419584
+  type: 'test'
+  ...
+# Subtest: missing clock and unchecked-batch counters cannot establish source authority
+ok 81 - missing clock and unchecked-batch counters cannot establish source authority
+  ---
+  duration_ms: 0.138625
+  type: 'test'
+  ...
+# Subtest: standalone defaults preserve canonical namespace and bind market source to it
+ok 82 - standalone defaults preserve canonical namespace and bind market source to it
+  ---
+  duration_ms: 0.814875
+  type: 'test'
+  ...
+# Subtest: explicit mismatch fails instead of silently renaming canonical or market namespace
+ok 83 - explicit mismatch fails instead of silently renaming canonical or market namespace
+  ---
+  duration_ms: 0.113708
+  type: 'test'
+  ...
+# Subtest: guard models real Compose fallback mismatch and effective per-instance maintainers
+ok 84 - guard models real Compose fallback mismatch and effective per-instance maintainers
+  ---
+  duration_ms: 0.166708
+  type: 'test'
+  ...
+1..84
+# tests 84
+# suites 0
+# pass 84
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 282.150875
+node --test scripts/dev/downstream-state-reference.test.mjs scripts/dev/full-projection-headroom.test.mjs scripts/dev/isolated-downstream-capacity.test.mjs
+TAP version 13
+# Subtest: extracts exact current full-rebuild templates and binds prepared parameters without rewriting expressions
+ok 1 - extracts exact current full-rebuild templates and binds prepared parameters without rewriting expressions
+  ---
+  duration_ms: 2.633292
+  type: 'test'
+  ...
+# Subtest: reference compares full business row multisets excluding only updated_at and always rolls back
+ok 2 - reference compares full business row multisets excluding only updated_at and always rolls back
+  ---
+  duration_ms: 1.351167
+  type: 'test'
+  ...
+# Subtest: source shape drift unexpected table names and missing lag fail closed
+ok 3 - source shape drift unexpected table names and missing lag fail closed
+  ---
+  duration_ms: 0.802542
+  type: 'test'
+  ...
+# Subtest: untrusted projection names use hex literals and cannot inject SQL or psql commands
+ok 4 - untrusted projection names use hex literals and cannot inject SQL or psql commands
+  ---
+  duration_ms: 0.806584
+  type: 'test'
+  ...
+# Subtest: verifier rejects missing rollback even with matching rows and retains semantic mismatches
+ok 5 - verifier rejects missing rollback even with matching rows and retains semantic mismatches
+  ---
+  duration_ms: 0.386708
+  type: 'test'
+  ...
+# Subtest: exact command accounting rejects dirty-row substitution, bad source checks and numeric strings
+ok 6 - exact command accounting rejects dirty-row substitution, bad source checks and numeric strings
+  ---
+  duration_ms: 0.832291
+  type: 'test'
+  ...
+# Subtest: direct canonical proof requires exact unique interval and all cohort commands
+ok 7 - direct canonical proof requires exact unique interval and all cohort commands
+  ---
+  duration_ms: 0.318708
+  type: 'test'
+  ...
+# Subtest: identity includes environment, host resources and mounts; startup transition explicit
+ok 8 - identity includes environment, host resources and mounts; startup transition explicit
+  ---
+  duration_ms: 8.188459
+  type: 'test'
+  ...
+# Subtest: rate clock starts before dispatch and never subtracts startup; thresholds exact
+ok 9 - rate clock starts before dispatch and never subtracts startup; thresholds exact
+  ---
+  duration_ms: 0.136875
+  type: 'test'
+  ...
+# Subtest: canonical health rejects missing, negative, unsafe or failed evidence
+ok 10 - canonical health rejects missing, negative, unsafe or failed evidence
+  ---
+  duration_ms: 0.206292
+  type: 'test'
+  ...
+# Subtest: canonical completion alone cannot finish while queues, callers or exact markers incomplete
+ok 11 - canonical completion alone cannot finish while queues, callers or exact markers incomplete
+  ---
+  duration_ms: 0.4105
+  type: 'test'
+  ...
+# Subtest: manifest refuses guessed isolation, duplicate ownership, absent exact config and client allowlist
+ok 12 - manifest refuses guessed isolation, duplicate ownership, absent exact config and client allowlist
+  ---
+  duration_ms: 0.938084
+  type: 'test'
+  ...
+# Subtest: journal binds exact immutable source membership and rejects drops, restart and duplicates
+ok 13 - journal binds exact immutable source membership and rejects drops, restart and duplicates
+  ---
+  duration_ms: 0.495875
+  type: 'test'
+  ...
+# Subtest: inspect success and failure artifacts never expose raw environment
+ok 14 - inspect success and failure artifacts never expose raw environment
+  ---
+  duration_ms: 0.684
+  type: 'test'
+  ...
+# Subtest: canonical stream hashes and retains exact UTF8 bytes while validating memberships
+ok 15 - canonical stream hashes and retains exact UTF8 bytes while validating memberships
+  ---
+  duration_ms: 27.188708
+  type: 'test'
+  ...
+# Subtest: stream verifier rejects missing, foreign, duplicate and conflicting source evidence
+ok 16 - stream verifier rejects missing, foreign, duplicate and conflicting source evidence
+  ---
+  duration_ms: 2.412791
+  type: 'test'
+  ...
+# Subtest: live non-atomic counter samples remain bounded but final reconciliation strict
+ok 17 - live non-atomic counter samples remain bounded but final reconciliation strict
+  ---
+  duration_ms: 0.427625
+  type: 'test'
+  ...
+# Subtest: interrupted canonical stream cannot return successful evidence
+ok 18 - interrupted canonical stream cannot return successful evidence
+  ---
+  duration_ms: 3.756167
+  type: 'test'
+  ...
+# Subtest: lifecycle parser keeps precise counts and timing; counts reconcile independently from commands
+ok 19 - lifecycle parser keeps precise counts and timing; counts reconcile independently from commands
+  ---
+  duration_ms: 1.196792
+  type: 'test'
+  ...
+# Subtest: missing duplicate reordered timings tags or SQL output fail closed
+ok 20 - missing duplicate reordered timings tags or SQL output fail closed
+  ---
+  duration_ms: 0.338792
+  type: 'test'
+  ...
+# Subtest: early zero unfinished queue source drift generation change and foreign clients invalidate lifecycle
+ok 21 - early zero unfinished queue source drift generation change and foreign clients invalidate lifecycle
+  ---
+  duration_ms: 0.514875
+  type: 'test'
+  ...
+# Subtest: market requires all fixed warmup and timed cycles with separate 64-count commits
+ok 22 - market requires all fixed warmup and timed cycles with separate 64-count commits
+  ---
+  duration_ms: 0.818125
+  type: 'test'
+  ...
+# Subtest: generated SQL has fixed batch separate statements bounded first-zero exit and safe manifest encoding
+ok 23 - generated SQL has fixed batch separate statements bounded first-zero exit and safe manifest encoding
+  ---
+  duration_ms: 0.913917
+  type: 'test'
+  ...
+# Subtest: manifest and project context reject ambiguity or untracked writers
+ok 24 - manifest and project context reject ambiguity or untracked writers
+  ---
+  duration_ms: 0.280917
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 113.713792
+node scripts/dev/ci-workflow-hardening.test.mjs
+CI workflow hardening guard checks passed
+node --test scripts/ci/check-required-results.test.mjs
+TAP version 13
+# Subtest: accepts a successful full CI run
+ok 1 - accepts a successful full CI run
+  ---
+  duration_ms: 0.496125
+  type: 'test'
+  ...
+# Subtest: accepts intentionally skipped full jobs for a bot-only pull request
+ok 2 - accepts intentionally skipped full jobs for a bot-only pull request
+  ---
+  duration_ms: 0.133333
+  type: 'test'
+  ...
+# Subtest: accepts an intentionally skipped replay on a human pull request
+ok 3 - accepts an intentionally skipped replay on a human pull request
+  ---
+  duration_ms: 0.620417
+  type: 'test'
+  ...
+# Subtest: rejects any failed full-CI job
+ok 4 - rejects any failed full-CI job
+  ---
+  duration_ms: 0.345917
+  type: 'test'
+  ...
+# Subtest: rejects a replay skip when replay is required
+ok 5 - rejects a replay skip when replay is required
+  ---
+  duration_ms: 0.111375
+  type: 'test'
+  ...
+# Subtest: rejects a failed scope classifier even when full CI is skipped
+ok 6 - rejects a failed scope classifier even when full CI is skipped
+  ---
+  duration_ms: 0.0865
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 50.001667
+node --test scripts/ci/build-container.test.mjs
+TAP version 13
+# Subtest: recognizes observed Maven request throttling and plugin-portal equivalent
+ok 1 - recognizes observed Maven request throttling and plugin-portal equivalent
+  ---
+  duration_ms: 0.662459
+  type: 'test'
+  ...
+# Subtest: successful first build runs once without waiting
+ok 2 - successful first build runs once without waiting
+  ---
+  duration_ms: 0.337333
+  type: 'test'
+  ...
+# Subtest: throttled builds retry with bounded backoff and require actual success
+ok 3 - throttled builds retry with bounded backoff and require actual success
+  ---
+  duration_ms: 0.821
+  type: 'test'
+  ...
+# Subtest: persistent throttling stays red after three attempts
+ok 4 - persistent throttling stays red after three attempts
+  ---
+  duration_ms: 0.118625
+  type: 'test'
+  ...
+# Subtest: compile errors, interrupted builds and spawn errors do not retry
+ok 5 - compile errors, interrupted builds and spawn errors do not retry
+  ---
+  duration_ms: 0.392292
+  type: 'test'
+  ...
+# build output
+# dependency error
+# Subtest: subprocess runner captures both streams and preserves exit code
+ok 6 - subprocess runner captures both streams and preserves exit code
+  ---
+  duration_ms: 39.505333
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 87.858125
+node --test scripts/dev/calcify-financial/record-attempt.test.mjs
+TAP version 13
+# Subtest: stdout and stderr retain split UTF-8 and invalid bytes exactly
+ok 1 - stdout and stderr retain split UTF-8 and invalid bytes exactly
+  ---
+  duration_ms: 1.656958
+  type: 'test'
+  ...
+# Subtest: recorder persists binary output, failures and separate spawn diagnostics
+ok 2 - recorder persists binary output, failures and separate spawn diagnostics
+  ---
+  duration_ms: 338.944917
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 394.272959
+node --test scripts/dev/calcify-financial/reservation-model.test.mjs scripts/dev/calcify-financial/gate-model.test.mjs scripts/dev/calcify-financial/rate-proof.test.mjs
+TAP version 13
+# Subtest: prefix: complete manifest, duplicate and out-of-order members close once
+ok 1 - prefix: complete manifest, duplicate and out-of-order members close once
+  ---
+  duration_ms: 1.846208
+  type: 'test'
+  ...
+# Subtest: prefix: unresolved prior fill prevents opening until dependency closure
+ok 2 - prefix: unresolved prior fill prevents opening until dependency closure
+  ---
+  duration_ms: 0.540041
+  type: 'test'
+  ...
+# Subtest: prefix: zero-trade amendment/cancel are explicit coverage members
+ok 3 - prefix: zero-trade amendment/cancel are explicit coverage members
+  ---
+  duration_ms: 0.285458
+  type: 'test'
+  ...
+# Subtest: prefix: high water leaves fetched suffix in separate bounded budget
+ok 4 - prefix: high water leaves fetched suffix in separate bounded budget
+  ---
+  duration_ms: 0.220292
+  type: 'test'
+  ...
+# Subtest: prefix: reassignment preserves grant membership; timeout never reclaims
+ok 5 - prefix: reassignment preserves grant membership; timeout never reclaims
+  ---
+  duration_ms: 1.219708
+  type: 'test'
+  ...
+# Subtest: prefix: closed tombstone rejects late old duplicate without extra capacity
+ok 6 - prefix: closed tombstone rejects late old duplicate without extra capacity
+  ---
+  duration_ms: 0.154667
+  type: 'test'
+  ...
+# Subtest: prefix: missing source fact remains waiting, not algorithmic deadlock
+ok 7 - prefix: missing source fact remains waiting, not algorithmic deadlock
+  ---
+  duration_ms: 0.162833
+  type: 'test'
+  ...
+# Subtest: credit: complete manifest, duplicate and out-of-order members close once
+ok 8 - credit: complete manifest, duplicate and out-of-order members close once
+  ---
+  duration_ms: 0.234875
+  type: 'test'
+  ...
+# Subtest: credit: unresolved prior fill prevents opening until dependency closure
+ok 9 - credit: unresolved prior fill prevents opening until dependency closure
+  ---
+  duration_ms: 0.381166
+  type: 'test'
+  ...
+# Subtest: credit: zero-trade amendment/cancel are explicit coverage members
+ok 10 - credit: zero-trade amendment/cancel are explicit coverage members
+  ---
+  duration_ms: 0.471083
+  type: 'test'
+  ...
+# Subtest: credit: high water leaves fetched suffix in separate bounded budget
+ok 11 - credit: high water leaves fetched suffix in separate bounded budget
+  ---
+  duration_ms: 0.2005
+  type: 'test'
+  ...
+# Subtest: credit: reassignment preserves grant membership; timeout never reclaims
+ok 12 - credit: reassignment preserves grant membership; timeout never reclaims
+  ---
+  duration_ms: 0.148834
+  type: 'test'
+  ...
+# Subtest: credit: closed tombstone rejects late old duplicate without extra capacity
+ok 13 - credit: closed tombstone rejects late old duplicate without extra capacity
+  ---
+  duration_ms: 0.077542
+  type: 'test'
+  ...
+# Subtest: credit: missing source fact remains waiting, not algorithmic deadlock
+ok 14 - credit: missing source fact remains waiting, not algorithmic deadlock
+  ---
+  duration_ms: 0.060833
+  type: 'test'
+  ...
+# Subtest: source-prefix refuses B grant while ungranted A occupies FIFO; credits need bounded bypass
+ok 15 - source-prefix refuses B grant while ungranted A occupies FIFO; credits need bounded bypass
+  ---
+  duration_ms: 0.4735
+  type: 'test'
+  ...
+# Subtest: seal behind future burst: prefix excludes ordering, credit reserved bypass reaches closure
+ok 16 - seal behind future burst: prefix excludes ordering, credit reserved bypass reaches closure
+  ---
+  duration_ms: 0.311875
+  type: 'test'
+  ...
+# Subtest: future burst beyond bypass envelope produces retained counterexample, no lost admitted membership
+ok 17 - future burst beyond bypass envelope produces retained counterexample, no lost admitted membership
+  ---
+  duration_ms: 0.093292
+  type: 'test'
+  ...
+# Subtest: declared fanout overflow rejected before opening; unknown membership faults without release
+ok 18 - declared fanout overflow rejected before opening; unknown membership faults without release
+  ---
+  duration_ms: 0.10575
+  type: 'test'
+  ...
+# Subtest: bounded exhaustive and seeded schedule families close all supplied facts within resources
+ok 19 - bounded exhaustive and seeded schedule families close all supplied facts within resources
+  ---
+  duration_ms: 102.266125
+  type: 'test'
+  ...
+# Subtest: healthy credit rejects unproved closure path before reserving capacity
+ok 20 - healthy credit rejects unproved closure path before reserving capacity
+  ---
+  duration_ms: 0.162833
+  type: 'test'
+  ...
+# Subtest: cyclic or forward prefix dependency manifests fail preflight instead of creating deadlock
+ok 21 - cyclic or forward prefix dependency manifests fail preflight instead of creating deadlock
+  ---
+  duration_ms: 0.189666
+  type: 'test'
+  ...
+# Subtest: prefix: checkpoint schema and required state reject truncated or mixed cuts
+ok 22 - prefix: checkpoint schema and required state reject truncated or mixed cuts
+  ---
+  duration_ms: 1.827208
+  type: 'test'
+  ...
+# Subtest: credit: checkpoint schema and required state reject truncated or mixed cuts
+ok 23 - credit: checkpoint schema and required state reject truncated or mixed cuts
+  ---
+  duration_ms: 1.486291
+  type: 'test'
+  ...
+# Subtest: capacity lock has fixed shared name in platform temporary directory
+ok 24 - capacity lock has fixed shared name in platform temporary directory
+  ---
+  duration_ms: 0.994042
+  type: 'test'
+  ...
+# Subtest: deadline CAPTURE decision may precede paired SETTLE durable admission
+ok 25 - deadline CAPTURE decision may precede paired SETTLE durable admission
+  ---
+  duration_ms: 1.153167
+  type: 'test'
+  ...
+# Subtest: stage counts reject decided beyond offered and settled beyond admission
+ok 26 - stage counts reject decided beyond offered and settled beyond admission
+  ---
+  duration_ms: 1.304708
+  type: 'test'
+  ...
+# Subtest: preparation stops until E3 correctness and real calibration plus indexed/bounded adapter exist
+ok 27 - preparation stops until E3 correctness and real calibration plus indexed/bounded adapter exist
+  ---
+  duration_ms: 0.1795
+  type: 'test'
+  ...
+# Subtest: source/fixture mismatches and fabricated zero-byte calibration cannot freeze runnable policy
+ok 28 - source/fixture mismatches and fabricated zero-byte calibration cannot freeze runnable policy
+  ---
+  duration_ms: 0.147334
+  type: 'test'
+  ...
+# Subtest: aged estimate retains proposed 1m identities; over-budget case explicitly shrinks diagnostic only
+ok 29 - aged estimate retains proposed 1m identities; over-budget case explicitly shrinks diagnostic only
+  ---
+  duration_ms: 0.073083
+  type: 'test'
+  ...
+# Subtest: disk space gate and exact prefunding bound all declared timed plus pending work
+ok 30 - disk space gate and exact prefunding bound all declared timed plus pending work
+  ---
+  duration_ms: 0.140292
+  type: 'test'
+  ...
+# Subtest: measurement separates stage rates; complete parity and all telemetry permit diagnostic pass
+ok 31 - measurement separates stage rates; complete parity and all telemetry permit diagnostic pass
+  ---
+  duration_ms: 0.172292
+  type: 'test'
+  ...
+# Subtest: producer duration miss fails even when output is exact after drain
+ok 32 - producer duration miss fails even when output is exact after drain
+  ---
+  duration_ms: 0.383667
+  type: 'test'
+  ...
+# Subtest: late drain cannot be counted as deadline output or settled financial throughput
+ok 33 - late drain cannot be counted as deadline output or settled financial throughput
+  ---
+  duration_ms: 0.681958
+  type: 'test'
+  ...
+# Subtest: cumulative offered cannot roll back between deadline and final cuts
+ok 34 - cumulative offered cannot roll back between deadline and final cuts
+  ---
+  duration_ms: 0.321083
+  type: 'test'
+  ...
+# Subtest: cumulative admitted cannot roll back between deadline and final cuts
+ok 35 - cumulative admitted cannot roll back between deadline and final cuts
+  ---
+  duration_ms: 0.152459
+  type: 'test'
+  ...
+# Subtest: cumulative decided cannot roll back between deadline and final cuts
+ok 36 - cumulative decided cannot roll back between deadline and final cuts
+  ---
+  duration_ms: 0.133208
+  type: 'test'
+  ...
+# Subtest: cumulative settled cannot roll back between deadline and final cuts
+ok 37 - cumulative settled cannot roll back between deadline and final cuts
+  ---
+  duration_ms: 0.166875
+  type: 'test'
+  ...
+# Subtest: deadline offers cannot exceed frozen expected workload even if final agrees
+ok 38 - deadline offers cannot exceed frozen expected workload even if final agrees
+  ---
+  duration_ms: 0.155209
+  type: 'test'
+  ...
+# Subtest: each cut rejects admission ordering and settlement accounting violations
+ok 39 - each cut rejects admission ordering and settlement accounting violations
+  ---
+  duration_ms: 0.841875
+  type: 'test'
+  ...
+# Subtest: pending may decrease during drain; only missed deadline settlement fails
+ok 40 - pending may decrease during drain; only missed deadline settlement fails
+  ---
+  duration_ms: 0.558417
+  type: 'test'
+  ...
+# Subtest: missing accounting or resource metrics are explicit limited attempt; count inconsistency fails
+ok 41 - missing accounting or resource metrics are explicit limited attempt; count inconsistency fails
+  ---
+  duration_ms: 0.444458
+  type: 'test'
+  ...
+# Subtest: lag growth, over-budget disk and unsupported latency clock cannot silently pass
+ok 42 - lag growth, over-budget disk and unsupported latency clock cannot silently pass
+  ---
+  duration_ms: 0.178375
+  type: 'test'
+  ...
+# Subtest: highest stable measured arm creates fresh/aged 300s pair with same business workload
+ok 43 - highest stable measured arm creates fresh/aged 300s pair with same business workload
+  ---
+  duration_ms: 0.120125
+  type: 'test'
+  ...
+# Subtest: missing restore cost, partial monitoring and observer slowdown remain limited preflight
+ok 44 - missing restore cost, partial monitoring and observer slowdown remain limited preflight
+  ---
+  duration_ms: 0.498416
+  type: 'test'
+  ...
+# Subtest: load and calibration entrypoints refuse before filesystem or adapter work without authorization
+ok 45 - load and calibration entrypoints refuse before filesystem or adapter work without authorization
+  ---
+  duration_ms: 0.386083
+  type: 'test'
+  ...
+# Subtest: calibration overrides cannot undercut measured physical byte budget or use invalid numbers
+ok 46 - calibration overrides cannot undercut measured physical byte budget or use invalid numbers
+  ---
+  duration_ms: 0.400583
+  type: 'test'
+  ...
+# Subtest: valid byte override preserves conservative floor and may increase budget only
+ok 47 - valid byte override preserves conservative floor and may increase budget only
+  ---
+  duration_ms: 0.107875
+  type: 'test'
+  ...
+# Subtest: derived per-trade budget must remain safe integer before policy freezes
+ok 48 - derived per-trade budget must remain safe integer before policy freezes
+  ---
+  duration_ms: 0.089208
+  type: 'test'
+  ...
+# Subtest: invalid telemetry produces null derived metrics instead of non-finite values
+ok 49 - invalid telemetry produces null derived metrics instead of non-finite values
+  ---
+  duration_ms: 0.6915
+  type: 'test'
+  ...
+# Subtest: invalid duration and zero trades cannot publish non-finite derived metrics
+ok 50 - invalid duration and zero trades cannot publish non-finite derived metrics
+  ---
+  duration_ms: 0.505292
+  type: 'test'
+  ...
+# Subtest: M3H missing conservative heap evidence blocks legacy real calibration
+ok 51 - M3H missing conservative heap evidence blocks legacy real calibration
+  ---
+  duration_ms: 0.058083
+  type: 'test'
+  ...
+# Subtest: M3H oversized retained heap cannot freeze despite fitting physical budget
+ok 52 - M3H oversized retained heap cannot freeze despite fitting physical budget
+  ---
+  duration_ms: 0.062666
+  type: 'test'
+  ...
+# Subtest: M3H finite checked formula includes timed+aged identities, pending and both reserves
+ok 53 - M3H finite checked formula includes timed+aged identities, pending and both reserves
+  ---
+  duration_ms: 0.181833
+  type: 'test'
+  ...
+# Subtest: M3H numeric controls reject missing, string, negative, NaN, infinity, unsafe and fractional values
+ok 54 - M3H numeric controls reject missing, string, negative, NaN, infinity, unsafe and fractional values
+  ---
+  duration_ms: 1.819
+  type: 'test'
+  ...
+# Subtest: M3H child lower max recomputes limit, higher unauthorized max cannot raise request cap
+ok 55 - M3H child lower max recomputes limit, higher unauthorized max cannot raise request cap
+  ---
+  duration_ms: 0.188375
+  type: 'test'
+  ...
+# Subtest: M3H equality, unsupported counts and multiplication/addition overflow refuse
+ok 56 - M3H equality, unsupported counts and multiplication/addition overflow refuse
+  ---
+  duration_ms: 0.211959
+  type: 'test'
+  ...
+# Subtest: M3H fresh and aged overrun block without silently shrinking original heap workload
+ok 57 - M3H fresh and aged overrun block without silently shrinking original heap workload
+  ---
+  duration_ms: 0.180083
+  type: 'test'
+  ...
+# Subtest: M3H candidate/config/fixture/build/VM/review mismatch or legacy averages refuse
+ok 58 - M3H candidate/config/fixture/build/VM/review mismatch or legacy averages refuse
+  ---
+  duration_ms: 0.519291
+  type: 'test'
+  ...
+# Subtest: M3H executable raw bound/capability/review/fixture bytes hash and exact scope verified before adapter read
+ok 59 - M3H executable raw bound/capability/review/fixture bytes hash and exact scope verified before adapter read
+  ---
+  duration_ms: 20.204958
+  type: 'test'
+  ...
+# Subtest: M3H synthetic evidence and unpinned launcher cannot authorize executable load
+ok 60 - M3H synthetic evidence and unpinned launcher cannot authorize executable load
+  ---
+  duration_ms: 14.671625
+  type: 'test'
+  ...
+# Subtest: M3H runtime guard failure or missing lifecycle observation cannot publish diagnostic success
+ok 61 - M3H runtime guard failure or missing lifecycle observation cannot publish diagnostic success
+  ---
+  duration_ms: 0.88075
+  type: 'test'
+  ...
+# Subtest: M3H capability timeout escalates TERM to KILL with bounded output and retained process error
+ok 62 - M3H capability timeout escalates TERM to KILL with bounded output and retained process error
+  ---
+  duration_ms: 18.694875
+  type: 'test'
+  ...
+# Subtest: M3H symlink outside policy ownership and valid hash with changed raw identity refuse
+ok 63 - M3H symlink outside policy ownership and valid hash with changed raw identity refuse
+  ---
+  duration_ms: 3.770208
+  type: 'test'
+  ...
+# Subtest: empirical timed profile cannot enter conservative or bootstrap admission
+ok 64 - empirical timed profile cannot enter conservative or bootstrap admission
+  ---
+  duration_ms: 0.697375
+  type: 'test'
+  ...
+# Subtest: empirical assessment keeps actual deadline rates and never grants capacity
+ok 65 - empirical assessment keeps actual deadline rates and never grants capacity
+  ---
+  duration_ms: 2.161833
+  type: 'test'
+  ...
+# Subtest: empirical executable boundary verifies owned raw evidence, config and unchanged proof sources
+ok 66 - empirical executable boundary verifies owned raw evidence, config and unchanged proof sources
+  ---
+  duration_ms: 8.107209
+  type: 'test'
+  ...
+# Subtest: USD_NANO: own hold consumption and competing withdrawal stay bounded
+ok 67 - USD_NANO: own hold consumption and competing withdrawal stay bounded
+  ---
+  duration_ms: 2.066417
+  type: 'test'
+  ...
+# Subtest: ACME_SHARE: own hold consumption and competing withdrawal stay bounded
+ok 68 - ACME_SHARE: own hold consumption and competing withdrawal stay bounded
+  ---
+  duration_ms: 0.266166
+  type: 'test'
+  ...
+# Subtest: cancel releases unmatched order only; captured obligation stays owned
+ok 69 - cancel releases unmatched order only; captured obligation stays owned
+  ---
+  duration_ms: 0.085917
+  type: 'test'
+  ...
+# Subtest: creation priority uses acceptance then stable owner ID; competing owner cannot spend hold
+ok 70 - creation priority uses acceptance then stable owner ID; competing owner cannot spend hold
+  ---
+  duration_ms: 0.655625
+  type: 'test'
+  ...
+# Subtest: exact-unit/range errors and conflicting transfers make no changes
+ok 71 - exact-unit/range errors and conflicting transfers make no changes
+  ---
+  duration_ms: 0.29525
+  type: 'test'
+  ...
+1..71
+# tests 71
+# suites 0
+# pass 71
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 179.372791

@@ -1,0 +1,7 @@
+Independent review instance 1/3, fresh context; scope 82563874c..447e5ea1e (production diff only).
+Verdict: Ready with non-blocking follow-ups. No actionable correctness findings.
+Chunk addressing consistently derives from CHUNK_BITS. Shared SETTLED is immutable; both settlement paths preserve bytes.
+Restore checks complete parsed values before equality-based interning; malformed residuals are not normalized.
+Read-only source/test review and git diff --check passed. Supplied finance test logs inspected; tests not independently rerun by reviewer.
+Not reviewed: uncommitted research harnesses/docs, unfinished measurements, delivery/retention gates.
+Follow-ups: exact base/head persisted-byte probe; mutations for old chunk shift, settled nonzero residual, status-only normalization, removed trailing-byte validation; clean-checkout CI.

@@ -1,0 +1,98 @@
+[
+  {
+    "run": "heap-G1-two-step",
+    "trades": 250000,
+    "bytes_per_trade": 1861.8,
+    "cpu_us_per_trade": 34.3
+  },
+  {
+    "run": "heap-G1-two-step",
+    "trades": 500000,
+    "bytes_per_trade": 1893.8,
+    "cpu_us_per_trade": 39.8
+  },
+  {
+    "run": "heap-G1-two-step",
+    "trades": 1000000,
+    "bytes_per_trade": 1879.7,
+    "cpu_us_per_trade": 43.63
+  },
+  {
+    "run": "heap-G1-two-step",
+    "trades": 2000000,
+    "bytes_per_trade": 1859.6,
+    "cpu_us_per_trade": 45.14
+  },
+  {
+    "run": "heap-Parallel-two-step",
+    "trades": 250000,
+    "bytes_per_trade": 1519.7,
+    "cpu_us_per_trade": 34.65
+  },
+  {
+    "run": "heap-Parallel-two-step",
+    "trades": 500000,
+    "bytes_per_trade": 1527.5,
+    "cpu_us_per_trade": 40.39
+  },
+  {
+    "run": "heap-Parallel-two-step",
+    "trades": 1000000,
+    "bytes_per_trade": 1523.7,
+    "cpu_us_per_trade": 43.45
+  },
+  {
+    "run": "heap-Parallel-two-step",
+    "trades": 2000000,
+    "bytes_per_trade": 1521.7,
+    "cpu_us_per_trade": 43.6
+  },
+  {
+    "run": "heap-G1-capture-settle-v1",
+    "trades": 250000,
+    "bytes_per_trade": 1162.1,
+    "cpu_us_per_trade": 23.44
+  },
+  {
+    "run": "heap-G1-capture-settle-v1",
+    "trades": 500000,
+    "bytes_per_trade": 1217.3,
+    "cpu_us_per_trade": 25.82
+  },
+  {
+    "run": "heap-G1-capture-settle-v1",
+    "trades": 1000000,
+    "bytes_per_trade": 1212.6,
+    "cpu_us_per_trade": 28.5
+  },
+  {
+    "run": "heap-G1-capture-settle-v1",
+    "trades": 2000000,
+    "bytes_per_trade": 1191.6,
+    "cpu_us_per_trade": 31.11
+  },
+  {
+    "run": "heap-Parallel-capture-settle-v1",
+    "trades": 250000,
+    "bytes_per_trade": 972.0,
+    "cpu_us_per_trade": 20.94
+  },
+  {
+    "run": "heap-Parallel-capture-settle-v1",
+    "trades": 500000,
+    "bytes_per_trade": 994.5,
+    "cpu_us_per_trade": 23.62
+  },
+  {
+    "run": "heap-Parallel-capture-settle-v1",
+    "trades": 1000000,
+    "bytes_per_trade": 990.7,
+    "cpu_us_per_trade": 26.23
+  },
+  {
+    "run": "heap-Parallel-capture-settle-v1",
+    "trades": 2000000,
+    "bytes_per_trade": 985.1,
+    "cpu_us_per_trade": 33.72
+  }
+]

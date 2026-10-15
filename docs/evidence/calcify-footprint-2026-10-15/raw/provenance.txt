@@ -1,0 +1,17 @@
+Footprint campaign provenance,2026-10-15
+Repository https://github.com/dills122/reef
+Branch codex/footprint-investigations
+Baseline product f09f20c7e9699dcb4156fe67eaeaa19b009452ae (handoff; no later lz4 default).
+Production prototype447e5ea1e: FlatStateTrie4096-node chunks; shared exact settled obligation.
+Executable probes359fdf0ea; published-input byte differential strengthened atcb85ca581.
+A/B swaps frozen baseline Kotlin main class directory and candidate main classes with same test/dependency classpath. javap confirms baseline CHUNK_BITS16. Standard smaller-scale probe lacks later HEAP-TRIE reflection line; object-retention logic and checkpoints unchanged. Draft Kotlin snapshots retained as provenance, not supported production files.
+Heap series: both modes, G1/Parallel, -Xmx12g, checkpoints250k/500k/1M/2M; HF_TOP30, accounts200,instruments64. Candidate/base3interleaved pairs at250k/500k, HF_TOP0; second interval compared. Scale candidate both collectors plus matched G1 baseline, combined only -Xmx28g, checkpoints9M/18M, HF_TOP20. JDK21, compressedOops true, fresh decoded-like strings, funded baseline subtracted; class histograms whole JVM.
+Byte inventories: one lane,300k trades,200accounts,64instruments,CAP_SOURCE=resolved. Six mode/codec cells none/lz4/zstd; explicit client+capture compression. Uncompacted scan uses24h lag. Initial bytes-two-step-none pilot default compaction undercounts emitted historical puts; preserved as retained/default-compaction observation. No throughput/hardware-capacity claim from shared-machine runs.
+Neutral matrix combined/zstd/WALlz4: delayed compaction; default lag; defaultlag+positionfillfactor90; defaultlag+allprojectiontablesUNLOGGED. Last variant changes crash semantics,soak-only. Asserted both-mode reruns include expected count checks and field/key logical savings. Final segment variant combined/zstd/WALlz4,lag0,16MiB segments,10s segment age.
+WAL LSNdelta generated traffic differs from retained pg_wal allocated bytes. Early du command passed parent+child together and child suppressed; corrected neutral/asserted runs query separately. Codec captures can fit baseline32MiB allocation; zero growth is not zero cost.
+Validation originals include command-placement failure, draft compiler failure, clean compiler OOM+successful3g retry, mutants/nontermination note, restored passes, broker restart/projector parity, independent Python encoders, dev doctor/tooling and review receipts. No failures silently rewritten.
+Raw import excludes compiled base-main classes, build caches, dependencies, secrets, databases, container volumes and executable credentials. Source and final notes remain in Reef; raw records preserve source commit/hash under archive manifest.
+
+Budget correction: net disk growth alone undercounts records filling preallocated segments. Notes retain growth slopes but planning now uses full three-topic allocation/N plus PG net growth and fixed broker metadata once. No conservative allowance presented as actual large-run disk measurement.
+
+Completion extension: two-step actual 9M/18M G1 and Parallel probes use -Xmx31g to retain compressed oops with more space than combined 28g runs. Collectors sequential; G1 starts while final combined baseline interval finishes (shared CPU contention, no isolated rate claim). Different heap size forbids direct collector/mode throughput claims. Any OOM is retained evidence, not erased.

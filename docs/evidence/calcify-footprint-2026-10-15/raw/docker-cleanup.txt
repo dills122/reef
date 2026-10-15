@@ -1,0 +1,4 @@
+Final broker/segment tests completed2026-10-15. docker ps -a --format names/status returned no containers. docker volume ls returned only initial pre-existing volumes:
+0d0021ea6f642845621ded1519a8e722135b0ab4ad6b3c3adad80202b7cb2faa
+9ac78062bae237e2735224d3258d97ffc60fbafde40965dbe8231f4a37793b0b
+No volumes removed outside owned test cleanup.

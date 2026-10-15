@@ -1,0 +1,104 @@
+[0.004s][info][gc] Using G1
+[0.287s][info][gc] GC(0) Pause Full (System.gc()) 56M->17M(216M) 7.665ms
+[0.452s][info][gc] GC(1) Pause Full (System.gc()) 19M->17M(80M) 11.839ms
+[0.636s][info][gc] GC(2) Pause Full (System.gc()) 18M->17M(80M) 28.532ms
+[0.801s][info][gc] GC(3) Pause Full (System.gc()) 18M->17M(80M) 14.721ms
+[1.076s][info][gc] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 33M->20M(80M) 2.717ms
+[1.154s][info][gc] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 36M->23M(80M) 4.441ms
+[1.257s][info][gc] GC(6) Pause Young (Normal) (G1 Evacuation Pause) 55M->37M(80M) 7.190ms
+[1.299s][info][gc] GC(7) Pause Young (Concurrent Start) (G1 Evacuation Pause) 45M->39M(80M) 4.949ms
+[1.299s][info][gc] GC(8) Concurrent Mark Cycle
+[1.306s][info][gc] GC(8) Pause Remark 40M->40M(112M) 0.667ms
+[1.310s][info][gc] GC(8) Pause Cleanup 41M->41M(112M) 0.036ms
+[1.310s][info][gc] GC(8) Concurrent Mark Cycle 10.391ms
+[1.340s][info][gc] GC(9) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 47M->40M(112M) 2.891ms
+[1.491s][info][gc] GC(10) Pause Young (Mixed) (G1 Evacuation Pause) 72M->45M(568M) 8.794ms
+[2.080s][info][gc] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 189M->87M(568M) 7.005ms
+[2.692s][info][gc] GC(12) Pause Young (Normal) (G1 Evacuation Pause) 215M->118M(568M) 8.655ms
+[3.392s][info][gc] GC(13) Pause Young (Normal) (G1 Evacuation Pause) 270M->160M(568M) 10.182ms
+[4.194s][info][gc] GC(14) Pause Young (Normal) (G1 Evacuation Pause) 328M->211M(688M) 12.035ms
+[5.630s][info][gc] GC(15) Pause Young (Normal) (G1 Evacuation Pause) 491M->284M(688M) 15.406ms
+[7.063s][info][gc] GC(16) Pause Young (Normal) (G1 Evacuation Pause) 548M->358M(688M) 17.743ms
+[7.457s][info][gc] GC(17) Pause Young (Concurrent Start) (G1 Humongous Allocation) 422M->371M(688M) 10.673ms
+[7.457s][info][gc] GC(18) Concurrent Mark Cycle
+[7.529s][info][gc] GC(18) Pause Remark 402M->402M(688M) 0.632ms
+[7.569s][info][gc] GC(18) Pause Cleanup 407M->407M(688M) 0.122ms
+[7.570s][info][gc] GC(18) Concurrent Mark Cycle 112.847ms
+[8.680s][info][gc] GC(19) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 611M->447M(688M) 14.632ms
+[9.640s][info][gc] GC(20) Pause Young (Mixed) (G1 Evacuation Pause) 623M->493M(840M) 13.952ms
+[9.783s][info][gc] GC(21) Pause Full (System.gc()) 508M->461M(840M) 61.781ms
+[9.995s][info][gc] GC(22) Pause Full (System.gc()) 465M->461M(840M) 59.106ms
+[10.209s][info][gc] GC(23) Pause Full (System.gc()) 465M->461M(840M) 61.685ms
+[10.515s][info][gc] GC(24) Pause Full (Heap Inspection Initiated GC) 473M->465M(840M) 52.164ms
+[10.830s][info][gc] GC(25) Pause Young (Concurrent Start) (G1 Humongous Allocation) 517M->478M(840M) 3.514ms
+[10.830s][info][gc] GC(26) Concurrent Mark Cycle
+[10.948s][info][gc] GC(26) Pause Remark 506M->506M(880M) 0.671ms
+[10.993s][info][gc] GC(26) Pause Cleanup 514M->514M(880M) 0.072ms
+[10.993s][info][gc] GC(26) Concurrent Mark Cycle 163.075ms
+[12.332s][info][gc] GC(27) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 742M->541M(880M) 14.502ms
+[13.639s][info][gc] GC(28) Pause Young (Mixed) (G1 Evacuation Pause) 781M->606M(880M) 16.767ms
+[13.886s][info][gc] GC(29) Pause Young (Concurrent Start) (G1 Humongous Allocation) 647M->620M(880M) 8.509ms
+[13.886s][info][gc] GC(30) Concurrent Mark Cycle
+[14.030s][info][gc] GC(30) Pause Remark 652M->652M(1120M) 0.611ms
+[14.087s][info][gc] GC(30) Pause Cleanup 660M->660M(1120M) 0.091ms
+[14.088s][info][gc] GC(30) Concurrent Mark Cycle 201.773ms
+[14.968s][info][gc] GC(31) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 796M->662M(1120M) 11.105ms
+[17.058s][info][gc] GC(32) Pause Young (Mixed) (G1 Evacuation Pause) 1054M->796M(1160M) 25.193ms
+[17.120s][info][gc] GC(33) Pause Young (Concurrent Start) (G1 Humongous Allocation) 810M->808M(1160M) 9.203ms
+[17.120s][info][gc] GC(34) Concurrent Mark Cycle
+[17.298s][info][gc] GC(34) Pause Remark 844M->836M(1416M) 1.066ms
+[17.371s][info][gc] GC(34) Pause Cleanup 848M->848M(1416M) 0.080ms
+[17.371s][info][gc] GC(34) Concurrent Mark Cycle 250.839ms
+[18.732s][info][gc] GC(35) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 1064M->865M(1416M) 15.182ms
+[20.768s][info][gc] GC(36) Pause Full (System.gc()) 1193M->921M(1600M) 140.035ms
+[21.044s][info][gc] GC(37) Pause Full (System.gc()) 925M->921M(1600M) 125.702ms
+[21.310s][info][gc] GC(38) Pause Full (System.gc()) 925M->921M(1600M) 110.622ms
+[21.575s][info][gc] GC(39) Pause Full (Heap Inspection Initiated GC) 925M->921M(1600M) 112.605ms
+[24.323s][info][gc] GC(40) Pause Young (Normal) (G1 Evacuation Pause) 1361M->1036M(1600M) 20.738ms
+[24.656s][info][gc] GC(41) Pause Young (Concurrent Start) (G1 Humongous Allocation) 1086M->1054M(1600M) 12.855ms
+[24.656s][info][gc] GC(42) Concurrent Mark Cycle
+[24.908s][info][gc] GC(42) Pause Remark 1098M->1098M(1912M) 0.672ms
+[24.999s][info][gc] GC(42) Pause Cleanup 1110M->1110M(1912M) 0.091ms
+[25.000s][info][gc] GC(42) Concurrent Mark Cycle 344.253ms
+[27.049s][info][gc] GC(43) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 1438M->1156M(3056M) 20.780ms
+[36.187s][info][gc] GC(44) Pause Young (Mixed) (G1 Evacuation Pause) 2628M->1590M(3056M) 70.986ms
+[36.277s][info][gc] GC(45) Pause Young (Concurrent Start) (G1 Humongous Allocation) 1603M->1622M(3056M) 24.494ms
+[36.277s][info][gc] GC(46) Concurrent Mark Cycle
+[36.629s][info][gc] GC(46) Pause Remark 1682M->1642M(3056M) 0.578ms
+[36.766s][info][gc] GC(46) Pause Cleanup 1658M->1658M(3056M) 0.129ms
+[36.768s][info][gc] GC(46) Concurrent Mark Cycle 490.568ms
+[42.657s][info][gc] GC(47) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 2566M->1826M(3056M) 47.403ms
+[43.972s][info][gc] GC(48) Pause Full (System.gc()) 1986M->1810M(3096M) 290.526ms
+[44.476s][info][gc] GC(49) Pause Full (System.gc()) 1814M->1810M(3096M) 352.723ms
+[44.863s][info][gc] GC(50) Pause Full (System.gc()) 1814M->1810M(3096M) 232.349ms
+[45.301s][info][gc] GC(51) Pause Full (Heap Inspection Initiated GC) 1814M->1810M(3096M) 285.428ms
+[45.579s][info][gc] GC(52) Pause Young (Concurrent Start) (G1 Humongous Allocation) 1839M->1824M(3096M) 2.404ms
+[45.579s][info][gc] GC(53) Concurrent Mark Cycle
+[46.068s][info][gc] GC(53) Pause Remark 1900M->1900M(3232M) 0.701ms
+[46.213s][info][gc] GC(53) Pause Cleanup 1928M->1928M(3232M) 0.128ms
+[46.215s][info][gc] GC(53) Concurrent Mark Cycle 635.420ms
+[51.918s][info][gc] GC(54) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 2784M->2065M(3232M) 46.264ms
+[57.939s][info][gc] GC(55) Pause Young (Mixed) (G1 Evacuation Pause) 2945M->2306M(3256M) 75.060ms
+[58.316s][info][gc] GC(56) Pause Young (Concurrent Start) (G1 Humongous Allocation) 2353M->2331M(3256M) 31.285ms
+[58.316s][info][gc] GC(57) Concurrent Mark Cycle
+[58.902s][info][gc] GC(57) Pause Remark 2415M->2415M(4080M) 0.827ms
+[59.089s][info][gc] GC(57) Pause Cleanup 2451M->2451M(4080M) 0.120ms
+[59.091s][info][gc] GC(57) Concurrent Mark Cycle 775.704ms
+[62.644s][info][gc] GC(58) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 3027M->2508M(4080M) 40.870ms
+[70.248s][info][gc] GC(59) Pause Young (Mixed) (G1 Evacuation Pause) 3716M->2828M(4080M) 78.140ms
+[70.766s][info][gc] GC(60) Pause Young (Concurrent Start) (G1 Humongous Allocation) 2892M->2865M(4080M) 34.524ms
+[70.766s][info][gc] GC(61) Concurrent Mark Cycle
+[71.516s][info][gc] GC(61) Pause Remark 3049M->3049M(5120M) 0.933ms
+[71.761s][info][gc] GC(61) Pause Cleanup 3081M->3081M(5120M) 0.155ms
+[71.764s][info][gc] GC(61) Concurrent Mark Cycle 997.187ms
+[77.252s][info][gc] GC(62) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 3905M->3217M(5120M) 62.689ms
+[87.231s][info][gc] GC(63) Pause Young (Mixed) (G1 Evacuation Pause) 4697M->3599M(5120M) 94.430ms
+[87.490s][info][gc] GC(64) Pause Young (Concurrent Start) (G1 Humongous Allocation) 3631M->3630M(5120M) 35.235ms
+[87.490s][info][gc] GC(65) Concurrent Mark Cycle
+[88.379s][info][gc] GC(65) Pause Remark 3762M->3690M(6192M) 0.922ms
+[88.677s][info][gc] GC(65) Pause Cleanup 3726M->3726M(6192M) 0.121ms
+[88.680s][info][gc] GC(65) Concurrent Mark Cycle 1189.864ms
+[91.629s][info][gc] GC(66) Pause Full (System.gc()) 4094M->3564M(6192M) 455.684ms
+[92.272s][info][gc] GC(67) Pause Full (System.gc()) 3568M->3564M(6192M) 487.566ms
+[92.822s][info][gc] GC(68) Pause Full (System.gc()) 3568M->3564M(6192M) 397.538ms
+[93.641s][info][gc] GC(69) Pause Full (Heap Inspection Initiated GC) 3568M->3564M(6192M) 667.632ms

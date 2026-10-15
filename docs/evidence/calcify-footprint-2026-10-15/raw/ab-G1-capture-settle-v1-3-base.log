@@ -1,0 +1,4 @@
+HEAP-CONFIG impl=current mode=capture-settle-v1 accounts=200 instruments=64 maxHeap=12288 MiB gc=G1 Young Generation+G1 Concurrent GC+G1 Old Generation jvm=21+35-LTS-2513 compressedOops=true
+HEAP-BASELINE after funding: used=18383 KiB entities=26065
+HEAP-POINT impl=current mode=capture-settle-v1 trades=250000 entities=776065 live=276 MiB perTrade=1159.0 B | interval thread CPU 23.99 us/trade (decide + input construction), wall 6.1 s
+HEAP-POINT impl=current mode=capture-settle-v1 trades=500000 entities=1526065 live=576 MiB perTrade=1209.4 B | interval thread CPU 27.97 us/trade (decide + input construction), wall 7.1 s

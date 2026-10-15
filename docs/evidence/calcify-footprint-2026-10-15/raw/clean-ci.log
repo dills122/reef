@@ -1,0 +1,117 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :verifyRuntimeOrderIdentityMigration
+> Task :processResources
+> Task :processTestResources
+> Task :verifyNoTestSourceExclusions
+
+> Task :compileKotlin
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/JsonCodec.kt:232:18 'fun fields(): (Mutable)Iterator<(Mutable)Map.(Mutable)Entry<String!, JsonNode!>!>!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:50:25 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:51:50 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:51:88 'constructor(): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformNettyHotPathServer.kt:70:30 'fun addLast(p0: EventExecutorGroup!, vararg p1: ChannelHandler!): ChannelPipeline!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:32:25 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:33:50 'constructor(p0: Int): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformStreamIngressServer.kt:33:88 'constructor(): NioEventLoopGroup' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandPublishing.kt:172:37 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/api/StreamCommandPublishing.kt:198:69 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/BrokerVenueSourceReader.kt:63:23 'fun close(p0: Duration!): Unit' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/finance/FinanceProcessor.kt:176:17 'fun close(p0: KafkaStreams.CloseOptions!): Boolean' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/finance/FinanceProcessor.kt:176:36 'constructor(): KafkaStreams.CloseOptions' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/finance/FinanceProcessor.kt:176:51 'fun timeout(p0: Duration!): KafkaStreams.CloseOptions!' is deprecated. Deprecated in Java.
+w: file:///private/tmp/reef-footprint-ci/services/platform-runtime/src/main/kotlin/com/reef/platform/calcify/finance/FinanceProcessor.kt:176:68 'fun leaveGroup(p0: Boolean): KafkaStreams.CloseOptions!' is deprecated. Deprecated in Java.
+
+> Task :compileJava
+> Task :classes
+> Task :jar
+> Task :compileTestKotlin
+e: java.lang.OutOfMemoryError: Java heap space
+	at java.base/java.util.Arrays.copyOf(Arrays.java:3537)
+	at java.base/jdk.internal.loader.Resource.getBytes(Resource.java:102)
+	at java.base/jdk.internal.loader.URLClassPath$JarLoader$1.getBytes(URLClassPath.java:730)
+	at java.base/jdk.internal.loader.BuiltinClassLoader.defineClass(BuiltinClassLoader.java:773)
+	at java.base/jdk.internal.loader.BuiltinClassLoader.findClassOnClassPathOrNull(BuiltinClassLoader.java:691)
+	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClassOrNull(BuiltinClassLoader.java:620)
+	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:578)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:490)
+	at org.jetbrains.kotlin.ir.util.RenderIrElementVisitor.renderReference$renderReferenceInClassicWay(RenderIrElement.kt:81)
+	at org.jetbrains.kotlin.ir.util.RenderIrElementVisitor.renderReference(RenderIrElement.kt:86)
+	at org.jetbrains.kotlin.ir.util.RenderIrElementVisitor.renderSymbolReference(RenderIrElement.kt:71)
+	at org.jetbrains.kotlin.backend.jvm.codegen.FunctionCodegen.generate(FunctionCodegen.kt:59)
+	at org.jetbrains.kotlin.backend.jvm.codegen.FunctionCodegen.generate$default(FunctionCodegen.kt:51)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generateMethodNode(ClassCodegen.kt:441)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generateMethod(ClassCodegen.kt:458)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generate(ClassCodegen.kt:168)
+	at org.jetbrains.kotlin.backend.jvm.JvmIrCodegenFactory.generateFile(JvmIrCodegenFactory.kt:220)
+	at org.jetbrains.kotlin.backend.jvm.JvmIrCodegenFactory.invokeCodegen(JvmIrCodegenFactory.kt:186)
+	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.runCodegen(JvmBackendPipelinePhase.kt:161)
+	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.executePhase(JvmBackendPipelinePhase.kt:108)
+	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.executePhase(JvmBackendPipelinePhase.kt:39)
+	at org.jetbrains.kotlin.cli.pipeline.PipelinePhase.phaseBody(PipelinePhase.kt:60)
+	at org.jetbrains.kotlin.cli.pipeline.PipelinePhase.phaseBody(PipelinePhase.kt:50)
+	at org.jetbrains.kotlin.config.phaser.NamedCompilerPhase.invoke(CompilerPhase.kt:102)
+	at org.jetbrains.kotlin.backend.common.phaser.CompositePhase.invoke(PhaseBuilders.kt:22)
+	at org.jetbrains.kotlin.config.phaser.CompilerPhaseKt.invokeToplevel(CompilerPhase.kt:53)
+	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.runPhasedPipeline(AbstractCliPipeline.kt:134)
+	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.executeAndReturnPipeLineArtifact(AbstractCliPipeline.kt:88)
+	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.executeAndReturnPipeLineArtifact$default(AbstractCliPipeline.kt:48)
+	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.execute(AbstractCliPipeline.kt:39)
+	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecutePhased(K2JVMCompiler.kt:30)
+	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecutePhased(K2JVMCompiler.kt:21)
+
+
+> Task :compileTestKotlin FAILED
+
+[Incubating] Problems report is available at: file:///private/tmp/reef-footprint-ci/services/platform-runtime/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileTestKotlin' (registered by plugin 'org.jetbrains.kotlin.jvm').
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+   > Kotlin compiler error
+       Kotlin compiler error
+         java.lang.OutOfMemoryError: Java heap space
+         	at java.base/java.util.Arrays.copyOf(Arrays.java:3537)
+         	at java.base/jdk.internal.loader.Resource.getBytes(Resource.java:102)
+         	at java.base/jdk.internal.loader.URLClassPath$JarLoader$1.getBytes(URLClassPath.java:730)
+         	at java.base/jdk.internal.loader.BuiltinClassLoader.defineClass(BuiltinClassLoader.java:773)
+         	at java.base/jdk.internal.loader.BuiltinClassLoader.findClassOnClassPathOrNull(BuiltinClassLoader.java:691)
+         	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClassOrNull(BuiltinClassLoader.java:620)
+         	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:578)
+         	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:490)
+         	at org.jetbrains.kotlin.ir.util.RenderIrElementVisitor.renderReference$renderReferenceInClassicWay(RenderIrElement.kt:81)
+         	at org.jetbrains.kotlin.ir.util.RenderIrElementVisitor.renderReference(RenderIrElement.kt:86)
+         	at org.jetbrains.kotlin.ir.util.RenderIrElementVisitor.renderSymbolReference(RenderIrElement.kt:71)
+         	at org.jetbrains.kotlin.backend.jvm.codegen.FunctionCodegen.generate(FunctionCodegen.kt:59)
+         	at org.jetbrains.kotlin.backend.jvm.codegen.FunctionCodegen.generate$default(FunctionCodegen.kt:51)
+         	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generateMethodNode(ClassCodegen.kt:441)
+         	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generateMethod(ClassCodegen.kt:458)
+         	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generate(ClassCodegen.kt:168)
+         	at org.jetbrains.kotlin.backend.jvm.JvmIrCodegenFactory.generateFile(JvmIrCodegenFactory.kt:220)
+         	at org.jetbrains.kotlin.backend.jvm.JvmIrCodegenFactory.invokeCodegen(JvmIrCodegenFactory.kt:186)
+         	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.runCodegen(JvmBackendPipelinePhase.kt:161)
+         	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.executePhase(JvmBackendPipelinePhase.kt:108)
+         	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.executePhase(JvmBackendPipelinePhase.kt:39)
+         	at org.jetbrains.kotlin.cli.pipeline.PipelinePhase.phaseBody(PipelinePhase.kt:60)
+         	at org.jetbrains.kotlin.cli.pipeline.PipelinePhase.phaseBody(PipelinePhase.kt:50)
+         	at org.jetbrains.kotlin.config.phaser.NamedCompilerPhase.invoke(CompilerPhase.kt:102)
+         	at org.jetbrains.kotlin.backend.common.phaser.CompositePhase.invoke(PhaseBuilders.kt:22)
+         	at org.jetbrains.kotlin.config.phaser.CompilerPhaseKt.invokeToplevel(CompilerPhase.kt:53)
+         	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.runPhasedPipeline(AbstractCliPipeline.kt:134)
+         	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.executeAndReturnPipeLineArtifact(AbstractCliPipeline.kt:88)
+         	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.executeAndReturnPipeLineArtifact$default(AbstractCliPipeline.kt:48)
+         	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.execute(AbstractCliPipeline.kt:39)
+         	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecutePhased(K2JVMCompiler.kt:30)
+         	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecutePhased(K2JVMCompiler.kt:21)
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3m 22s
+8 actionable tasks: 8 executed

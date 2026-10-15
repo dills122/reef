@@ -1,0 +1,5 @@
+Independent delivery review, instance3of3, preliminary
+Production/probe scope f09f20c7..cb85ca581 plus working owner notes.
+Findings: none actionable. Production change preserves canonical bytes and restore validation. Frozen baseline/candidate hashes match both modes; targeted mutations fail. Raw inventory parsing confirms storage budgets and GC figures.
+Coverage then: combined actual9M/18M; two-step extrapolated. Subsequent two-step runs in progress.
+Final technical review pending completed scale evidence and docs reconciliation. Archive publication/verification remains delivery gate; same-instance reconciliation required.

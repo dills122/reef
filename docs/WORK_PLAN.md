@@ -36,6 +36,14 @@ in `docs/evidence/` and analysis in the plan.
 Authority: relational financial authority (D009) stays accepted; no Calcify financial authority, credit or capacity claim
 exists. Hosted CI is Linux/Node 22/Bun 1.3.14; the finite O2 harness is macOS-local (`make test-finite-o2-harness`).
 
+## Capacity footprint pickup — October 15, 2026
+
+Owner authorized takeover of both spike branches. [Heap investigation](work/CALCIFY_HEAP_FOOTPRINT_SPIKE.md)
+and [byte inventory](work/CALCIFY_BYTES_FOOTPRINT_SPIKE.md) own measurements, budgets and
+contract-change proposals. Smaller trie chunks/shared settled values preserve existing
+bytes; rollout waits on prerequisite PR573 and normal review/CI. Combined decision
+remains opt-in. No cloud run, financial-authority or integrated capacity claim.
+
 ## Calcify single-server pressure test — October 11, 2026
 
 Research baseline `b9a8756e8d0efc5e8b665a5c62da1ab064d01539` includes merged
