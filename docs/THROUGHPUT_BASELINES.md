@@ -1891,3 +1891,147 @@ Against CAL-FIN-P10 (same server, root disk, 10 ms synchronous writes): **+53 to
 It does not establish that a durable disk delivers this: tmpfs has no write cost at all. What is needed is a durable volume with synchronous writes in the low milliseconds or below (the c-16's root disk measured 1.5 ms; the c-32's 10 ms; the g5 line's 43 to 57 ms; local NVMe and block-storage volumes are untested) and a capacity of about 380 GB for a 60-minute session (CAL-FIN-P10).
 
 Interpretation limits: see CAL-FIN-P10 and earlier. One droplet, single runs except one repeat (six lanes within 1.4 percent); runs of 36 to 101 s; tmpfs is not a deployment. No capacity claim.
+
+## Calcify arena baseline D: the "2x SSD" 32 vCPU size, CAL-FIN-P12 (October 14, 2026)
+
+Third storage point for CAL-FIN-P10 and P11: same test, settings and matrix (`droplet-chain-run.sh baseline`, root-disk stores, full retention) on one DigitalOcean `c2-32vcpu-64gb` droplet (`sfo2`, $1.12/h, "CPU-Optimized 2x SSD", 774 GB root disk, Intel Xeon Platinum 8168, 32 vCPU, 64 GB), tried because the larger local disk was expected to write faster. 18 minutes (about $0.34), destroyed, API check clean.
+**Synchronous 4 KiB writes on the root disk: about 7 ms each** (200 writes in 1.41 to 1.54 s), against 10 ms on the `c-32` (P10), 1.5 ms on the `c-16` (P7) and 43 to 57 ms on the g5 line (P8). It is not the low-millisecond disk that was hoped for.
+
+**Rate (lanes together inputs/s; projected decisions/s; projector lag; CPU per decision):** 4 lanes 18,769; 15,932 (7.6 s); 497. 6 lanes 21,099 and 21,302; **17,985 and 18,074** (9.8 and 10.1 s); 545 and 531. 8 lanes 21,675; **19,051** (10.2 s); 551. **Sustained, 6 lanes with 250,000 trades each (3,000,000 decisions): 18,800 inputs/s over 160 s, 17,819 projected**; 564.
+Against the `c-32` on its 10 ms disk (P10): +5 to +11 percent at 4 and 6 lanes, +3 percent at 8, **-5 percent sustained** (18.7k to 17.8k); inside the 15 percent spread this ledger sees run to run. Against the same `c-32` with free storage (P11: 27.1k to 31.4k): 63 to 68 percent of it. **No size tried so far delivers a durable disk fast enough for the 20,000 decisions/s need on this chain;** the best durable result is 19,051 projected (95 percent) with eight lanes.
+
+| Storage | Root disk 4 KiB synchronous write | Best projected decisions/s (lanes) |
+| --- | --- | --- |
+| tmpfs, `c-32` (P11) | none | 31,368 (8), sustained 27,581 (6) |
+| `c-16` root disk (P7, Xeon, 16 vCPU) | 1.5 ms | 15,834 (5) |
+| `c2-32vcpu-64gb` root disk (this entry) | 7 ms | 19,051 (8), sustained 17,819 (6) |
+| `c-32` root disk (P10) | 10 ms | 18,471 (8), sustained 18,729 (6) |
+| g5 EPYC root disk (P8) | 43 to 57 ms | falls with lanes: 3,801 inputs/s at 3 lanes |
+
+The c-16 line shows the latency is not the whole story (a 16 vCPU host with a 1.5 ms disk delivers less than a 32 vCPU host with a 7 to 10 ms one, because it has half the cores). What it does show is that the two 32 vCPU hosts stay at 92 to 95 percent of the need whatever the disk, within noise of each other, while free storage gives 135 to 155 percent. The remaining open candidates: a disk with synchronous writes well under 1 ms (local NVMe on another provider, or a block-storage volume, neither tried), and less synchronous write work per decision (broker and Postgres settings that were not effective on the slow g5 disk, CAL-FIN-P8, were not retried here).
+
+Interpretation limits: see CAL-FIN-P10 and P11. One droplet per size, single runs except one repeat (six lanes within 1.0 percent); the root-disk check is a 200-write `dd` sample taken once per host. No capacity claim.
+
+## Calcify commitment on the deciding thread versus a second thread, end to end without the coverage agent, CAL-FIN-P14 (October 14, 2026)
+
+Settles the size of the gain behind design section 5.6 (lagged commitment), raised by independent review 1 of 5.6 (the earlier 1.5x to 1.8x came from the S3d stand-in lane, and the only end-to-end pair, CAL-FIN-P4, ran with the JaCoCo agent). `S4EndToEndSpikeTest.wholeChainOnOneMachine`, laptop (load average 5 to 7, not quiet), one lane, projector off, K = 100, 100,000 trades (200,000 inputs), JaCoCo off (`-PresearchTests`), `-XX:+UseParallelGC`, Redpanda and Postgres in Docker; `S4_ASYNC=false` puts the root on the deciding thread, `true` on a second thread; three interleaved pairs.
+
+| Pair | Root on the deciding thread | Root on a second thread |
+| --- | --- | --- |
+| 1 | 13,238 inputs/s (66.9 microseconds per record in `process`) | 18,386 (45.3; 7 waits for the worker) |
+| 2 | 13,244 (66.5) | 18,862 (45.0; 8 waits) |
+| 3 | 14,567 (60.6) | 18,405 (46.0; 3 waits) |
+
+Means 13,683 and 18,551: **a second thread is 1.35x faster end to end** (processor path 64.7 against 45.4 microseconds per record), against 1.5x to 1.8x in the S3d stand-in lane and about 1.3x in the one CAL-FIN-P4 pair. The lane with the root on a second thread is within 8 percent of 20,000 inputs/s on this machine; the same lane with the root on the deciding thread is 32 percent short. Not measured: the undo ring's put, the worker's wait share at higher rates, any restore. Limits: one machine, three pairs, 15 percent spread elsewhere in this ledger; a one-lane, projector-off lane isolates the commitment term and is not the whole chain. No capacity claim.
+
+## Calcify finance projector: set-based writes in product code, CAL-FIN-P13 (October 14, 2026)
+
+First product-code change from the capacity work: `FinanceProjector.apply` now verifies every record in memory (order, input digest, replay equality, hash link) and writes the batch with one `INSERT ... SELECT FROM unnest(arrays)` statement per table (decisions, positions with net deltas, obligations, attempts) and one set-based update for settled obligations, instead of up to five prepared statements per record. Behaviour is unchanged: the same fence, the same replay check (now one query for all replayed sequences), the same rollback of the whole batch on any failure. Measured with `FinanceProjectorThroughputSpikeTest` (new, research-tagged) on the product class, the laptop's Docker Postgres 16 (load average 5 to 7, not quiet), decisions from the real `FinanceLedger`, 40 bindings of 207 decisions per batch size, the 320-sequence bound of migration 0014 lifted as in the capacity spikes:
+
+| Schema | Batch | Before (per-record statements) | After (set-based) |
+| --- | --- | --- | --- |
+| product constraints | 1 | 98 decisions/s | 92 |
+| product constraints | 10 | 417 | 665 |
+| product constraints | 120 | **690** | **4,894** (7.1x) |
+| without the four binding foreign keys | 1 | 97 | 86 |
+| without the four binding foreign keys | 10 | 426 | 703 |
+| without the four binding foreign keys | 120 | 792 | 4,410 |
+
+A call of one record is bound by its commit and does not move; the gain grows with the batch. With the foreign keys kept (the product's schema) the projector is not measurably slower here (4,894 against 4,410, within the spread), so they stay. Existing suites pass against real Postgres: `FinanceProjectorPostgresTest` (8, including random batching with redelivery, rollback of a bad batch and the role-restriction test), `JdbcFinanceReadStorePostgresTest`, `FiniteP3EndToEndTest`, the launcher and runtime broker tests.
+
+**What this does not change.** The runner (`FinanceProjectionRunner`) re-reads the whole decision log on every pass and the product migration still bounds a binding to 320 sequences, both correct for the finite profile and both incompatible with the capacity profile; the next projector step is an incremental runner that tails the log in batches of hundreds to thousands and a capacity-profile schema decision (lifting the bound, keeping or dropping foreign keys). Batch sizes above 120 were not measured (a ledger run admits at most 128 captures). The 4,894 decisions/s is the projector alone; it is below the 20,000 decisions/s need by itself, and the Postgres side of the chain reached 15,000 to 31,000 projected decisions/s in CAL-FIN-P4 to P11 only with the test projector's larger batches and a lifted bound. No capacity claim.
+
+## Calcify product capacity ledger and the price of committing on the deciding thread, CAL-FIN-P15 (October 14, 2026)
+
+Two measurements from the capacity-profile build, laptop (load average 5 to 7, not quiet), JaCoCo off (`-PresearchTests`), `-XX:+UseParallelGC`.
+
+**The product ledger alone** (`CapacityLedgerScaleSpikeTest`, `CapacityLedger` in `main`, synchronous commitment: every recorded decision carries the commitment `C(S')` of its post-state; 2,000 accounts; one thread; in memory): **75,464 decisions/s at 150,003 entities and 54,825 decisions/s at 1,050,003 entities**, about 370 to 381 bytes of heap per entity. That is 2.7x to 3.8x the 20,000 decisions/s need before any lane overhead, and above the test-code prototype's 43.6k and 37.0k (CAL-FIN-P3, measured with the JaCoCo agent). The ledger is not the binding term even with a commitment on every decision.
+
+**Where the commitment is computed, end to end** (`S4EndToEndSpikeTest`, one lane, projector off, 100,000 trades, three interleaved rounds, inputs/s): the root every decision on the deciding thread (K = 1) 12,867 / 12,998 / 12,770 (mean 12,878; 67 microseconds per record in `process`); the root every 100 decisions on the deciding thread 14,590 / 14,572 / 12,483 (mean 13,882; 60 to 69); the root every 100 decisions on a second thread (the lagged profile of design 5.6) 17,018 / 17,913 / 18,660 (mean 17,864; 45 to 52). So the second thread is **1.39x** the simplest variant (a commitment on every decision, no exposure window) and 1.29x the every-100 variant; batching alone buys 1.08x. Together with the CAL-FIN-P14 pair (1.35x) the gain of lagging the commitment is about 1.3x to 1.4x, from parallelism, not from computing less. No lane variant reaches 20,000 inputs/s on this machine by itself: the lagged lane is 11 percent short and the every-decision lane 36 percent short; the processor path (envelope parse, content-digest check, history entry, store puts) is the remaining term.
+
+Interpretation limits: see CAL-FIN-P4, P13, P14. Single runs per cell except the three-round lane comparison (spread up to 15 percent in this ledger); the ledger spike has no store, no restore and no Streams; the lane figures include the test harness's processor path, not the product processor. No capacity claim.
+
+## Calcify capacity path on product code, lanes on one laptop, CAL-FIN-P16 (October 14, 2026)
+
+First measurement of the capacity path as product code end to end: real capture decoders, the capacity Streams app (one thread per lane, task N is lane N), per-lane decision logs and projections into Postgres 16, Redpanda, all in containers on the same 10-core laptop as the JVM and the load generator (load average 6 to 7, not quiet). `CapacityLaneThroughputTest` (`-PbrokerTests -PresearchTests`, JaCoCo off). Each trade is a capture plus its automatic first settlement attempt (two decisions); every trade settles; funding is decided and projected before the clock starts; the rate is `2 x trades` divided by the time from the first trade record sent to the last decision projected. Sixteen instruments split across the lanes, 200 accounts (500 in the last row), pre-generated 1.2 KB envelopes.
+
+| Lanes | Trades | Processed decisions/s | **Projected decisions/s** | Wall |
+| --- | --- | --- | --- | --- |
+| 1, projector as in CAL-FIN-P13 | 150,000 | 13,916 | 5,957 | 50 s |
+| 1, after the fix below | 150,000 | 13,816 | **12,009** | 25 s |
+| 2 | 240,000 | 25,755 | **21,711** | 22 s |
+| 3 | 240,000 | 32,279 | **26,986** | 18 s |
+| 3, longer, 500 accounts | 800,000 | 29,511 | **24,492** | 65 s (1.6 million decisions) |
+
+For comparison, CAL-FIN-P5 (prototype ledger, one history entry per record, disjoint-account shards) measured 11.1k, 15.3k and 17.5k projected decisions/s at one, two and three lanes on a similar loaded machine. The product processor is not the limit: one lane decides 13.8k to 13.9k per second (about 21 s of stream-thread CPU for 300,000 decisions).
+
+**What limited the first run, and the fix.** Projection ran at 6.0k per lane while the processor ran at 13.9k. The projection threads used 5 s of JVM CPU in 50 s of wall time, so the time was in Postgres. Not the disk (data directory on tmpfs: 6.1k), not the foreign keys (dropped: 6.2k), not commit durability (`synchronous_commit = off`: 6.1k). Per-statement timing of the 300,000-decision run: the `UPDATE` of obligations to SETTLED **25.0 s**, the decision insert 9.5 s, attempts 4.1 s, position upserts 3.9 s, obligation insert 1.8 s. Chunk size changed the rate the wrong way (500 decisions per transaction 7.1k, 2,000 6.0k, 10,000 3.5k, the update alone 64 s at 10,000). In the instant profile a capture and its settlement are decided back to back and land in the same projector batch, so the projector now inserts the obligation already settled when the batch holds both, and updates only when the settlement comes from a later batch (repairs). One lane went from 6.0k to 12.0k decisions/s; the behaviour is unchanged (the end-to-end test compares the obligation rows with an independent replay, and the existing `FinanceProjectorPostgresTest` suite passes against a real Postgres except two checks that need migration 0013 in the throwaway database).
+
+Interpretation limits: single runs per cell, 18 to 65 s each, so ramp effects are in the figures; at most 1.1 million obligations and about 3,000 positions per lane, no reads, no restart during a run; Postgres in a container on the Docker VM's disk; lanes are independent instrument groups with cash funded per lane (design option S1), so no cross-lane cash movement is exercised; the machine ran the broker, the database, the load generator and the service together. This is a laptop, not a dedicated host. It says the product path can clear 20,000 projected decisions/s here with two lanes; it says nothing about API reads, trading-view visibility, settlement visibility latency, session finalization or hot-instrument skew (budget rows unmeasured), and it is not a capacity claim for the arena goal.
+
+
+## Capacity path on the production source, engine-aligned lanes, CAL-FIN-P17 (October 14, 2026)
+
+The CAL-FIN-P16 path fed the production source: Phase 2 resolved match contexts (`MatchContextResolvedV1`) on lanes assigned with `PartitionLaneHash` as a stand-in for the matching engine's partitioning (**superseded: a real-stack run showed the platform routes with `StreamCommandEnvelopeBuilder.partition(run, session, instrument, count)`; the per-lane splits quoted in this entry are those of the wrong hash, see CAL-FIN-P18 for the corrected ones; the per-lane rates are unaffected**), instead of the finite lifecycle envelopes on evenly split lanes. Same machine, harness and conditions as P16 (shared 10-core laptop, Redpanda and Postgres 16 in containers, JaCoCo off, single runs of 6 to 42 s); `CAP_SOURCE=resolved`, 200 accounts.
+
+| Instruments | Lanes | Trades per lane | Processed decisions/s | **Projected decisions/s** |
+| --- | --- | --- | --- | --- |
+| 16 | 1 | 240,000 | 15,892 | **11,474** |
+| 16 | 2 | split by the hash | 25,946 | 18,479 |
+| 16 | 3 | 37,492 / 18,911 / 3,597 (10, 5, 1 instruments) | 25,725 | 18,010 |
+| 64 | 2 | 122,003 / 177,997 (26, 38 instruments) | 24,135 | **18,704** |
+| 64 | 3 | 93,842 / 131,326 / 74,832 (20, 28, 16) | 30,658 | **23,513** |
+| 64 | 4 | 65,700 / 107,493 / 60,814 / 65,993 (14, 23, 13, 14) | 37,060 | **26,451** |
+
+**What this shows.** A resolved context is cheaper to decode than a lifecycle envelope (one lane processes 15.9k decisions/s against 13.8k). The engine's hash splits instruments unevenly: 16 instruments over three lanes give 10, 5 and 1, so the busiest lane carries 62 percent of the trades and the total is bound by that lane's projection (about 11.5k to 12k decisions/s per lane), which is why three lanes did no better than two there. With 64 instruments (the arena profile) the busiest lane carries 44 percent at three lanes and 36 percent at four; the projected rate rises with the lane count and passes 20,000 decisions/s at three lanes on this laptop. The per-lane projection (about 65 microseconds of Postgres time per decision: decision insert 32, attempts 14, positions 13, obligations 6) is now the binding term; the processor has 30 to 40 percent headroom over it.
+
+Interpretation limits: those of CAL-FIN-P16, plus: one hash-induced split per cell (a different instrument naming gives a different split), uniform choice of instrument per trade (a hot instrument loads its lane alone and is not addressed by instrument sharding), cash funded per lane, no hot-instrument or skewed-participant variant. Not a capacity claim.
+
+**Where the per-lane projection time goes, and migration 0017.** One lane, resolved source, 480,000 decisions, same machine: projected 11,849 decisions/s as shipped; 11,601 without the sequence-bound statement trigger (it costs nothing measurable); 12,853 without the decision table's `UNIQUE (binding, action key)` index (+8 percent); 14,685 without its three hex-format regular-expression CHECKs (+24 percent); 15,897 without both (+34 percent, level with the 16.6k the processor decides). Migration 0017 replaces the three regex CHECKs with length checks (`octet_length = 64`): the projector writes only values it has just verified in memory (checksum recomputed from the decision, prior chain equal to the stored chain, input digest equal to the digest of the input it carries), so hex spelling is established there; the length guard stays in the database. The UNIQUE index stays (the action key is the audit identity). After 0017, 64 instruments: one lane 12,917 projected (13,080 processed; the ledger is larger at 64 instruments), **three lanes 28,245 projected decisions/s against 30,451 processed** (busiest lane 44 percent of the trades), up from 23,513. The projection no longer trails the processor by more than a few percent at three lanes.
+
+
+## Capacity service on the real compose stack, and the corrected lane routing, CAL-FIN-P18 (October 14, 2026)
+
+**The run.** `make dev-smoke-calcify-full-path` with `DEV_CALCIFY_PHASE2=1` brought up the repository's own stack on the laptop (HTTP intake, Redpanda, Go matching engine on four stream-direct partitions, Phase 1 extractor, verifier and receipt worker, the Phase 2 managed resolver, three Postgres databases) and submitted real orders. The capacity service (`CapacityRuntime`, the process role from `Main`) ran in a container on the stack's network with `captureSource` `resolved-context-v1` reading the resolver's own output topic, four lanes, the plan from `mkplan`-style generation, funding written by `CapacityControlCli`, and projecting into the stack's boundary Postgres through migrations 0014, 0016 and 0017. Correctness only; one machine, nothing else measured.
+
+| Run | Real trades | What was checked | Result |
+| --- | --- | --- | --- |
+| Preflight | 1 | positions, obligation, decisions | buyer paid 100 x 150,250,000,000 = 15,025,000,000,000 and received 100 shares; seller the reverse; obligation SETTLED; lane decisions fund, fund, capture, settle |
+| Burst | 3,001 (3,000 pairs, accepted in 4.2 s) | decision count, obligations, positions | 6,004 decisions in one lane (3,001 captures, 3,001 settles, 2 fundings), 3,001 obligations SETTLED, positions equal to 3,001 x 100 x 150,250,000,000 on both sides to the unit |
+| Restarts after the burst | none new | duplicate decisions | a wiped local state (restored from the changelog) and a SIGKILL with the state kept both started healthy and left the checkpoint at 6,004 and the decision topic's high watermark unchanged |
+| Crash under load | 20,001 (20,000 pairs) | exactness after SIGKILL at 8,822 of 40,004 decisions, restart | 40,004 distinct sequences and distinct action ids, 20,001 CAPTURED, 20,001 SETTLED, 2 FUNDED, 20,001 obligations SETTLED, positions equal to the expected values to the unit (buyer USD 699,484,975,000,000,000, seller USD 300,515,025,000,000,000, buyer 2,000,100 and seller 7,999,900 shares) |
+
+**What the run found, and what was fixed (all before the numbers above).**
+1. **The routing assumption was wrong.** The real trade of the smoke instrument landed on partition 2; `PartitionLaneHash` (the legacy HTTP lane hash used in CAL-FIN-P17's splits) predicted lane 1. The Calcify direct stream path chooses the command partition with `StreamCommandEnvelopeBuilder.partition(run, session, instrument, count)`, a SHA-256 hash of the three, the engine lane that consumes it publishes the venue event there, and the resolver writes the resolved context there. Fixed (`stream-command-partition-v1`); a test pins the observed placement. A wrong assumption would have made every lane stop on its first trade (fail closed), not lose trades.
+2. **A refused captured input vanished silently.** The ledger does not record a refusal (for example UNKNOWN_ACCOUNT for an unfunded participant), so an executed trade would have been counted and dropped. With the production flag the lane now stops unless the refusal only says the ledger already holds the input.
+3. **Ordering of funding and trades.** The resolver writes timestamp 0, so after a backlog or restart Streams would present a buffered trade before buffered funding, and a lane stopped on an unfunded account could never be unstuck by funding it. Controls now sort first (CONTROL stamped 0, CAPTURE at least 1); the end-to-end test fails without the change.
+4. **Restart refused by the role's own check.** Kafka Streams widens the permissions of its state directory to group read/execute on its first run, so the owner-only check refused every restart. Streams now gets a subdirectory of the owner-only configured directory.
+
+**The corrected lane split** (64 instruments, run `p3-run`, session `p3-session`, resolved source, the CAL-FIN-P16/P17 machine and harness, single runs): 
+
+| Lanes | Trades per lane | Processed decisions/s | **Projected decisions/s** |
+| --- | --- | --- | --- |
+| 2 | 163,890 / 136,110 | 25,041 | **23,307** |
+| 3 | 83,916 / 102,939 / 113,145 | 35,255 | **30,619** |
+| 4 | 74,724 / 75,305 / 89,166 / 60,805 | 42,652 | **34,742** |
+
+The SHA-based routing spreads 64 instruments more evenly than the legacy hash did (busiest lane 38 percent at three lanes against 44, 30 percent at four against 36), so the rates are higher than CAL-FIN-P17's. The per-lane rates are unchanged; only the split moved.
+
+Interpretation limits: the stack run is a correctness run on a laptop (no rate claim from it; the load generator uses one instrument and one buyer/seller pair, so it exercises one lane); the routing hash includes the run and session, so a lane's instrument set is specific to its run; the rate table has the limits of CAL-FIN-P16 and P17 (single short runs, shared machine, uniform instrument choice, no hot instrument).
+
+
+## Hot instrument: how much of the flow one lane can carry, CAL-FIN-P19 (October 14, 2026)
+
+Same machine, harness and conditions as CAL-FIN-P16 to P18 (shared 10-core laptop, Redpanda and Postgres 16 in containers, JaCoCo off, resolved-context source, four lanes, 64 instruments with the platform's stream-command routing, 200 accounts, 300,000 pre-generated trades, single runs). `CAP_HOT_SHARE` sends that fraction of all trades to one instrument and the rest uniformly. Design and decisions: `docs/work/CALCIFY_HOT_INSTRUMENT_DESIGN.md`.
+
+| Trades on the hot instrument | Trades per lane | Processed decisions/s | **Projected decisions/s** |
+| --- | --- | --- | --- |
+| none | 74,724 / 75,305 / 89,166 / 60,805 | 42,652 | 34,742 |
+| 50 percent | 37,525 / 37,399 / 44,504 / 180,572 | 26,096 | **23,120** |
+| 100 percent | 0 / 0 / 0 / 300,000 | 16,600 | **16,393** |
+
+One lane, 64 instruments, 600,000 decisions, no skew: processed 13,330 and projected 13,192 decisions/s; with the decision table reduced to a bare unlogged heap 13,425 and 13,280 (the projection is not the limit at one lane). Processor thread by section over that run (seconds, 600,000 decisions plus funding): `decide` 22.2, head, meta and store puts 18.8, encode 2.5, decode 1.5, entity bytes 1.1, forward 0.6. A caching store cut the put time to 16.4 s but the run was not faster (12,441 processed against 13,330; not shipped).
+
+What it says: the lane ceiling is about 16.4k decisions/s (8.2k trades/s) with a small state and 13.2k (6.6k trades/s) with 64 instruments' state; the limit is the processor thread. At the contract's 10,000 trades/s the hottest lane can carry roughly 65 to 80 percent of the trades; half the flow on one instrument (the hot lane at 60 percent) still projects 23.1k decisions/s against the 20k need.
+
+Interpretation limits: those of CAL-FIN-P16 to P18, plus: one hash outcome per cell (a different run or session id gives different lane sets); the hot instrument's lane also carries its share of the uniform flow; the matching engine's single-book rate is not measured here (the design note says why it decides whether this matters); the timers used for the section breakdown were temporary and are not in the product.

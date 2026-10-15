@@ -188,6 +188,8 @@ class S4EndToEndSpikeTest {
         fun start() {
             stateDir = Files.createTempDirectory("s4-state-$index")
             val props = FinanceTopology.streamsProperties("s4-app-$index", bootstrap, stateDir.toString())
+            // S4_STREAMS_PROPS="key=value,key=value" overrides Streams properties for a tuning experiment (product code takes its properties from FinanceTopology and verifyPinned refuses a weaker set).
+            System.getenv("S4_STREAMS_PROPS")?.split(",")?.filter { it.contains("=") }?.forEach { kv -> val (k, v) = kv.split("=", limit = 2); props[k.trim()] = v.trim().toIntOrNull() ?: v.trim() }
             streams = KafkaStreams(topology(accounts, every, async, shared, lean, captureTopic, controlTopic, decisionsTopic, "s4-store", free, verifier, spec), props)
             streams.setUncaughtExceptionHandler { e -> System.err.println("S4-ERROR lane $index: $e"); org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT }
             projector.open()
@@ -317,6 +319,12 @@ class S4EndToEndSpikeTest {
                     log.append("  CPU per decision (microseconds, all threads): JVM (processors, commitment, tailers, projectors, producers, verifiers) %.0f, Redpanda container %.0f, Postgres container %.0f, total %.0f; at 20,000 decisions/s that is %.1f cores\n".format(jvmCpu / perDecision, rpCpu / perDecision, pgCpu / perDecision, (jvmCpu + rpCpu + pgCpu) / perDecision, (jvmCpu + rpCpu + pgCpu) / perDecision * 20000 / 1e6))
                     log.append("  gc %.1f s (shared JVM); machine load average at the end: %s\n".format(gcSecs, "%.2f (1 min, system)".format(java.lang.management.ManagementFactory.getOperatingSystemMXBean().systemLoadAverage)))
                     for (l in lanes) { val p = l.shared.processor!!; val n = p.records.get().toDouble(); log.append("  lane %d: %d records, %.1f us per record inside process (commitment waits %d)\n".format(l.index, p.records.get(), p.tTotal.get() / n / 1e3, p.ledger.blockedCount)) }
+                    // Where the deciding thread's wall time goes (Kafka Streams thread metrics; a ratio is the share of the thread's time).
+                    val wanted = listOf("process-ratio", "poll-ratio", "commit-ratio", "punctuate-ratio", "poll-latency-avg", "commit-latency-avg", "poll-records-avg", "commit-rate", "process-rate")
+                    for (l in lanes) {
+                        val m = l.streams.metrics().filter { it.key.group() == "stream-thread-metrics" && it.key.name() in wanted }
+                        log.append("  lane %d thread: %s\n".format(l.index, wanted.joinToString(", ") { w -> m.entries.firstOrNull { it.key.name() == w }?.let { e -> "%s %s".format(w, (e.value.metricValue() as? Double)?.let { d -> "%.3f".format(d) } ?: e.value.metricValue()) } ?: "$w n/a" }))
+                    }
                 } finally { producer.close(); lanes.forEach { try { it.stop() } catch (e: Throwable) { System.err.println("lane stop: $e") } } }
             }
             println(log); Files.writeString(S0Metrics.file("s4-end-to-end.txt"), log)

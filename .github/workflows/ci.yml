@@ -722,6 +722,7 @@ jobs:
         run: |
           python3 scripts/dev/calcify-financial/binding_v2_reference.py check
           python3 scripts/dev/calcify-financial/startup_v2_fixture.py --check
+          python3 scripts/dev/calcify-financial/state_commitment_reference.py check
       - name: Run Calcify tests against real Postgres
         env:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef

@@ -6,6 +6,11 @@ import com.reef.platform.api.PlatformHttpServer
 import com.reef.platform.infrastructure.config.RuntimeEnv
 
 fun main() {
+    if (RuntimeEnv.string("CALCIFY_CAPACITY_PLAN_FILE", "").isNotBlank()) {
+        com.reef.platform.calcify.finance.CapacityRuntime.requireExclusive { RuntimeEnv.string(it, "") }
+        com.reef.platform.calcify.finance.CapacityRuntime.run()
+        return
+    }
     if (RuntimeEnv.string("CALCIFY_FINANCE_BINDING_DIGEST", "").isNotBlank()) {
         com.reef.platform.calcify.finance.FiniteFinanceRuntime.requireExclusive { RuntimeEnv.string(it, "") }
         com.reef.platform.calcify.finance.FiniteFinanceRuntime.run()

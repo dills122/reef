@@ -133,6 +133,114 @@ class FinanceProjectorPostgresTest {
         assertFailsWith<FinanceProjectionDiverged>("never opened") { FinanceProjectionRunner({ records }, projector, unopened, 1).runOnce() }
     }
 
+    /** A log that hands out only records it has not handed out before, `chunk` at a time, and counts what it delivered. */
+    private class TailSource(private val log: List<Pair<Decision, FinanceInput>>, private val chunk: Int) {
+        var delivered = 0; private set
+        var calls = 0; private set
+        val next: () -> List<Pair<Decision, FinanceInput>> = { calls++; val out = log.drop(delivered).take(chunk); delivered += out.size; out }
+    }
+
+    @Test fun aTailingRunnerProjectsEachRecordOnceFromChunksAndEqualsTheLedger() {
+        val ds = dataSource(); val projector = FinanceProjector(ledger, ds)
+        val (records, state) = run(21, steps = 160); assertTrue(records.size >= 15)
+        val binding = digest(); projector.open(binding, 1)
+        val source = TailSource(records, chunk = 7)
+        val runner = FinanceProjectionRunner.tailing(source.next, projector, binding, 1, maxApply = 5)
+        assertEquals(records.size, runner.runOnce(), "the first pass streams the whole log and applies it")
+        assertEquals(records.size, source.delivered, "every record was read exactly once")
+        assertProjectionEquals(ds, binding, state, "tailing")
+        val callsAfterFirstPass = source.calls
+        assertEquals(0, runner.runOnce(), "a caught-up pass is a no-op"); assertEquals(callsAfterFirstPass + 1, source.calls, "and costs one empty read, not a re-read of the log")
+        assertEquals(records.size, source.delivered)
+    }
+
+    @Test fun aTailingRunnerAppliesOnlyWhatIsNewAfterARestartAndAfterMoreDecisions() {
+        val ds = dataSource(); val projector = FinanceProjector(ledger, ds)
+        val (records, state) = run(22, steps = 100); val half = records.size / 2; assertTrue(half >= 10)
+        val binding = digest(); projector.open(binding, 1)
+        assertEquals(half, FinanceProjectionRunner.tailing(TailSource(records.take(half), 9).next, projector, binding, 1).runOnce())
+        val restarted = TailSource(records, 9)                       // a new process reads the log from the start again
+        val runner = FinanceProjectionRunner.tailing(restarted.next, projector, binding, 1)
+        assertEquals(records.size - half, runner.runOnce(), "only the records after the stored progress are applied")
+        assertProjectionEquals(ds, binding, state, "restarted tailing")
+    }
+
+    @Test fun aTailingRunnerRefusesAProjectionAheadOfOrForkedFromTheLogAndALogWithAGap() {
+        val ds = dataSource(); val projector = FinanceProjector(ledger, ds)
+        val (records, _) = run(11); val (fork, _) = run(12)
+        assertTrue(records.size >= 4 && fork.size >= 4 && records[1].first.checksum != fork[1].first.checksum)
+        val binding = digest(); projector.open(binding, 1)
+        fun runner(log: List<Pair<Decision, FinanceInput>>) = FinanceProjectionRunner.tailing(TailSource(log, 5).next, projector, binding, 1)
+        assertEquals(records.size, runner(records).runOnce())
+        assertEquals(0, runner(records).runOnce(), "a log equal to the projection is a clean no-op")
+        assertFailsWith<FinanceProjectionDiverged>("projection ahead of a truncated log") { runner(records.take(records.size - 2)).runOnce() }
+        assertFailsWith<FinanceProjectionDiverged>("projection on a different chain than the log") { runner(fork).runOnce() }
+        assertFailsWith<FinanceProjectionDiverged>("a log with a gap") { runner(records.filterIndexed { i, _ -> i != 1 }).runOnce() }
+        assertFailsWith<FinanceProjectionDiverged>("never opened") { FinanceProjectionRunner.tailing(TailSource(records, 5).next, projector, digest(), 1).runOnce() }
+    }
+
+    @Test fun aTailingRunnerKeepsRecordsItReadButCouldNotWriteAndAppliesThemOnTheNextPass() {
+        val real = dataSource(); var failNextWrite = false
+        val flaky = object : javax.sql.DataSource by real {
+            override fun getConnection(): java.sql.Connection = if (failNextWrite) { failNextWrite = false; throw java.sql.SQLException("injected transient failure") } else real.connection
+        }
+        val projector = FinanceProjector(ledger, flaky)
+        val (records, state) = run(23, steps = 120); assertTrue(records.size >= 10)
+        val binding = digest(); projector.open(binding, 1)
+        val source = TailSource(records, chunk = 1_000)
+        // The pass reads the checkpoint (a connection), then reads the log, then writes (another connection): fail that write.
+        val reading = source.next; var armed = false
+        val armedRunner = FinanceProjectionRunner.tailing({ val r = reading(); if (!armed) { armed = true; failNextWrite = true }; r }, projector, binding, 1)
+        assertFailsWith<java.sql.SQLException> { armedRunner.runOnce() }
+        assertEquals(records.size, source.delivered, "the records were consumed from the source")
+        assertEquals(records.size, armedRunner.runOnce(), "and are applied by the next pass although the source has nothing new")
+        assertProjectionEquals(real, binding, state, "after a transient failure")
+    }
+
+    private fun hex64() = (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "").take(64)
+    private fun insertRawDecisions(ds: PGSimpleDataSource, binding: String, from: Int, to: Int) = ds.connection.use { c ->
+        c.prepareStatement("INSERT INTO boundary.calcify_finance_decision(binding_digest, sequence, action_namespace, action_domain, action_id, disposition, input_digest, prior_chain, checksum) VALUES (?, ?, 'n', 'd', ?, 'FUNDED', ?, ?, ?)").use { ps ->
+            for (i in from..to) { ps.setString(1, binding); ps.setLong(2, i.toLong()); ps.setString(3, "raw-$i"); ps.setString(4, hex64()); ps.setString(5, hex64()); ps.setString(6, hex64()); ps.addBatch() }
+            ps.executeBatch()
+        }
+    }
+    private fun sqlState(block: () -> Unit): String? = try { block(); null } catch (e: java.sql.SQLException) { e.sqlState } catch (e: java.sql.BatchUpdateException) { e.sqlState }
+
+    @Test fun aBindingKeepsTheSequenceBoundItWasCreatedWithAndTheDatabaseEnforcesIt() {
+        val ds = dataSource(); val projector = FinanceProjector(ledger, ds)
+        val finite = digest(); projector.open(finite, 1)
+        insertRawDecisions(ds, finite, 1, 320)
+        assertEquals("23514", sqlState { insertRawDecisions(ds, finite, 321, 321) }, "a finite binding refuses row 321 as migration 0014 did")
+        val capacity = digest(); projector.open(capacity, 1, sequenceBound = 400)
+        insertRawDecisions(ds, capacity, 1, 400)
+        assertEquals("23514", sqlState { insertRawDecisions(ds, capacity, 401, 401) }, "and a capacity binding refuses its own bound plus one")
+        ds.connection.use { c ->
+            fun update(sql: String, binding: String) = sqlState { c.prepareStatement(sql).use { ps -> ps.setString(1, binding); ps.executeUpdate() } }
+            assertEquals("23514", update("UPDATE boundary.calcify_finance_checkpoint SET last_sequence = 401 WHERE binding_digest = ?", capacity), "the checkpoint cannot pass the bound")
+            assertEquals("23514", update("UPDATE boundary.calcify_finance_checkpoint SET sequence_bound = 1000 WHERE binding_digest = ?", capacity), "the bound cannot be changed afterwards")
+            assertEquals("23514", update("UPDATE boundary.calcify_finance_checkpoint SET sequence_bound = 320 WHERE binding_digest = ?", capacity), "not even lowered")
+        }
+        assertFailsWith<IllegalStateException>("an existing binding reopened with a different bound") { projector.open(capacity, 1, sequenceBound = 320) }
+        assertFailsWith<IllegalStateException>("a claim that names a different bound") { projector.claim(capacity, sequenceBound = 500) }
+        assertEquals(2L, projector.claim(capacity, sequenceBound = 400), "a claim that names the stored bound raises the epoch as before")
+        assertFailsWith<IllegalArgumentException>("a bound below the finite one") { projector.open(digest(), 1, sequenceBound = 100) }
+        assertFailsWith<IllegalArgumentException>("a bound above the ceiling") { projector.open(digest(), 1, sequenceBound = 2_000_000_000L) }
+    }
+
+    @Test fun decisionDigestsKeepALengthGuardAfterTheHexChecksWereReplaced() {
+        val ds = dataSource(); val binding = digest(); FinanceProjector(ledger, ds).open(binding, 1)
+        fun insert(input: String, prior: String, checksum: String, action: String, sequence: Long = 1) = sqlState { ds.connection.use { c ->
+            c.prepareStatement("INSERT INTO boundary.calcify_finance_decision(binding_digest, sequence, action_namespace, action_domain, action_id, disposition, input_digest, prior_chain, checksum) VALUES (?, ?, 'n', 'd', ?, 'FUNDED', ?, ?, ?)").use { ps ->
+                ps.setString(1, binding); ps.setLong(2, sequence); ps.setString(3, action); ps.setString(4, input); ps.setString(5, prior); ps.setString(6, checksum); ps.executeUpdate()
+            }
+        } }
+        assertEquals("23514", insert(hex64().drop(1), hex64(), hex64(), "a1"), "a short input digest")
+        assertEquals("23514", insert(hex64(), hex64() + "0", hex64(), "a2"), "a long prior chain")
+        assertEquals("23514", insert(hex64(), hex64(), "", "a3"), "an empty checksum")
+        assertEquals(null, insert(hex64(), hex64(), hex64(), "a4"), "sixty-four characters pass")
+        assertEquals(null, insert("z".repeat(64), hex64(), hex64(), "a5", sequence = 2), "hex spelling is no longer a database concern (migration 0017): the projector's in-memory verification establishes it, the database keeps the length")
+    }
+
     /** The projector is the only writer of the projection and must hold nothing else (docs/work/CALCIFY_FINITE_P3_DB_ROLES.md, O4 projection role). */
     @Test fun theProjectorRoleCannotDeleteTruncateOrTouchTheIngressTablesAndFunctions() {
         dataSource().connection.use { c ->
