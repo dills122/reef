@@ -55,3 +55,9 @@ variable "monitoring" {
   type        = bool
   default     = true
 }
+
+variable "volume_size_gb" {
+  description = "Size in GB of an optional block-storage volume attached to the Droplet (0 = none). Billed while it exists; `destroy` removes it with the Droplet."
+  type        = number
+  default     = 0
+}
