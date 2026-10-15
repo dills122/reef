@@ -2018,3 +2018,20 @@ Interpretation limits: those of CAL-FIN-P16, plus: one hash-induced split per ce
 The SHA-based routing spreads 64 instruments more evenly than the legacy hash did (busiest lane 38 percent at three lanes against 44, 30 percent at four against 36), so the rates are higher than CAL-FIN-P17's. The per-lane rates are unchanged; only the split moved.
 
 Interpretation limits: the stack run is a correctness run on a laptop (no rate claim from it; the load generator uses one instrument and one buyer/seller pair, so it exercises one lane); the routing hash includes the run and session, so a lane's instrument set is specific to its run; the rate table has the limits of CAL-FIN-P16 and P17 (single short runs, shared machine, uniform instrument choice, no hot instrument).
+
+
+## Hot instrument: how much of the flow one lane can carry, CAL-FIN-P19 (October 14, 2026)
+
+Same machine, harness and conditions as CAL-FIN-P16 to P18 (shared 10-core laptop, Redpanda and Postgres 16 in containers, JaCoCo off, resolved-context source, four lanes, 64 instruments with the platform's stream-command routing, 200 accounts, 300,000 pre-generated trades, single runs). `CAP_HOT_SHARE` sends that fraction of all trades to one instrument and the rest uniformly. Design and decisions: `docs/work/CALCIFY_HOT_INSTRUMENT_DESIGN.md`.
+
+| Trades on the hot instrument | Trades per lane | Processed decisions/s | **Projected decisions/s** |
+| --- | --- | --- | --- |
+| none | 74,724 / 75,305 / 89,166 / 60,805 | 42,652 | 34,742 |
+| 50 percent | 37,525 / 37,399 / 44,504 / 180,572 | 26,096 | **23,120** |
+| 100 percent | 0 / 0 / 0 / 300,000 | 16,600 | **16,393** |
+
+One lane, 64 instruments, 600,000 decisions, no skew: processed 13,330 and projected 13,192 decisions/s; with the decision table reduced to a bare unlogged heap 13,425 and 13,280 (the projection is not the limit at one lane). Processor thread by section over that run (seconds, 600,000 decisions plus funding): `decide` 22.2, head, meta and store puts 18.8, encode 2.5, decode 1.5, entity bytes 1.1, forward 0.6. A caching store cut the put time to 16.4 s but the run was not faster (12,441 processed against 13,330; not shipped).
+
+What it says: the lane ceiling is about 16.4k decisions/s (8.2k trades/s) with a small state and 13.2k (6.6k trades/s) with 64 instruments' state; the limit is the processor thread. At the contract's 10,000 trades/s the hottest lane can carry roughly 65 to 80 percent of the trades; half the flow on one instrument (the hot lane at 60 percent) still projects 23.1k decisions/s against the 20k need.
+
+Interpretation limits: those of CAL-FIN-P16 to P18, plus: one hash outcome per cell (a different run or session id gives different lane sets); the hot instrument's lane also carries its share of the uniform flow; the matching engine's single-book rate is not measured here (the design note says why it decides whether this matters); the timers used for the section breakdown were temporary and are not in the product.
