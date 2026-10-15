@@ -34,7 +34,8 @@ import reef.contracts.calcify.v1.FiniteLifecycleCaptureV1
 @Tag("broker")
 class CapacityEndToEndTest {
     private val lanes = 3
-    private fun planOver(laneSets: List<Set<String>>) = CapacityPlan("e2e-plan", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), laneSets, 10_000, 10_000, 20_000, 1_000, sequenceBound = 100_000)
+    private fun planOver(laneSets: List<Set<String>>, mode: DecisionMode = DecisionMode.TWO_STEP) =
+        CapacityPlan(if (mode == DecisionMode.TWO_STEP) "e2e-plan" else "e2e-plan-cs", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), laneSets, 10_000, 10_000, 20_000, 1_000, sequenceBound = 100_000, decisionMode = mode)
     private val participants = (0 until 12).map { AccountId("u$it") }
     private val captureBinding = FiniteLifecycleFixtures.binding().digest
     private val appId = "capacity-e2e"
@@ -102,6 +103,16 @@ class CapacityEndToEndTest {
         withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityResolvedContextDecoder(plan), ::resolvedContext) }
     }
 
+    @Test fun captureSettleModeOnLifecycleCapturesGivesOneDecisionPerTradeAndTheTwoStepTables() {
+        val plan = planOver((0 until 6).map { "INS$it" }.chunked(2).map { it.toSet() }, DecisionMode.CAPTURE_SETTLE)
+        withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityInputDecoders(plan, captureBinding), ::envelope) }
+    }
+
+    @Test fun captureSettleModeOnResolvedMatchContextsWithShortfallsAndOperatorRepairsSurvivesRestartsAndWipedState() {
+        val plan = planOver(CapacityRouting.engineLanes("p3-run", "p3-session", (0 until 12).map { "INS$it" }, lanes), DecisionMode.CAPTURE_SETTLE).also { it.requireEngineAligned() }
+        withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityResolvedContextDecoder(plan), ::resolvedContext, shortfalls = true) }
+    }
+
     @Test fun bufferedControlsAreProcessedBeforeBufferedCapturesSoAnOperatorCanUnstickALane() {
         val plan = planOver(listOf(setOf("INS0")))
         DisposableRedpanda().start().use { rp ->
@@ -142,7 +153,8 @@ class CapacityEndToEndTest {
         } finally { ProcessBuilder("docker", "rm", "-f", "-v", pgName).redirectErrorStream(true).start().also { it.inputStream.readAllBytes() }.waitFor() }
     }
 
-    private fun run(rp: DisposableRedpanda, ds: PGSimpleDataSource, plan: CapacityPlan, decoder: CapacityInputDecoder, record: (Int, String, AccountId, AccountId, Long, Long) -> ByteArray) {
+    private fun run(rp: DisposableRedpanda, ds: PGSimpleDataSource, plan: CapacityPlan, decoder: CapacityInputDecoder, record: (Int, String, AccountId, AccountId, Long, Long) -> ByteArray, shortfalls: Boolean = false) {
+        val combined = plan.decisionMode == DecisionMode.CAPTURE_SETTLE
         val instruments = plan.laneInstruments.flatten().sorted()
         rp.admin().use { admin ->
             val history = mapOf("retention.ms" to "-1", "retention.bytes" to "-1", "cleanup.policy" to "delete")
@@ -153,8 +165,16 @@ class CapacityEndToEndTest {
         fun launcher() = CapacityLauncher(plan, decoder, topics, appId, client, client, stateDir.path, ds)
         // The oracle: one independent ledger per lane, fed the inputs the lane must have seen, in order.
         val oracle = (0 until lanes).map { CapacityLedger(plan.capacity(it)) }
+        // In the combined mode the projection tables (positions, obligations, attempts) must be exactly the ones the two-step flow produces for the same trades: a second, two-step oracle.
+        val shadow = if (combined) (0 until lanes).map { CapacityLedger(plan.capacity(it).copy(decisionMode = DecisionMode.TWO_STEP)) } else oracle
         val expected = (0 until lanes).map { ArrayList<Decision>() }
-        fun feed(lane: Int, input: FinanceInput) { oracle[lane].decide(input).decision?.let { expected[lane] += it } }
+        fun feed(lane: Int, input: FinanceInput) { oracle[lane].decide(input).decision?.let { expected[lane] += it }; if (combined) shadow[lane].decide(input) }
+        fun feedTrade(lane: Int, key: ExecutionKey, b: AccountId, s: AccountId, units: Long, nanos: Long) {
+            val capture = FinanceInput.Capture(ActionKey("calcify-finance", "capture", key.executionId), key, b, s, units, nanos)
+            if (!combined) { feed(lane, capture); feed(lane, CapacityCaptureMapping.firstSettle(key)); return }
+            oracle[lane].decide(CapacityCaptureMapping.captureSettle(capture)).decision?.let { expected[lane] += it }
+            shadow[lane].decide(capture); shadow[lane].decide(CapacityCaptureMapping.firstSettle(key))
+        }
         val rnd = Random(7); var n = 0
         val producer = producer(rp.bootstrap)
         fun trades(count: Int) {
@@ -164,8 +184,7 @@ class CapacityEndToEndTest {
                 val units = 1L + rnd.nextInt(4); val nanos = 1_000L + rnd.nextInt(50)
                 val i = n++
                 producer.send(ProducerRecord(topics.capture, lane, ByteArray(0), record(i, ins, b, s, units, nanos))).get(15, TimeUnit.SECONDS)
-                val key = ExecutionKey("p3-run", "p3-session", ins, "exec-$i")
-                feed(lane, FinanceInput.Capture(ActionKey("calcify-finance", "capture", "exec-$i"), key, b, s, units, nanos)); feed(lane, CapacityCaptureMapping.firstSettle(key))
+                feedTrade(lane, ExecutionKey("p3-run", "p3-session", ins, "exec-$i"), b, s, units, nanos)
             }
         }
         fun total() = expected.sumOf { it.size }
@@ -178,10 +197,13 @@ class CapacityEndToEndTest {
                 assertEquals(expected[lane].map { it.checksum }, decisions(rp.bootstrap, lane).map { it.checksum }, "lane $lane decision log equals the oracle")
                 assertEquals(oracle[lane].chain to expected[lane].size.toLong(), ds.connection.use { c -> c.prepareStatement("SELECT last_chain, last_sequence FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps -> ps.setString(1, plan.bindingDigest(lane)); ps.executeQuery().use { r -> r.next(); r.getString(1) to r.getLong(2) } } }, "lane $lane projection")
                 val positions = ds.connection.use { c -> c.prepareStatement("SELECT account_id, asset_id, amount FROM boundary.calcify_finance_position WHERE binding_digest = ?").use { ps -> ps.setString(1, plan.bindingDigest(lane)); ps.executeQuery().use { r -> val m = HashMap<Pair<String, String>, Long>(); while (r.next()) m[r.getString(1) to r.getString(2)] = r.getLong(3); m } } }
-                assertEquals(oracle[lane].snapshot().positions.filterValues { it != 0L }.mapKeys { it.key.first.value to it.key.second.value }, positions.filterValues { it != 0L }, "lane $lane positions")
+                assertEquals(shadow[lane].snapshot().positions.filterValues { it != 0L }.mapKeys { it.key.first.value to it.key.second.value }, positions.filterValues { it != 0L }, "lane $lane positions")
+                assertEquals(oracle[lane].snapshot().positions.filterValues { it != 0L }, shadow[lane].snapshot().positions.filterValues { it != 0L }, "lane $lane: the ledger holds the same positions in both modes")
                 val obligations = ds.connection.use { c -> c.prepareStatement("SELECT execution_id, status, cash_residual, share_residual FROM boundary.calcify_finance_obligation WHERE binding_digest = ?").use { ps -> ps.setString(1, plan.bindingDigest(lane)); ps.executeQuery().use { r -> val m = HashMap<String, Triple<String, Long, Long>>(); while (r.next()) m[r.getString(1)] = Triple(r.getString(2), r.getLong(3), r.getLong(4)); m } } }
-                val wanted = oracle[lane].snapshot().obligations.entries.associate { (k, o) -> k.executionId to Triple(o.status.name, o.cashResidual, o.shareResidual) }
+                val wanted = shadow[lane].snapshot().obligations.entries.associate { (k, o) -> k.executionId to Triple(o.status.name, o.cashResidual, o.shareResidual) }
                 assertEquals(wanted, obligations, "lane $lane obligations (inserted settled when settled in the same batch, updated otherwise)")
+                val attempts = ds.connection.use { c -> c.prepareStatement("SELECT execution_id, attempt, disposition FROM boundary.calcify_finance_attempt WHERE binding_digest = ?").use { ps -> ps.setString(1, plan.bindingDigest(lane)); ps.executeQuery().use { r -> val m = HashMap<Pair<String, Int>, String>(); while (r.next()) m[r.getString(1) to r.getInt(2)] = r.getString(3); m } } }
+                assertEquals(shadow[lane].snapshot().attempts.entries.associate { (k, v) -> (k.first.executionId to k.second) to v.name }, attempts, "lane $lane attempt rows equal the two-step flow's, including the settled first attempts the combined ledger holds no leaf for")
                 assertEquals(oracle[lane].commitment(), StateCommitment.reference(oracle[lane].snapshot()), "lane $lane oracle commitment")
             }
         }
@@ -204,6 +226,36 @@ class CapacityEndToEndTest {
             trades(240); waitFor("first batch converged") { running.healthy() && converged() }; assertTrue(running.healthy()); verify()
             assertTrue(expected.all { it.size > 40 }, "every lane did real work: ${expected.map { it.size }}")
             assertTrue(expected.flatten().count { it.disposition == Disposition.SETTLED } > 200, "most trades settled")
+            if (combined) {
+                assertEquals(240, expected.flatten().count { it.disposition == Disposition.SETTLED && it.legs.size == 4 }, "one SETTLED four-leg decision per booked trade")
+                assertTrue(expected.indices.all { shadow[it].sequence > oracle[it].sequence }, "the two-step flow needs more decisions for the same trades")
+            }
+
+            // 1b. Shortfalls and operator repairs: a participant with shares but no cash buys; the first attempt is recorded (the obligation stays pending, attempt 1 on record),
+            // then the account is funded and the operator settles attempt 2 for each. The combined mode must keep this working live, in the projection and across the restarts below.
+            if (shortfalls) {
+                val poor = AccountId("poor"); val shorts = ArrayList<Pair<Int, ExecutionKey>>()
+                CapacityControlWriter(client, topics.control, plan).use { w ->
+                    for (ins in instruments) { w.fundSecurity("poor", poor, ins, 50L); feed(plan.laneOf(ins)!!, FinanceInput.Fund(ActionKey("operator", "fund", "poor/$ins"), Authority.OPERATOR, poor, AssetId(ins), 50L)) }
+                }
+                waitFor("poor admitted") { running.healthy() && converged() }
+                repeat(30) { k ->
+                    val ins = instruments[k % instruments.size]; val lane = plan.laneOf(ins)!!; val i = n++; val seller = participants[k % participants.size]
+                    producer.send(ProducerRecord(topics.capture, lane, ByteArray(0), record(i, ins, poor, seller, 2, 100))).get(15, TimeUnit.SECONDS)
+                    val key = ExecutionKey("p3-run", "p3-session", ins, "exec-$i"); feedTrade(lane, key, poor, seller, 2, 100); shorts += lane to key
+                }
+                waitFor("shortfalls converged") { running.healthy() && converged() }; verify()
+                assertEquals(30, expected.flatten().count { it.disposition == Disposition.INSUFFICIENT_CASH }, "each shortfall is one recorded decision")
+                assertEquals(30, (0 until lanes).sumOf { l -> shadow[l].snapshot().obligations.values.count { it.status == ObligationStatus.PENDING } })
+                CapacityControlWriter(client, topics.control, plan).use { w ->
+                    w.fundCash("poor-cash", poor, List(lanes) { 10_000_000L })
+                    for (lane in 0 until lanes) feed(lane, FinanceInput.Fund(ActionKey("operator", "fund", "poor-cash/cash/$lane"), Authority.OPERATOR, poor, plan.cashAsset, 10_000_000L))
+                    shorts.forEachIndexed { idx, (lane, key) -> w.repair("rp-$idx", key, 2); feed(lane, FinanceInput.Settle(ActionKey("operator", "repair", "rp-$idx"), Authority.OPERATOR, key, 2)) }
+                    shorts.take(5).forEachIndexed { idx, (lane, key) -> w.repair("again-$idx", key, 1); feed(lane, FinanceInput.Settle(ActionKey("operator", "repair", "again-$idx"), Authority.OPERATOR, key, 1)) }     // refused, not recorded
+                }
+                waitFor("repairs converged") { running.healthy() && converged() }; verify()
+                assertEquals(0, (0 until lanes).sumOf { l -> shadow[l].snapshot().obligations.values.count { it.status == ObligationStatus.PENDING } }, "every repaired trade settled")
+            }
 
             // 2. Clean restart: the local state and the projection are intact; the next trades continue each lane.
             running.close(); running = launcher().start()
