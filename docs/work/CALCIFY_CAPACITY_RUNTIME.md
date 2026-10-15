@@ -39,6 +39,8 @@ Strict JSON, every field required, numbers as decimal text:
 
 Inline secrets (a variable without `_FILE`) are refused.
 
+For a local development stack whose broker has no authentication (the compose Redpanda), set `CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL=PLAINTEXT` together with `CALCIFY_CAPACITY_DEV_PLAINTEXT=true`; no Kafka principals or passwords are then read. The flag exists so PLAINTEXT cannot be chosen by accident; do not use it anywhere else.
+
 ## Provision before the first start
 - Topics `capture`, `control`, `decisions`: **at least `lanes` partitions each, the same count**, retention unlimited (`retention.ms=-1`, `retention.bytes=-1`) for the run, replication as the cluster requires. The Streams changelog `<applicationId>-capacity-finance-changelog` needs `lanes` partitions and compaction; provision it up front as the finite profile does.
 - Migrations 0014 and 0016 (`boundary.calcify_finance_*`, the per-binding `sequence_bound`).
@@ -48,6 +50,7 @@ Inline secrets (a variable without `_FILE`) are refused.
 - **Start:** reads the last read-committed record of each lane's decision log, claims each lane's projection (raising its owner epoch, which fences an older instance), opens each checkpoint with the plan's sequence bound, starts the Streams app. Each lane restores its store (the entities must hash to the head decision's committed state) and must be **exactly the head of its published log**; otherwise the lane's task fails and the process exits non-zero with nothing wrong silently accepted.
 - **Restart after a clean stop or a crash, or with the local state wiped:** the store is rebuilt from the changelog; redelivered records are absorbed by the ledger's action keys. Verified by `CapacityEndToEndTest` for both capture sources.
 - **An unusable capture record or member** (wrong lane, wrong run, inconsistent acceptances, malformed amounts, unparseable): the lane **stops** and the process exits non-zero; nothing is skipped, because a skipped record is an executed trade missing from the books. It stops at the same record until the cause is resolved. An unusable control record is counted and ignored.
+- **A captured input the ledger refuses** (an account that was never funded, conflicting economics for an execution, an exhausted budget) also **stops the lane**: it is an executed trade missing from the books. The only refusals that do not are the ones that mean the ledger already holds the input (a redelivered capture or settlement). To recover from an unfunded account, fund it with the control writer and restart: **buffered controls are always processed before buffered captures** (CONTROL records are stamped 0 and CAPTURE records at least 1, because the resolver writes its records with timestamp 0), so after the restart the funding goes first and the trade then books.
 - **Projection failures:** transient database or broker errors are retried with backoff; a stale owner epoch, a projection that is not a prefix of the log, or ten consecutive failures stop the process.
 - **Health:** the process supervises itself and exits 1 when the Streams app or any projection dies, so the supervisor restarts it.
 
