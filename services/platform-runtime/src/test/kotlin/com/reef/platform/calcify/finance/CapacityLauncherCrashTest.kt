@@ -123,7 +123,7 @@ class CapacityLauncherCrashTest {
                         for (ins in instruments) { writer.fundSecurity("seed-${p.value}", p, ins, 100_000L); feed(plan.laneOf(ins)!!, FinanceInput.Fund(ActionKey("operator", "fund", "seed-${p.value}/$ins"), Authority.OPERATOR, p, AssetId(ins), 100_000L)); funds++ }
                     }
                 }
-                val trades = 1_500
+                val trades = 12_000
                 val random = Random(20261015)
                 val schedule = (0 until trades).map {
                     val ins = instruments[random.nextInt(instruments.size)]; val b = participants[random.nextInt(participants.size)]; var s = participants[random.nextInt(participants.size)]; if (s == b) s = participants[(participants.indexOf(b) + 1) % participants.size]
@@ -142,7 +142,7 @@ class CapacityLauncherCrashTest {
                         put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rp.bootstrap); put(ProducerConfig.ACKS_CONFIG, "all"); put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
                         put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer::class.java.name); put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer::class.java.name)
                     })
-                    try { for ((i, ins, rest) in schedule) { val (b, s, un) = rest; producer.send(ProducerRecord(topics.capture, plan.laneOf(ins)!!, ByteArray(0), CapacityCrashFixture.resolvedContext(i, ins, b, s, un.first, un.second))); if (i % 25 == 24) Thread.sleep(40) }; producer.flush() } finally { producer.close() }
+                    try { for ((i, ins, rest) in schedule) { val (b, s, un) = rest; producer.send(ProducerRecord(topics.capture, plan.laneOf(ins)!!, ByteArray(0), CapacityCrashFixture.resolvedContext(i, ins, b, s, un.first, un.second))); if (i % 25 == 24) Thread.sleep(100) }; producer.flush() } finally { producer.close() }
                 }
                 var feederFailure: Throwable? = null
                 feeder.setUncaughtExceptionHandler { _, e -> feederFailure = e }
