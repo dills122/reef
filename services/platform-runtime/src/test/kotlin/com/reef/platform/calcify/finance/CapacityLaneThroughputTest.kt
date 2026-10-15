@@ -83,7 +83,7 @@ class CapacityLaneThroughputTest {
         try {
             val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
             while (true) { try { sh("docker", "exec", pgName, "psql", "-U", "postgres", "-d", "reef", "-c", "select 1"); break } catch (e: Exception) { check(System.nanoTime() < deadline) { "postgres not ready" }; Thread.sleep(1000) } }
-            val migrations = listOf("0014_calcify_finance_projection.sql", "0016_calcify_finance_sequence_bound.sql").joinToString("\n") { Files.readString(Path.of("../../scripts/dev/db/migrations/boundary/$it")) }
+            val migrations = listOf("0014_calcify_finance_projection.sql", "0016_calcify_finance_sequence_bound.sql", "0017_calcify_finance_decision_digest_checks.sql").joinToString("\n") { Files.readString(Path.of("../../scripts/dev/db/migrations/boundary/$it")) }
             sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "CREATE SCHEMA boundary;\n$migrations")
             if (env("CAP_PG_NOFK", "false").toBoolean()) sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = """
                 DO ${'$'}${'$'} DECLARE r record; BEGIN
@@ -91,6 +91,17 @@ class CapacityLaneThroughputTest {
                     EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.t, r.conname);
                   END LOOP;
                 END ${'$'}${'$'};""")
+            val lean = env("CAP_PG_LEAN", "false")      // false | unique | regex | both: drop the decision table's UNIQUE(action key) and/or its three hex-format CHECKs (measurement only)
+            if (lean != "false") {
+                val predicate = when (lean) { "unique" -> "contype = 'u'"; "regex" -> "contype = 'c' AND pg_get_constraintdef(oid) LIKE '%~%'"; else -> "contype = 'u' OR (contype = 'c' AND pg_get_constraintdef(oid) LIKE '%~%')" }
+                sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = """
+                    DO ${'$'}${'$'} DECLARE r record; BEGIN
+                      FOR r IN SELECT conname FROM pg_constraint WHERE conrelid = 'boundary.calcify_finance_decision'::regclass AND ($predicate) LOOP
+                        EXECUTE format('ALTER TABLE boundary.calcify_finance_decision DROP CONSTRAINT %I', r.conname);
+                      END LOOP;
+                    END ${'$'}${'$'};""")
+            }
+            if (env("CAP_PG_NOTRIGGER", "false").toBoolean()) sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "DROP TRIGGER calcify_finance_decision_within_bound ON boundary.calcify_finance_decision;")
             if (env("CAP_PG_SYNC_OFF", "false").toBoolean()) sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "ALTER DATABASE reef SET synchronous_commit = off;")
             val ds = PGSimpleDataSource().apply { setUrl("jdbc:postgresql://127.0.0.1:$pgPort/reef"); user = "postgres"; password = "cap"; reWriteBatchedInserts = true }
             DisposableRedpanda(smp = env("S4_SMP", "1").toInt(), memory = env("S4_BROKER_MEM", "2G")).start().use { rp ->
