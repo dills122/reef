@@ -4,7 +4,7 @@
 # installs a JDK on the host, runs a short matrix, fetches the outputs, and destroys the droplet on every exit path.
 #
 #   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | compare | tmpfs | baseline | smoke | s1smoke)
-#   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then one finance lane with its projector on tmpfs stores; `lanesmoke` is the same at a few seconds each.
+#   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then one finance lane with its projector on tmpfs stores; `lanesmoke` is the same at a few seconds each and `enginesmoke` is only its engine case.
 #   `compare` runs the single-thread microbenchmarks first, then lanes 1 to 4 with the projector and lanes 1 and 3 without it, all with -XX:+UseParallelGC, then the S1 shard cases.
 #
 # Needs DIGITALOCEAN_TOKEN in .env or the environment, an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
@@ -111,10 +111,11 @@ run_case() {
 run_engine_drain() {
   # run_engine_drain LABEL PAIRS BATCHES [ENV...]  -- the Go lane drain test (real source, real transactional publisher) against a Redpanda whose data directory is tmpfs.
   # The Go toolchain runs in the golang image matching go.mod so the host needs no Go; the event topic's max.message.bytes and the producer limit are raised by the test itself.
+  # Redpanda is sized from the host (half the cores up to 4, a quarter of the memory up to 8 GB) so the same case runs on a small smoke droplet and on the measurement host.
   local label="$1" pairs="$2" batches="$3"; shift 3
   if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
   log "case $label (pairs $pairs batches $batches $*)"
-  remote "docker rm -f -v reef-it-rp >/dev/null 2>&1; docker run -d --rm --name reef-it-rp --network host --tmpfs /var/lib/redpanda/data:rw,size=16g,uid=101,gid=101,mode=0777 redpandadata/redpanda:v26.2.3 redpanda start --mode dev-container --smp 4 --memory 8G --reserve-memory 0M --overprovisioned --node-id 0 --check=false --kafka-addr 0.0.0.0:19092 --advertise-kafka-addr 127.0.0.1:19092 >/dev/null && for i in \$(seq 1 60); do docker exec reef-it-rp rpk cluster info >/dev/null 2>&1 && break; sleep 2; done; GOV=\$(awk '/^go /{print \$2}' $REMOTE_DIR/services/matching-engine/go.mod); mkdir -p /tmp/gocache /tmp/gomod; docker run --rm --network host -v \$PWD/$REMOTE_DIR/services/matching-engine:/src -v /tmp/gocache:/root/.cache/go-build -v /tmp/gomod:/go/pkg/mod -w /src -e REEF_KAFKA_INTEGRATION_BOOTSTRAP=127.0.0.1:19092 -e KAFKA_DRAIN=1 -e KAFKA_DRAIN_PAIRS=$pairs -e KAFKA_DRAIN_BATCHES=$batches $(for e in "$@"; do printf -- '-e %s ' "$e"; done) golang:\$GOV go test ./internal/streamdirect -run TestKafkaLaneDrainRate -v -count=1 -timeout 40m 2>&1 | grep -E 'LANE-DRAIN|FAIL|panic|^ok'; docker rm -f -v reef-it-rp >/dev/null 2>&1; docker ps -a --format 'LEFTOVER {{.Names}}'" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+  remote "docker rm -f -v reef-it-rp >/dev/null 2>&1; NP=\$(nproc); SMP=\$(( NP / 2 )); [ \$SMP -gt 4 ] && SMP=4; [ \$SMP -lt 1 ] && SMP=1; MEMG=\$(( \$(free -g | awk '/^Mem:/{print \$2}') / 4 )); [ \$MEMG -gt 8 ] && MEMG=8; [ \$MEMG -lt 1 ] && MEMG=1; docker run -d --rm --name reef-it-rp --network host --tmpfs /var/lib/redpanda/data:rw,size=\${MEMG}g,uid=101,gid=101,mode=0777 redpandadata/redpanda:v26.2.3 redpanda start --mode dev-container --smp \$SMP --memory \${MEMG}G --reserve-memory 0M --overprovisioned --node-id 0 --check=false --kafka-addr 0.0.0.0:19092 --advertise-kafka-addr 127.0.0.1:19092 >/dev/null && echo \"redpanda smp=\$SMP memory=\${MEMG}G\"; ready=0; for i in \$(seq 1 60); do docker exec reef-it-rp rpk cluster info >/dev/null 2>&1 && ready=1 && break; sleep 2; done; [ \$ready = 1 ] || { echo 'REDPANDA-NOT-READY'; docker logs --tail 15 reef-it-rp 2>&1; }; GOV=\$(awk '/^go /{print \$2}' $REMOTE_DIR/services/matching-engine/go.mod); mkdir -p /tmp/gocache /tmp/gomod; docker run --rm --network host -v \$PWD/$REMOTE_DIR/services/matching-engine:/src -v /tmp/gocache:/root/.cache/go-build -v /tmp/gomod:/go/pkg/mod -w /src -e REEF_KAFKA_INTEGRATION_BOOTSTRAP=127.0.0.1:19092 -e KAFKA_DRAIN=1 -e KAFKA_DRAIN_PAIRS=$pairs -e KAFKA_DRAIN_BATCHES=$batches $(for e in "$@"; do printf -- '-e %s ' "$e"; done) golang:\$GOV go test ./internal/streamdirect -run TestKafkaLaneDrainRate -v -count=1 -timeout 40m > /tmp/drain-$label.txt 2>&1; grep -E 'LANE-DRAIN|^ok' /tmp/drain-$label.txt; if ! grep -q 'LANE-DRAIN batch' /tmp/drain-$label.txt; then echo 'DRAIN-FAILED, test output follows'; tail -25 /tmp/drain-$label.txt; docker logs --tail 15 reef-it-rp 2>&1; fi; docker rm -f -v reef-it-rp >/dev/null 2>&1; docker ps -a --format 'LEFTOVER {{.Names}}'" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
 }
 
 run_engine_cpu() {
@@ -190,6 +191,9 @@ case "$MATRIX" in
       run_cap "cap-hot-lane-apply8000-$r" CAP_LANES=1 CAP_TRADES=600000 CAP_MAX_APPLY=8000
     done
     run_cap "cap-4lanes" CAP_LANES=4 CAP_TRADES=1200000
+    ;;
+  enginesmoke)
+    run_engine_drain "engine-smoke" 5000 500,2000
     ;;
   lanesmoke)
     run_engine_drain "engine-smoke" 5000 500,2000
