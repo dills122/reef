@@ -2113,3 +2113,23 @@ Two byte-identical changes to the finance lane found by parallel investigations 
 **Measured** (Apple M1 Max, quiet, no broker, `CapacityLaneCostTest`, 150,000 trades, master code and the branch alternating, three pairs): master 12,865, 12,826 and 12,911 trades/s; branch 18,228, 17,966 and 18,116 trades/s, **+41 percent**. Thread CPU per decision: about 39 to 41 us before the trie change, 32 to 33 after; allocation per decision about 34 KB to 15 KB. The projector's protobuf decode fell from 6.6-6.9 to 1.9 us per decision, but Postgres still dominates its time. Not measured on x86 (the CAL-FIN-P23 host spends 462 ns per 64-byte SHA-256 against 80 on this laptop, so hash count weighs more there and memory layout less); expect a smaller gain on the Xeon.
 
 **Not done, needs the owner (contract changes):** one decision per booked trade (1.42 to 1.66 times in a prototype), a creation-chain hybrid for the state commitment (about 4 times on the commitment alone, loses per-key inclusion proofs), checkpointed head and meta with a merged execution record (store layout v2, a new restore rule and a fresh application id; 11 to 7 puts and 1.8 KB to 0.7 KB per trade), and `producer.compression.type=lz4` on the Streams producer (config only, 55 percent fewer bytes per decision). See `docs/work/CALCIFY_COMBINED_DECISION_INVESTIGATION.md` and `docs/work/CALCIFY_STORE_WRITES_INVESTIGATION.md` on the investigation branches.
+
+
+## One decision per booked trade: capture-settle-v1, CAL-FIN-P25 (October 15, 2026)
+
+The owner-approved opt-in decision mode of the capacity profile (`decisionMode: "capture-settle-v1"`, default `two-step` and unchanged; see `docs/work/CALCIFY_CAPACITY_PROFILE.md` decision 7 and `docs/work/CALCIFY_COMBINED_DECISION_INVESTIGATION.md`). A booked trade is one `CaptureSettle` input and one decision, so the sequence counts trades; every rate below is given per trade, with decisions/s noted where it differs. One Apple M1 Max laptop, 10 cores, shared with nothing else heavy but not isolated; JDK 21; modes interleaved, three pairs; no capacity claim.
+
+**No broker** (`CapacityLaneCostTest`, `CAP_DECISION_MODE`, 200,000 trades, 2,000 accounts, 8 instruments): thread CPU per trade 50.9 / 52.1 / 52.5 us (`two-step`) against 31.9 / 32.6 / 31.4 us (`capture-settle-v1`), **1.59 to 1.67 times less**; trie branch hashes per trade 170.4 against 112.1; allocation per trade 20.2 KB against 12.7 KB; wall 18.6k to 19.2k against 30.0k to 31.2k trades/s.
+
+**Real stack** (`CapacityLaneThroughputTest`, `CAP_DECISION_MODE`, `CAP_LANES=1 CAP_TRADES=300000 CAP_INSTRUMENTS=64 CAP_ACCOUNTS=200 CAP_SOURCE=resolved`, local Redpanda and Postgres 16 containers, JaCoCo off, chain digest verified). Range over three pairs:
+
+| | processed trades/s | projected trades/s | decisions/s processed / projected | Streams-thread CPU per trade | projector SQL seconds (300k trades) |
+|---|---|---|---|---|---|
+| `two-step` | 13.3k to 13.8k | 8.0k to 8.1k | 26.6k to 27.7k / 16.0k to 16.3k | 72.7 to 74.3 us | 36.5 to 39.0 |
+| `capture-settle-v1` | 17.0k to 18.5k | 12.8k to 13.8k | same as trades | 53.7 to 55.3 us | 25.0 to 26.5 |
+| ratio (per pair) | 1.25 to 1.39 | 1.59 to 1.72 | | 1.33 to 1.39 | 1.38 to 1.47 |
+
+The lane gain on the real stack (1.33 to 1.39 times CPU, 1.25 to 1.39 times processed rate) is smaller than the no-broker gain (1.59 to 1.67): RocksDB puts, the changelog and the Kafka client cost per trade does not fall as much as the hashing. The projection gain (1.59 to 1.72 times in trades/s) is larger than the prototype's SQL-only estimate (1.11 to 1.26 times) because the projector, which was the stage closest to the limit, also sheds half its decision-row parsing, verification and chain work, not only half its decision-row inserts. The projector is still the limit (the projection finishes 5 to 6 s after the processor). Decisions/s in the new mode is lower than in the old one on the same hardware (13k against 16k projected) while trades/s is higher: compare modes in trades/s only.
+
+Correctness: the combined mode's differential test (160 seeds x 2 account modes x 140 steps) shows equal state, equal dispositions and a state digest equal to the reference commitment after every decision; the broker-backed `CapacityEndToEndTest` runs it for both capture sources, with shortfalls and operator repairs, clean restart and wiped-state restart, logs and projections equal to independent replays and the projection tables equal to a two-step shadow oracle.
+

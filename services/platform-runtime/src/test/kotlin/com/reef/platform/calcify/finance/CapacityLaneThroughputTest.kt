@@ -24,7 +24,8 @@ import org.postgresql.ds.PGSimpleDataSource
  * write it. The rate is projected decisions per second: decisions the projections hold, divided by the time from the first trade record sent to the last decision
  * projected (funding is decided before the clock starts). Compare CAL-FIN-P5 (stand-in ledger, one history entry per record): 1 lane 11.1k, 2 lanes 15.3k, 3 lanes 17.5k.
  *
- * CAP_LANES (1), CAP_TRADES (100000), CAP_ACCOUNTS (200), CAP_INSTRUMENTS (16), CAP_VERIFY_DIGEST (true). Shares the machine with the broker, the database and the
+ * CAP_LANES (1), CAP_TRADES (100000), CAP_ACCOUNTS (200), CAP_INSTRUMENTS (16), CAP_VERIFY_DIGEST (true), CAP_DECISION_MODE (`two-step`, the default, or `capture-settle-v1`: one decision per
+ * booked trade, so the sequence counts trades; the report then gives both decisions/s and trades/s, and trades/s is the figure to compare between modes). Shares the machine with the broker, the database and the
  * load generator, as the stand-in measurements did. S4_RP_DOCKER / S4_PG_DOCKER add `docker run` options (for example a tmpfs data directory).
  */
 @Tag("broker") @Tag("research")
@@ -43,9 +44,10 @@ class CapacityLaneThroughputTest {
         val instruments = (0 until instrumentCount).map { "INS$it" }
         val hotShare = env("CAP_HOT_SHARE", "0").toDouble()      // fraction of all trades sent to INS0; the rest are uniform over every instrument (INS0 included)
         val resolved = env("CAP_SOURCE", "lifecycle") == "resolved"
+        val mode = DecisionMode.ofWire(env("CAP_DECISION_MODE", DecisionMode.TWO_STEP.wire)); val decisionsPerTrade = if (mode == DecisionMode.CAPTURE_SETTLE) 1L else 2L
         val laneSets = if (resolved) CapacityRouting.engineLanes("p3-run", "p3-session", instruments, lanes) else (0 until lanes).map { l -> instruments.filterIndexed { i, _ -> i % lanes == l }.toSet() }
         val plan = CapacityPlan("rate-plan", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), laneSets,
-            trades + 10, trades + 10, 2 * trades + 10, accountCount * (lanes + instrumentCount) + 10, sequenceBound = 1_000_000_000L)
+            trades + 10, trades + 10, 2 * trades + 10, accountCount * (lanes + instrumentCount) + 10, sequenceBound = 1_000_000_000L, decisionMode = mode)
         val accounts = (0 until accountCount).map { AccountId("u$it") }
         val topics = CapacityTopics("RATE_CAPTURE", "RATE_CONTROL", "RATE_DECISIONS")
         val captureBinding = FiniteLifecycleFixtures.binding().digest
@@ -130,7 +132,7 @@ class CapacityLaneThroughputTest {
                     }
                     val fundDeadline = System.nanoTime() + Duration.ofMinutes(5).toNanos()
                     while (projected() < funds) { check(launcher.healthy()) { "service unhealthy during funding: ${launcher.projectionFailure()}" }; check(System.nanoTime() < fundDeadline) { "funding not projected: ${projected()} of $funds" }; Thread.sleep(200) }
-                    val expected = funds + 2L * trades
+                    val expected = funds + decisionsPerTrade * trades
                     val mx = java.lang.management.ManagementFactory.getThreadMXBean()
                     fun cpuByGroup(): Map<String, Long> = Thread.getAllStackTraces().keys.groupBy { th -> when { th.name.startsWith("capacity-projection") -> "projection"; th.name.contains("StreamThread") -> "streams"; th.name.contains("kafka-producer") || th.name.contains("kafka-coordinator") -> "kafka-clients"; else -> "other" } }
                         .mapValues { (_, ths) -> ths.sumOf { th -> mx.getThreadCpuTime(th.id).coerceAtLeast(0) } }
@@ -150,12 +152,12 @@ class CapacityLaneThroughputTest {
                         Thread.sleep(100)
                     }
                     val tDone = System.nanoTime()
-                    val decisions = 2L * trades; val seconds = (tDone - t0) / 1e9
+                    val decisions = decisionsPerTrade * trades; val seconds = (tDone - t0) / 1e9
                     admin.close()
                     val cpu1 = cpuByGroup()
                     println("CAPACITY-CPU cpu_seconds " + listOf("projection", "streams", "kafka-clients").joinToString(" ") { g -> "$g=${"%.1f".format(((cpu1[g] ?: 0) - (cpu0[g] ?: 0)) / 1e9)}" } + " read_s=${"%.1f".format(launcher.readNanos.get() / 1e9)} apply_s=${"%.1f".format(launcher.applyNanos() / 1e9)} verify_s=${"%.1f".format(launcher.projectorNanos().first / 1e9)} sql_s=${"%.1f".format(launcher.projectorNanos().second / 1e9)} wall=${"%.1f".format((tDone - t0) / 1e9)} cores=${Runtime.getRuntime().availableProcessors()}")
                     println("CAPACITY-LANES trades_per_lane=${(0 until lanes).map { l -> schedule.count { it.first == l } }} instruments_per_lane=${plan.laneInstruments.map { it.size }}")
-                    println("CAPACITY-RATE source=${if (resolved) "resolved" else "lifecycle"} lanes=$lanes trades=$trades decisions=$decisions processed_in=${"%.1f".format((tProcessed - t0) / 1e9)}s processed_decisions_per_s=${"%.0f".format(decisions / ((tProcessed - t0) / 1e9))} sent_in=${"%.1f".format((tSent - t0) / 1e9)}s projected_in=${"%.1f".format(seconds)}s projected_decisions_per_s=${"%.0f".format(decisions / seconds)} verify_digest=$verifyDigest")
+                    println("CAPACITY-RATE mode=${mode.wire} source=${if (resolved) "resolved" else "lifecycle"} lanes=$lanes trades=$trades decisions=$decisions processed_in=${"%.1f".format((tProcessed - t0) / 1e9)}s processed_decisions_per_s=${"%.0f".format(decisions / ((tProcessed - t0) / 1e9))} processed_trades_per_s=${"%.0f".format(trades / ((tProcessed - t0) / 1e9))} sent_in=${"%.1f".format((tSent - t0) / 1e9)}s projected_in=${"%.1f".format(seconds)}s projected_decisions_per_s=${"%.0f".format(decisions / seconds)} projected_trades_per_s=${"%.0f".format(trades / seconds)} verify_digest=$verifyDigest")
                     assertEquals(expected, projected())
                 } finally { launcher.close(); producer.close() }
             }

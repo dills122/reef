@@ -6,6 +6,10 @@ Status: measurement note, 2026-10-15. Not a capacity claim: one laptop (Apple M1
 
 `CapacityLaneCostTest` (research tag, `-PresearchTests`) runs the real `CapacityProcessor` on a mock context with an in-memory store. Input is captured trades (a capture and its instant first settlement, as the decoder emits them): 2,000 accounts, 8 instruments, 200,000 trades after a 20,000 trade warm-up, 18,000 funding records. A sampler thread records the processing thread's stack every millisecond and reports inclusive time per function. Because it excludes RocksDB, the changelog and the Kafka client, it bounds the processor's own cost from below.
 
+**Decisions per second versus trades per second.** Every rate in this note and in the notes before it is in *decisions* per second with the default `two-step` decision mode, where a booked trade is two decisions (capture and first settlement), so trades/s is half the decisions/s. In the opt-in `capture-settle-v1` mode a booked trade is one decision and the two figures are equal (see CALCIFY_CAPACITY_PROFILE.md decision 7 and CAL-FIN-P25). Compare modes in trades/s, thread CPU per trade or hashes per trade, never in decisions/s: the combined mode's decisions/s is lower on the same hardware while it books more trades.
+
+**Combined capture and settle (CAL-FIN-P25, 2026-10-15).** Same harness, flat trie and no re-encoding code, 200,000 trades, 2,000 accounts, 8 instruments, three interleaved pairs, no broker: thread CPU 50.9, 52.1, 52.5 us per trade in `two-step` against 31.9, 32.6, 31.4 us in `capture-settle-v1` (1.59 to 1.67 times less); branch hashes per trade 170.4 against 112.1; allocation 20.2 KB against 12.7 KB per trade; 18.6k to 19.2k against 30.0k to 31.2k trades/s. On the real stack the lane gain is smaller (1.33 to 1.39 times in Streams-thread CPU per trade), because RocksDB, the changelog and the Kafka client are not reduced as much as the hashing.
+
 ## Breakdown before the encoder change (10.7k trades/s, 21.4k decisions/s)
 
 | Share (inclusive) | Where |
