@@ -113,14 +113,31 @@ class CapacityLaneThroughputTest {
             }
             if (env("CAP_PG_NOTRIGGER", "false").toBoolean()) sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "DROP TRIGGER calcify_finance_decision_within_bound ON boundary.calcify_finance_decision;")
             if (env("CAP_PG_SYNC_OFF", "false").toBoolean()) sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "ALTER DATABASE reef SET synchronous_commit = off;")
+            if (env("CAP_WAL_COMPRESSION", "off") == "lz4") sh("docker", "exec", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", "-c", "ALTER DATABASE reef SET wal_compression = 'lz4';")
+            System.getenv("CAP_POSITION_FILLFACTOR")?.toInt()?.also { require(it in 10..100) }?.let { positionFillfactor ->
+                sh("docker", "exec", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", "-c", "ALTER TABLE boundary.calcify_finance_position SET (fillfactor=$positionFillfactor);")
+            }
+            if (env("CAP_UNLOGGED", "false").toBoolean()) for (table in listOf("decision", "position", "attempt", "obligation", "checkpoint"))
+                sh("docker", "exec", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", "-c", "ALTER TABLE boundary.calcify_finance_$table SET UNLOGGED;")
             val ds = PGSimpleDataSource().apply { setUrl("jdbc:postgresql://127.0.0.1:$pgPort/reef"); user = "postgres"; password = "cap"; reWriteBatchedInserts = true }
             DisposableRedpanda(smp = env("S4_SMP", "1").toInt(), memory = env("S4_BROKER_MEM", "2G")).start().use { rp ->
-                rp.admin().use { admin -> admin.createTopics(listOf(topics.capture, topics.control, topics.decisions).map { NewTopic(it, lanes, 1.toShort()).configs(mapOf("retention.ms" to "-1", "retention.bytes" to "-1")) }).all().get(30, TimeUnit.SECONDS) }
-                val client = Properties().apply { put("bootstrap.servers", rp.bootstrap) }
+                rp.admin().use { admin ->
+                    val definitions = listOf(topics.capture, topics.control, topics.decisions).map { NewTopic(it, lanes, 1.toShort()).configs(mapOf("retention.ms" to "-1", "retention.bytes" to "-1")) }.toMutableList()
+                    // Keep every emitted changelog record until counted; otherwise concurrent compaction makes byte inventory incomplete.
+                    if (env("CAP_FOOTPRINT", "false").toBoolean()) definitions += NewTopic("capacity-rate-capacity-finance-changelog", lanes, 1.toShort())
+                        .configs(buildMap {
+                            put("cleanup.policy", "compact"); put("min.compaction.lag.ms", env("CAP_COMPACTION_LAG_MS", "86400000"))
+                            System.getenv("CAP_CHANGELOG_SEGMENT_BYTES")?.let { put("segment.bytes", it) }
+                            System.getenv("CAP_CHANGELOG_SEGMENT_MS")?.let { put("segment.ms", it) }
+                        })
+                    admin.createTopics(definitions).all().get(30, TimeUnit.SECONDS)
+                }
+                val client = Properties().apply { put("bootstrap.servers", rp.bootstrap); System.getenv("CAP_COMPRESSION")?.let { put("producer.compression.type", it) } }
                 val stateDir = Files.createTempDirectory("capacity-rate-state").toFile()
                 val launcher = CapacityLauncher(plan, if (resolved) CapacityResolvedContextDecoder(plan) else CapacityInputDecoders(plan, captureBinding, verifyDigest), topics, "capacity-rate", client, client, stateDir.path, ds, maxApply = env("CAP_MAX_APPLY", "2000").toInt()).start()
                 val producer = KafkaProducer<ByteArray, ByteArray>(Properties().apply {
                     put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rp.bootstrap); put(ProducerConfig.ACKS_CONFIG, "all"); put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
+                    System.getenv("CAP_COMPRESSION")?.let { put(ProducerConfig.COMPRESSION_TYPE_CONFIG, it) }
                     put(ProducerConfig.LINGER_MS_CONFIG, 5); put(ProducerConfig.BATCH_SIZE_CONFIG, 131_072)
                     put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer::class.java.name); put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer::class.java.name)
                 })
@@ -132,6 +149,7 @@ class CapacityLaneThroughputTest {
                     }
                     val fundDeadline = System.nanoTime() + Duration.ofMinutes(5).toNanos()
                     while (projected() < funds) { check(launcher.healthy()) { "service unhealthy during funding: ${launcher.projectionFailure()}" }; check(System.nanoTime() < fundDeadline) { "funding not projected: ${projected()} of $funds" }; Thread.sleep(200) }
+                    val inventory = if (env("CAP_FOOTPRINT", "false").toBoolean()) CapacityByteInventory(ds, rp, pgName).also { it.baseline() } else null
                     val expected = funds + decisionsPerTrade * trades
                     val mx = java.lang.management.ManagementFactory.getThreadMXBean()
                     fun cpuByGroup(): Map<String, Long> = Thread.getAllStackTraces().keys.groupBy { th -> when { th.name.startsWith("capacity-projection") -> "projection"; th.name.contains("StreamThread") -> "streams"; th.name.contains("kafka-producer") || th.name.contains("kafka-coordinator") -> "kafka-clients"; else -> "other" } }
@@ -159,7 +177,8 @@ class CapacityLaneThroughputTest {
                     println("CAPACITY-LANES trades_per_lane=${(0 until lanes).map { l -> schedule.count { it.first == l } }} instruments_per_lane=${plan.laneInstruments.map { it.size }}")
                     println("CAPACITY-RATE mode=${mode.wire} source=${if (resolved) "resolved" else "lifecycle"} lanes=$lanes trades=$trades decisions=$decisions processed_in=${"%.1f".format((tProcessed - t0) / 1e9)}s processed_decisions_per_s=${"%.0f".format(decisions / ((tProcessed - t0) / 1e9))} processed_trades_per_s=${"%.0f".format(trades / ((tProcessed - t0) / 1e9))} sent_in=${"%.1f".format((tSent - t0) / 1e9)}s projected_in=${"%.1f".format(seconds)}s projected_decisions_per_s=${"%.0f".format(decisions / seconds)} projected_trades_per_s=${"%.0f".format(trades / seconds)} verify_digest=$verifyDigest")
                     assertEquals(expected, projected())
-                } finally { launcher.close(); producer.close() }
+                    inventory?.finish(trades, decisionsPerTrade, env("CAP_COMPACTION_LAG_MS", "86400000").toLong() >= 86400000)
+                } finally { launcher.close(); producer.close(); stateDir.deleteRecursively() }
             }
         } finally { ProcessBuilder("docker", "rm", "-f", "-v", pgName).redirectErrorStream(true).start().also { it.inputStream.readAllBytes() }.waitFor() }
     }
