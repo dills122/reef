@@ -6,7 +6,7 @@ import reef.contracts.calcify.v1.MatchContextResolvedV1
 /**
  * The capacity profile's decoder for the production upstream record: a [MatchContextResolvedV1] from the Phase 2 resolver (one trade with the acceptance facts of its
  * buy and sell orders), written to the venue source partition, which is the finance lane. Mapping `calcify-capacity-resolved-state-v1`:
- *  - the context must be policy [POLICY_VERSION] and in the plan's run and session, and its instrument must trade in the lane it arrived on (the plan is engine-aligned,
+ *  - the context must be policy [POLICY_VERSION] and in the plan's run and session, and its instrument must trade in the lane it arrived on (the plan is engine-aligned (stream-command routing),
  *    so a mismatch is a routing fault and the record is counted, never recorded);
  *  - the buyer and seller accounts are the accounts of the two acceptance facts, whose order ids must be the trade's buy and sell order ids;
  *  - quantity is the trade's `units` and price its `nanos`, canonical positive decimals at the plan's cash currency;

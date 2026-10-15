@@ -22,10 +22,10 @@ internal data class CapacityDeployment(val plan: CapacityPlan, val decoder: Capa
  * operator's statement of the deployment and its digest is the lane bindings' identity.
  *
  * Plan file (strict JSON, every field required, numbers spelled as decimal text as in the finite contract):
- * `{"schema":"calcify-capacity-plan-v1","planId","run","session","cashAsset","openingAccount","laneRouting":"partition-lane-hash-v1"|"explicit","laneInstruments":[["A","B"],["C"]],
+ * `{"schema":"calcify-capacity-plan-v1","planId","run","session","cashAsset","openingAccount","laneRouting":"stream-command-partition-v1"|"explicit","laneInstruments":[["A","B"],["C"]],
  *   "maxObligations","maxCaptures","maxSettleAttempts","maxControls","sequenceBound","autoSettle":true,"applicationId","topics":{"capture","control","decisions"},
  *   "captureSource":{"kind":"resolved-context-v1","policyVersion":"1"} | {"kind":"finite-lifecycle-capture-v1","bindingDigest":"<64 hex>","verifyContentDigest":true}}`
- * `partition-lane-hash-v1` makes the file refuse any instrument assignment that is not the matching engine's own partitioning, which is required for the production
+ * `stream-command-partition-v1` makes the file refuse any instrument assignment that is not the platform's stream-command routing (run, session, instrument hash), which is required for the production
  * source (resolved match contexts arrive on the venue source partition = the lane).
  */
 internal object CapacityRuntime {
@@ -59,7 +59,7 @@ internal object CapacityRuntime {
             "resolved-context-v1" -> {
                 FiniteBindingContract.fields(source, listOf("kind", "policyVersion"))
                 require(FiniteBindingContract.number(source, "policyVersion", 1_000) == CapacityResolvedContextDecoder.POLICY_VERSION.toLong()) { "unsupported resolved-context policyVersion" }
-                require(routing == CapacityRouting.ENGINE_PARTITIONS) { "resolved contexts arrive on the engine's partitions: laneRouting must be partition-lane-hash-v1" }
+                require(routing == CapacityRouting.ENGINE_PARTITIONS) { "resolved contexts arrive on the engine's partitions: laneRouting must be stream-command-partition-v1" }
                 CapacityResolvedContextDecoder(plan)
             }
             "finite-lifecycle-capture-v1" -> {
@@ -73,6 +73,13 @@ internal object CapacityRuntime {
         return CapacityDeployment(plan, decoder, topics, t("applicationId"))
     }
 
+    /**
+     * Kafka Streams widens the permissions of its own state directory to group read and execute the first time it runs, so the configured directory itself would fail the
+     * owner-only check on every later start. Streams gets a subdirectory instead; the configured parent stays owner-only (0700), which keeps group and others from
+     * traversing into the ledger whatever the permissions below it are. Found by restarting the service on a real stack.
+     */
+    internal fun streamsStateDirectory(configured: Path): Path = configured.resolve("streams")
+
     /** Builds (does not start) the launcher. Reads files and the environment only: no broker or database connection is opened here. */
     fun create(lookup: (String) -> String? = System::getenv): CapacityLauncher {
         fun required(key: String) = lookup(key)?.takeIf { it.isNotBlank() } ?: error("missing $key")
@@ -83,11 +90,18 @@ internal object CapacityRuntime {
         val deployment = parsePlan(FiniteRuntime.privateBytes(Path.of(required("CALCIFY_CAPACITY_PLAN_FILE")), 65_536))
         val bootstrap = required("CALCIFY_CAPACITY_KAFKA_BOOTSTRAP_SERVERS")
         val protocol = lookup("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL")?.takeIf { it.isNotBlank() } ?: "SASL_PLAINTEXT"
-        val mechanism = lookup("CALCIFY_CAPACITY_KAFKA_SASL_MECHANISM")?.takeIf { it.isNotBlank() } ?: "PLAIN"
-        val financeUser = required("CALCIFY_CAPACITY_KAFKA_USERNAME"); val observerUser = required("CALCIFY_CAPACITY_OBSERVER_KAFKA_USERNAME")
-        require(financeUser != observerUser) { "the finance and observer principals must differ" }
-        val streamsProps = FiniteFinanceRuntime.clientProperties(bootstrap, protocol, mechanism, financeUser, secret("CALCIFY_CAPACITY_KAFKA_PASSWORD"))
-        val evidenceProps = FiniteFinanceRuntime.clientProperties(bootstrap, protocol, mechanism, observerUser, secret("CALCIFY_CAPACITY_OBSERVER_KAFKA_PASSWORD"))
+        val streamsProps: Properties; val evidenceProps: Properties
+        if (protocol == "PLAINTEXT") {
+            // Local development stacks only (the compose Redpanda has no authentication). Explicit and separate from the protocol so it cannot be selected by accident.
+            require(lookup("CALCIFY_CAPACITY_DEV_PLAINTEXT") == "true") { "PLAINTEXT Kafka needs CALCIFY_CAPACITY_DEV_PLAINTEXT=true (local development stacks only)" }
+            streamsProps = Properties().apply { put("bootstrap.servers", bootstrap) }; evidenceProps = Properties().apply { put("bootstrap.servers", bootstrap) }
+        } else {
+            val mechanism = lookup("CALCIFY_CAPACITY_KAFKA_SASL_MECHANISM")?.takeIf { it.isNotBlank() } ?: "PLAIN"
+            val financeUser = required("CALCIFY_CAPACITY_KAFKA_USERNAME"); val observerUser = required("CALCIFY_CAPACITY_OBSERVER_KAFKA_USERNAME")
+            require(financeUser != observerUser) { "the finance and observer principals must differ" }
+            streamsProps = FiniteFinanceRuntime.clientProperties(bootstrap, protocol, mechanism, financeUser, secret("CALCIFY_CAPACITY_KAFKA_PASSWORD"))
+            evidenceProps = FiniteFinanceRuntime.clientProperties(bootstrap, protocol, mechanism, observerUser, secret("CALCIFY_CAPACITY_OBSERVER_KAFKA_PASSWORD"))
+        }
         lookup("CALCIFY_CAPACITY_SESSION_TIMEOUT_MS")?.takeIf { it.isNotBlank() }?.let { raw ->
             val session = raw.toIntOrNull()?.takeIf { it in 6_000..45_000 } ?: error("CALCIFY_CAPACITY_SESSION_TIMEOUT_MS must be an integer in 6000..45000")
             streamsProps[StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = session
@@ -106,7 +120,7 @@ internal object CapacityRuntime {
             setURL(jdbcUrl); user = required("CALCIFY_CAPACITY_POSTGRES_USER"); password = secret("CALCIFY_CAPACITY_POSTGRES_PASSWORD")
             connectTimeout = 5; socketTimeout = 120; reWriteBatchedInserts = true
         }
-        return CapacityLauncher(deployment.plan, deployment.decoder, deployment.topics, deployment.applicationId, evidenceProps, streamsProps, stateDir.toString(), dataSource,
+        return CapacityLauncher(deployment.plan, deployment.decoder, deployment.topics, deployment.applicationId, evidenceProps, streamsProps, streamsStateDirectory(stateDir).toString(), dataSource,
             threads = threads, projectionIntervalMs = interval, maxApply = maxApply)
     }
 
