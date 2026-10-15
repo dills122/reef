@@ -213,9 +213,10 @@ func TestProcessorTreatsAProducerSizeRejectionLikeAnOversizeBatch(t *testing.T) 
 }
 
 func TestProcessorGrowsBackToTheConfiguredBatchAfterSustainedSuccess(t *testing.T) {
-	source, _ := newCapSource(2000)
+	source, _ := newCapSource(4000)
 	publisher := &sizeLimitedPublisher{source: source}
 	processor := NewProcessor(app.NewService(), source, publisher, ProcessorConfig{ShardID: "engine-test", BatchSize: 32})
+	processor.growAfter, processor.reprobeAfter = 4, 8
 	publisher.err = &EventBatchTooLargeError{Bytes: 2, Limit: 1}
 	if _, err := processor.ProcessOnce(context.Background()); !isEventBatchTooLarge(err) {
 		t.Fatalf("expected an oversize error: %v", err)
@@ -224,13 +225,29 @@ func TestProcessorGrowsBackToTheConfiguredBatchAfterSustainedSuccess(t *testing.
 	if got := processor.Stats().BatchLimit; got != 16 {
 		t.Fatalf("limit after one split = %d, want 16", got)
 	}
-	for i := 0; i < 400 && processor.Stats().BatchLimit < 32; i++ {
+	for i := 0; i < 200 && processor.Stats().BatchLimit < 31; i++ {
+		if _, err := processor.ProcessOnce(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := processor.Stats().BatchLimit; got != 31 {
+		t.Fatalf("growth must stop just below the size that failed (31), got %d", got)
+	}
+	for i := 0; i < 6; i++ {
+		if _, err := processor.ProcessOnce(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := processor.Stats().BatchLimit; got != 31 {
+		t.Fatalf("the size that failed (32) was probed again before the re-probe interval: limit %d", got)
+	}
+	for i := 0; i < 200 && processor.Stats().BatchLimit < 32; i++ {
 		if _, err := processor.ProcessOnce(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if got := processor.Stats().BatchLimit; got != 32 {
-		t.Fatalf("limit never recovered: %d", got)
+		t.Fatalf("after the re-probe interval the configured size must be reachable again, got %d", got)
 	}
 }
 
@@ -255,5 +272,32 @@ func TestKafkaPublisherRefusesAnEventBatchOverTheProducerLimitBeforeOpeningATran
 	publisher.maxMessageBytes = 0
 	if _, err := publisher.eventBatchMessage(large); err != nil {
 		t.Fatalf("limit 0 means unchecked: %v", err)
+	}
+}
+
+func TestRecordEstimateNeverUnderstatesTheProducersByteSize(t *testing.T) {
+	subject := "reef.evt.p00.VenueEventBatch"
+	for _, size := range []int{0, 1, 127, 128, 16384, 1 << 20} {
+		message := &sarama.ProducerMessage{
+			Key:     sarama.StringEncoder("batch-0001"),
+			Value:   sarama.ByteEncoder(make([]byte, size)),
+			Headers: []sarama.RecordHeader{{Key: []byte(kafkaStreamSubjectHeader), Value: []byte(subject)}},
+		}
+		if estimate, actual := estimateRecordBytes(size, len("batch-0001"), subject), message.ByteSize(2); estimate < actual {
+			t.Fatalf("payload %d: estimate %d is below the producer's own %d, so a batch could pass the check and still be refused", size, estimate, actual)
+		}
+	}
+}
+
+func TestProcessorDoesNotReprobeASizeThatAlreadyFailedOnASteadyLoad(t *testing.T) {
+	limit := sizeOfBatch(t, 10)
+	source, _ := newCapSource(6000)
+	publisher := &sizeLimitedPublisher{source: source, limit: limit}
+	processor := NewProcessor(app.NewService(), source, publisher, ProcessorConfig{ShardID: "engine-test", BatchSize: 64})
+
+	tooLarge := drain(t, processor, source, 5000)
+
+	if tooLarge > 8 {
+		t.Fatalf("%d oversize attempts on a steady load: the lane keeps re-probing a size that already failed", tooLarge)
 	}
 }

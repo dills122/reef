@@ -562,6 +562,14 @@ func (p *KafkaEventBatchPublisher) PublishEventBatchAndAck(ctx context.Context, 
 
 const producerRecordFramingMargin = 128
 
+// estimateRecordBytes bounds, from above, what the producer measures for one
+// event batch record: sarama counts key, value, header key and value plus fixed
+// framing, uncompressed. TestRecordEstimateNeverUnderstatesTheProducersByteSize
+// pins it to sarama's own ByteSize.
+func estimateRecordBytes(payloadBytes int, keyBytes int, subject string) int {
+	return payloadBytes + keyBytes + len(kafkaStreamSubjectHeader) + len(subject) + producerRecordFramingMargin
+}
+
 func (p *KafkaEventBatchPublisher) eventBatchMessage(batch VenueEventBatch) (*sarama.ProducerMessage, error) {
 	payload, err := json.Marshal(batch)
 	if err != nil {
@@ -571,7 +579,7 @@ func (p *KafkaEventBatchPublisher) eventBatchMessage(batch VenueEventBatch) (*sa
 	if p.maxMessageBytes > 0 {
 		// The producer compares the uncompressed record (key, value, headers and
 		// the record's own framing) with the limit; the margin covers the framing.
-		size := len(payload) + len(batch.BatchID) + len(kafkaStreamSubjectHeader) + len(subject) + producerRecordFramingMargin
+		size := estimateRecordBytes(len(payload), len(batch.BatchID), subject)
 		if size > p.maxMessageBytes {
 			return nil, &EventBatchTooLargeError{Bytes: size, Limit: p.maxMessageBytes}
 		}

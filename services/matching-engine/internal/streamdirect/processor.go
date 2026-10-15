@@ -81,11 +81,23 @@ type Processor struct {
 	// Only the processing goroutine touches it; Stats carries the published copy.
 	batchLimit  int
 	fullBatches int
+	// failedAt is the smallest fetch size whose event batch was too large. Growth
+	// stays below it so a steady load does not re-probe a size that already
+	// failed; after reprobeFullBatches full batches at the ceiling it is cleared
+	// once, in case the commands got smaller.
+	failedAt int
+
+	growAfter    int
+	reprobeAfter int
 }
 
 // fullBatchesBeforeGrowth is how many consecutive full-size batches must
 // publish before a halved batch limit doubles again.
 const fullBatchesBeforeGrowth = 64
+
+// reprobeFullBatches is how many full batches at the ceiling below a failed
+// size publish before that size may be tried again.
+const reprobeFullBatches = 64 * fullBatchesBeforeGrowth
 
 // EventBatchTooLargeError reports an event batch that cannot be sent as one
 // producer message. It is raised before any broker transaction is opened.
@@ -224,6 +236,8 @@ func NewProcessor(service *app.Service, source CommandSource, publisher EventBat
 		now:       time.Now,
 	}
 	processor.batchLimit = config.BatchSize
+	processor.growAfter = fullBatchesBeforeGrowth
+	processor.reprobeAfter = reprobeFullBatches
 	stats.BatchLimit.Store(int64(config.BatchSize))
 	processor.lifecycleError = validateCalcifyLifecycle(service, config.CalcifyLifecycleEnabled, config.CalcifyFiniteBindingDigest, config.BatchSize)
 	if config.CalcifyLifecycleEnabled && processor.lifecycleError == nil {
@@ -372,7 +386,10 @@ func (p *Processor) afterPublishFailure(err error, fetched int) error {
 		return err
 	}
 	if fetched <= 1 {
-		return &fatalProcessorError{cause: fmt.Errorf("one command's event batch exceeds the producer message limit; raise MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES and the event topic max.message.bytes together: %w", err)}
+		return &fatalProcessorError{cause: fmt.Errorf("one command's event batch exceeds the producer message limit; raise MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES (and the event topic's max.message.bytes if it is lower): %w", err)}
+	}
+	if p.failedAt == 0 || fetched < p.failedAt {
+		p.failedAt = fetched
 	}
 	p.batchLimit = fetched / 2
 	p.fullBatches = 0
@@ -386,14 +403,32 @@ func (p *Processor) afterPublishSuccess(fetched int) {
 		return
 	}
 	p.fullBatches++
-	if p.fullBatches < fullBatchesBeforeGrowth {
+	ceiling := p.config.BatchSize
+	if p.failedAt > 0 && p.failedAt-1 < ceiling {
+		ceiling = p.failedAt - 1
+	}
+	if p.batchLimit >= ceiling {
+		if p.failedAt > 0 && p.fullBatches >= p.reprobeAfter {
+			p.failedAt = 0
+			p.fullBatches = 0
+		}
+		return
+	}
+	if p.fullBatches < p.growAfter {
 		return
 	}
 	p.fullBatches = 0
-	p.batchLimit *= 2
-	if p.batchLimit > p.config.BatchSize {
-		p.batchLimit = p.config.BatchSize
+	next := p.batchLimit * 2
+	if p.failedAt > 0 {
+		// Search between the size known to fit and the size known to fail.
+		if mid := p.batchLimit + (p.failedAt-p.batchLimit+1)/2; mid < next {
+			next = mid
+		}
 	}
+	if next > ceiling {
+		next = ceiling
+	}
+	p.batchLimit = next
 	p.stats.BatchLimit.Store(int64(p.batchLimit))
 }
 
