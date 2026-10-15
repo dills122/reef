@@ -12,6 +12,9 @@ import java.security.MessageDigest
  * deleted in the capacity profile (a rotating ledger is sealed and replaced), so there is no delete; that would need the collapse rule of 4.1.
  *
  * Not thread-safe: one writer, which is the commitment worker of the lagged profile or the deciding thread of the synchronous one.
+ *
+ * This linked-node form is the readable specification of the incremental algorithm. [CapacityLedger] runs [FlatStateTrie], the same trie in flat arrays, which
+ * a differential test holds to this class's digests and hash counts; this class stays as its oracle.
  */
 internal class StateTrie {
     private sealed class Node { abstract fun digest(trie: StateTrie): ByteArray }

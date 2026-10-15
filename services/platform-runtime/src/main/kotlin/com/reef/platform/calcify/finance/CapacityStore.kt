@@ -22,8 +22,26 @@ internal object CapacityStore {
     const val HEAD = "head"
     private val hex = HexFormat.of()
 
-    fun entityKey(e: StateCommitment.Entity) = "e/${e.tag}/${hex.formatHex(e.keyBytes)}"
-    fun entityValue(e: StateCommitment.Entity) = Canon.bytes { str(ENTITY_VERSION) } + e.valueBytes
+    /** The version frame every entity value starts with: constant, so encoded once. */
+    private val ENTITY_PREFIX = Canon.bytes { str(ENTITY_VERSION) }
+
+    private val HEX_DIGITS = "0123456789abcdef".toByteArray(StandardCharsets.ISO_8859_1)
+
+    /** `e/<tag>/<lowercase hex of the framed key fields>`: one pass into one Latin-1 array, then one string (the tag is one ASCII character). */
+    fun entityKey(e: StateCommitment.Entity): String {
+        val key = e.keyBytes; val tag = e.tag
+        if (tag.length != 1 || tag[0].code >= 0x80) return "e/$tag/${hex.formatHex(key)}"
+        val out = ByteArray(4 + 2 * key.size)
+        out[0] = 'e'.code.toByte(); out[1] = '/'.code.toByte(); out[2] = tag[0].code.toByte(); out[3] = '/'.code.toByte()
+        var at = 4
+        for (b in key) { val v = b.toInt() and 0xff; out[at++] = HEX_DIGITS[v ushr 4]; out[at++] = HEX_DIGITS[v and 15] }
+        return String(out, StandardCharsets.ISO_8859_1)
+    }
+    fun entityValue(e: StateCommitment.Entity): ByteArray {
+        val out = ByteArray(ENTITY_PREFIX.size + e.valueBytes.size)
+        System.arraycopy(ENTITY_PREFIX, 0, out, 0, ENTITY_PREFIX.size); System.arraycopy(e.valueBytes, 0, out, ENTITY_PREFIX.size, e.valueBytes.size)
+        return out
+    }
 
     data class Meta(val bindingDigest: String, val configDigest: String, val sequence: Long, val chain: String, val controls: Int) {
         fun bytes() = Canon.bytes { str(META_VERSION); str(bindingDigest); str(configDigest); long(sequence); str(chain); int(controls) }
@@ -45,7 +63,7 @@ internal object CapacityStore {
         require(decision.sequence == ledger.sequence && decision.checksum == ledger.chain) { "the decision is not the ledger's latest" }
         val out = LinkedHashMap<String, ByteArray>()
         for (e in ledger.lastWrites) out[entityKey(e)] = entityValue(e)
-        out[HEAD] = FinanceWire.toProto(decision).toByteArray()
+        out[HEAD] = FinanceWire.encode(decision)
         out[META] = Meta(bindingDigest, ledger.config.digest(), ledger.sequence, ledger.chain, ledger.controls).bytes()
         return out
     }
@@ -53,7 +71,7 @@ internal object CapacityStore {
     private fun decodeEntity(key: String, value: ByteArray): StateCommitment.Entity {
         val parts = key.split("/"); require(parts.size == 3 && parts[0] == "e" && parts[1].length == 1) { "malformed entity key" }
         val keyBytes = try { hex.parseHex(parts[2]) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("malformed entity key", e) }
-        val version = Canon.bytes { str(ENTITY_VERSION) }
+        val version = ENTITY_PREFIX
         require(value.size >= version.size && value.copyOfRange(0, version.size).contentEquals(version)) { "unknown entity version" }
         val entity = StateCommitment.Entity(parts[1], keyBytes, value.copyOfRange(version.size, value.size))
         require(entityKey(entity) == key) { "non-canonical entity key" }
