@@ -69,7 +69,7 @@ class FlatStateTrieTest {
     @Test fun aLargeStateAcrossChunkBoundariesAgrees() {
         val rnd = Random(77); val flat = FlatStateTrie(); val linked = StateTrie()
         val keys = ArrayList<ByteArray>()
-        repeat(200_000) { val k = ByteArray(32).also { rnd.nextBytes(it) }; val l = leafFor(rnd); flat.put(k, l); linked.put(k, l); keys += k }   // > 3 chunks of 65,536 leaves
+        repeat(200_000) { val k = ByteArray(32).also { rnd.nextBytes(it) }; val l = leafFor(rnd); flat.put(k, l); linked.put(k, l); keys += k }   // crosses chunk and chunk-directory growth boundaries
         assertEquals(hex.formatHex(linked.root()), hex.formatHex(flat.root()))
         repeat(5_000) { val k = keys[rnd.nextInt(keys.size)]; val l = leafFor(rnd); flat.put(k, l); linked.put(k, l); if (it % 7 == 0) assertEquals(hex.formatHex(linked.root()), hex.formatHex(flat.root())) }
         repeat(2_000) { val k = ByteArray(32).also { rnd.nextBytes(it) }; val l = leafFor(rnd); flat.put(k, l); linked.put(k, l) }

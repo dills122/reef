@@ -17,7 +17,7 @@ import java.security.MessageDigest
  *  - the descent of `put` also touches each visited branch's digest record, so those cache misses are issued in parallel with the dependent pointer chase instead
  *    of one after the other when `root` runs;
  *  - a branch hash assembles its 67 input bytes in one reused buffer and writes the digest straight into its slot: no allocation per hash.
- * Chunks (64 Ki nodes each) keep growth O(chunk) with no large array copy, so a lane never pauses to grow the trie.
+ * Chunks (4 Ki nodes each) keep growth O(chunk). The largest array is 256 KiB plus its header, below G1's humongous threshold even with 1 MiB regions.
  *
  * Invariant: if a branch is not stale, the digest in its parent's slot (or `rootDigest`) is its current digest; a stale branch's slot is garbage until `root` re-hashes it.
  *
@@ -25,7 +25,7 @@ import java.security.MessageDigest
  */
 internal class FlatStateTrie {
     private companion object {
-        const val CHUNK_BITS = 16
+        const val CHUNK_BITS = 12
         const val CHUNK = 1 shl CHUNK_BITS
         const val MASK = CHUNK - 1
         const val NO_ROOT = Int.MIN_VALUE

@@ -214,7 +214,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
             return record(i, digest, why, emptyList())
         }
         val applied = apply(plan!!)
-        val settled = Obligation(ObligationStatus.SETTLED, 0, 0); obligations[i.execution] = settled
+        val settled = SETTLED; obligations[i.execution] = settled
         commitExecution(i.execution, captured); commitObligation(i.execution, settled)
         return record(i, digest, Disposition.SETTLED, applied)
     }
@@ -253,11 +253,14 @@ internal class CapacityLedger(val config: CapacityConfig) {
         if (plan == null) { attempts[attemptKey] = Disposition.BALANCE_OVERFLOW; commitAttempt(i.execution, i.attempt, Disposition.BALANCE_OVERFLOW); return record(i, digest, Disposition.BALANCE_OVERFLOW, emptyList()) }
         val applied = apply(plan)
         attempts[attemptKey] = Disposition.SETTLED; commitAttempt(i.execution, i.attempt, Disposition.SETTLED)
-        val settled = Obligation(ObligationStatus.SETTLED, 0, 0); obligations[i.execution] = settled; commitObligation(i.execution, settled)
+        val settled = SETTLED; obligations[i.execution] = settled; commitObligation(i.execution, settled)
         return record(i, digest, Disposition.SETTLED, applied)
     }
 
     companion object {
+        // Immutable and identical for every completed obligation; canonical entity bytes remain unchanged.
+        private val SETTLED = Obligation(ObligationStatus.SETTLED, 0, 0)
+
         /** The decision checksum (the same layout as [FinanceLedger]'s, so the finite chain verifier accepts capacity decisions). */
         fun checksumOf(sequence: Long, action: ActionKey, inputDigest: String, disposition: Disposition, legs: List<Leg>, priorChain: String, stateDigest: String): String = Canon.digestHex {
             str("calcify-finance-decision-v1"); str(priorChain); long(sequence); str(stateDigest)
@@ -313,7 +316,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
         when (e.tag) {
             "P" -> { val k = AccountId(key.text()) to AssetId(key.text()); key.end(); positions[k] = value.long().also { value.end() } }
             "X" -> { val k = execution(); key.end(); executions[k] = Captured(AccountId(value.text()), AccountId(value.text()), value.long(), value.long()).also { value.end() } }
-            "O" -> { val k = execution(); key.end(); obligations[k] = Obligation(ObligationStatus.valueOf(value.text()), value.long(), value.long()).also { value.end() } }
+            "O" -> { val k = execution(); key.end(); obligations[k] = Obligation(ObligationStatus.valueOf(value.text()), value.long(), value.long()).also { value.end() }.let { if (it == SETTLED) SETTLED else it } }
             "A" -> { val k = execution() to key.int(); key.end(); attempts[k] = Disposition.valueOf(value.text()).also { value.end() } }
             "K" -> {
                 val k = ActionKey(key.text(), key.text(), key.text()); key.end()
