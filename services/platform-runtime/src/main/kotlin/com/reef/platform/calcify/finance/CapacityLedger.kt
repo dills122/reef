@@ -55,7 +55,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
     private val actions = HashMap<ActionKey, ActionRecord>()
     /** Accounts admitted by funding (only used when the configuration has no fixed account set); derived from the positions at restore, so it is not separate state. */
     private val admitted = HashSet<AccountId>()
-    private val trie = StateTrie()
+    private val trie = FlatStateTrie()
     var sequence = 0L; private set
     var controls = 0; private set
     var chain: String = genesisChain; private set

@@ -67,10 +67,15 @@ class CapacityLaneCostTest {
         }.also { it.isDaemon = true; it.start() }
         fun branchHashes(): Long = processor.currentLedger().branchHashes
         val hashesBefore = branchHashes()
+        // Wall-clock rate is noisy when other processes share the machine; the processing thread's own CPU time and allocation per decision are not.
+        val threadBean = java.lang.management.ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        val cpu0 = threadBean.currentThreadCpuTime; val alloc0 = threadBean.getThreadAllocatedBytes(thread.id)
         val t0 = System.nanoTime()
         val base = 20_000
         for (i in 0 until trades) { trade(base + i); if (i % 5_000 == 0) context.resetForwards() }
         val seconds = (System.nanoTime() - t0) / 1e9; running = false; sampler.join()
+        val cpu1 = threadBean.currentThreadCpuTime; val alloc1 = threadBean.getThreadAllocatedBytes(thread.id)
+        println("LANE-COST thread CPU ${"%.2f".format((cpu1 - cpu0) / 1000.0 / (2.0 * trades))} us/decision, allocated ${"%.0f".format((alloc1 - alloc0) / (2.0 * trades))} B/decision (sampler thread excluded from the CPU figure)")
         println("LANE-COST $trades trades ($accountCount accounts, $instrumentCount instruments) in ${"%.2f".format(seconds)} s = ${"%.0f".format(trades / seconds)} trades/s, ${"%.0f".format(2 * trades / seconds)} decisions/s; ${total} samples; ledger entities started at $stateBefore records")
         println("LANE-COST trie branch hashes per decision: ${"%.1f".format((branchHashes() - hashesBefore) / (2.0 * trades))}")
         val top = samples.entries.sortedByDescending { it.value }.filter { it.key.contains("Capacity") || it.key.contains("State") || it.key.contains("Canon") || it.key.contains("Finance") || it.key.contains("Message") || it.key.contains("Digest") || it.key.contains("Proto") || it.key.contains("HashMap") || it.key.contains("Lifecycle") || it.key.contains("update") || it.key.contains("digest") }.take(40)

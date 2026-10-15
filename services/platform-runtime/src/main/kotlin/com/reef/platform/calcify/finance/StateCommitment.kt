@@ -23,7 +23,13 @@ internal object StateCommitment {
     class Entity(val tag: String, val keyBytes: ByteArray, val valueBytes: ByteArray)
 
     private val hex = HexFormat.of()
-    private fun sha(vararg parts: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").also { md -> parts.forEach { md.update(it) } }.digest()
+    /** One SHA-256 instance per thread (looking one up per call cost about 5 percent of a lane); `digest()` resets it, and nothing here re-enters. */
+    private val digests = ThreadLocal.withInitial { MessageDigest.getInstance("SHA-256") }
+    private fun sha(vararg parts: ByteArray): ByteArray { val md = digests.get(); for (p in parts) md.update(p); return md.digest() }
+    /** `frame(KEY_LABEL) || frame(tag)` per tag: constant, so it is encoded once instead of for every entity written. */
+    private val keyPrefixes = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+    private fun keyPrefix(tag: String): ByteArray = keyPrefixes.computeIfAbsent(tag) { Canon.bytes { str(KEY_LABEL); str(tag) } }
+    private val leafTag = byteArrayOf(0x00); private val valueTag = byteArrayOf(0x01)
     private val hexDigest = Regex("^[0-9a-f]{64}$")
 
     /**
@@ -42,10 +48,10 @@ internal object StateCommitment {
     }
 
     /** `K(e) = SHA-256(frame(KEY_LABEL) || frame(tag) || keyBytes(e))`: the 256-bit trie key; bit 0 is the most significant. */
-    fun keyOf(e: Entity): ByteArray = sha(Canon.bytes { str(KEY_LABEL); str(e.tag) }, e.keyBytes)
+    fun keyOf(e: Entity): ByteArray = sha(keyPrefix(e.tag), e.keyBytes)
 
     /** `L(e) = SHA-256(0x00 || K(e) || SHA-256(0x01 || valueBytes(e)))`. */
-    fun leafOf(e: Entity, key: ByteArray = keyOf(e)): ByteArray = sha(byteArrayOf(0x00), key, sha(byteArrayOf(0x01), e.valueBytes))
+    fun leafOf(e: Entity, key: ByteArray = keyOf(e)): ByteArray = sha(leafTag, key, sha(valueTag, e.valueBytes))
 
     /** `SHA-256(0x03)`: the trie digest of the empty set. */
     val emptyTrie: ByteArray get() = sha(byteArrayOf(0x03))
