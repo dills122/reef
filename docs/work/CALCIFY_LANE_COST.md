@@ -58,3 +58,22 @@ Hash speed is also not the whole trie cost. The trie does 82 branch hashes per d
 2. Fewer entities per trade. Each trade creates four new leaves (execution, obligation, attempt, action) plus position updates. Folding the attempt into the obligation leaf is also a commitment change.
 3. Locality: hashing from one reused buffer instead of three `update` calls was tried and gave no measurable gain (12.8k trades/s against 12.8-13.6k). Storing the trie in arrays instead of linked heap nodes is contract-neutral: **done afterwards** (`FlatStateTrie`, byte-identical roots, lane CPU per decision -16 to -23 percent), together with a cheaper commitment contract proposed in [the state commitment investigation](CALCIFY_STATE_COMMITMENT_INVESTIGATION.md). That note also revisits the recommendation against batching above: a lagged root gains little, a hybrid log plus position trie gains about 4x on the commitment.
 4. A different hash (BLAKE3 etc.) is a contract change with no hardware support on this JVM, so it is not expected to beat SHA-256 here.
+
+## On a dedicated host (CAL-FIN-P23, 2026-10-15)
+
+DigitalOcean `c-32` (32 dedicated vCPU, **Intel Xeon Platinum 8168 at 2.7 GHz**), broker and Postgres data on tmpfs, JIT flags `-XX:+UseParallelGC`, resolved-context source, 64 instruments, 200 accounts, `CapacityLaneThroughputTest` via `droplet-chain-run.sh lane`. Raw output: `docs/work/evidence/CAL-FIN-P23-c32-lane-matrix.txt`.
+
+| Case | Trades | Processed | Projected | Notes |
+| --- | --- | --- | --- | --- |
+| One hot lane, run 1 | 600,000 | 7,131 decisions/s | 7,111 | Streams thread busy 168.3 s of 168.7 s wall |
+| One hot lane, run 2 | 600,000 | 7,115 | 7,095 | |
+| One hot lane, 8,000 record apply chunks, run 1 | 600,000 | 7,008 | 6,985 | no gain |
+| Same, run 2 | 600,000 | 6,904 | 6,890 | no gain |
+| **Four lanes, 64 instruments uniform** | 1,200,000 | **22,885** | **22,010** | lanes took 299,836 / 300,201 / 356,086 / 243,877 trades; digest verified; 109 s |
+
+Findings, in order of importance:
+
+1. **A single hot instrument is limited by one thread**: 7.1k decisions/s is about 3.5k trades/s on this host, with the lane's Streams thread saturated and the projector keeping pace (SQL 141 s of a 165 s apply, in memory verification 6.4 s). Ten thousand trades/s on one instrument needs about 2.9 times more from that thread; the laptop's 15k to 19k decisions/s per lane does not transfer to this hardware.
+2. **Uniform load meets the goalpost**: four lanes projected 22.0k decisions/s (11.0k trades/s), above the 20k decisions/s target, for the 109 second run. Storage for a long session is still not solved: the run wrote about 13 GB to tmpfs in under two minutes.
+3. **The host's CPU generation matters more than anything tuned so far.** The host microbenchmark measured SHA-256 of 64 bytes at 462 ns (the laptop: about 80 ns). A Skylake-generation Xeon has no SHA instructions (inference from the CPU model; the 462 ns is measured), and the state trie, 40 percent of the lane on the laptop, is hash bound. The earlier `g5` AMD EPYC line was measured markedly faster per thread than the Xeon `c-16` line (CAL-FIN-P8, before the encoder change, so the ratio is not comparable with today's numbers); a host with SHA extensions is the first thing to try for the hot instrument, and it has not been measured with the current code.
+4. Larger apply chunks did nothing on this host (6.9k to 7.0k against 7.1k), as expected when the lane thread, not the projector, is the limit.

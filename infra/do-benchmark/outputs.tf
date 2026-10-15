@@ -22,3 +22,8 @@ output "ssh_command" {
   description = "Convenience SSH command."
   value       = "ssh ${var.ssh_user}@${digitalocean_droplet.benchmark.ipv4_address}"
 }
+
+output "volume_name" {
+  description = "Name of the attached block-storage volume, or empty when none."
+  value       = var.volume_size_gb > 0 ? digitalocean_volume.benchmark[0].name : ""
+}
