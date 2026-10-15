@@ -2035,3 +2035,57 @@ One lane, 64 instruments, 600,000 decisions, no skew: processed 13,330 and proje
 What it says: the lane ceiling is about 16.4k decisions/s (8.2k trades/s) with a small state and 13.2k (6.6k trades/s) with 64 instruments' state; the limit is the processor thread. At the contract's 10,000 trades/s the hottest lane can carry roughly 65 to 80 percent of the trades; half the flow on one instrument (the hot lane at 60 percent) still projects 23.1k decisions/s against the 20k need.
 
 Interpretation limits: those of CAL-FIN-P16 to P18, plus: one hash outcome per cell (a different run or session id gives different lane sets); the hot instrument's lane also carries its share of the uniform flow; the matching engine's single-book rate is not measured here (the design note says why it decides whether this matters); the timers used for the section breakdown were temporary and are not in the product.
+
+
+## Hot instrument through the real stack: where one lane's pipeline saturates, CAL-FIN-P20 (October 14, 2026)
+
+The question CAL-FIN-P19 left open: with every trade on one instrument, which stage of the lane's pipeline falls behind first, the order book, the engine lane, Phase 1/2 or the finance lane? Local compose stack (10 CPUs shared by everything, Docker VM; the repository's own stack: Netty HTTP front door, matching engine on four stream-direct partitions with `MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE=500`, Redpanda, Phase 1 extractor/verifier/receipt worker, the Phase 2 resolver, the capacity service from the process role on the resolver's output topic with four lanes), load from `calcify-load` (paired mode, 1,024 workers, one instrument so every pair lands on one partition). The front door was switched from the dev profile's PostgreSQL intake to the in-memory bounded intake (`STREAM_ACK_INTAKE_STORE=inmemory`, `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory`, 1,000,000 entries, 256 shards) by an untracked temporary copy of `calcify-full-path-smoke.mjs` (deleted afterwards; its only failing assertion was the PostgreSQL intake row count). Single runs, 20 to 40 s each, one machine; correctness checked at the end of every sequence.
+
+**The book itself.** `matching-engine-load` (in-process, one worker, one instrument, alternating crossing orders, 8,000,000 commands, no Kafka, no HTTP): **378,390 commands/s** (189k trades/s), p99 latency 7 microseconds. The matching algorithm is about 20 times above any target here and is never the limit.
+
+| Front door | Offered pairs/s (orders/s) | Accepted orders/s | Result |
+| --- | --- | --- | --- |
+| PostgreSQL intake (the dev profile) | 1,000 (2,000) | 2,000 | all stages kept up exactly |
+| PostgreSQL intake | 2,500 (5,000) | 5,000 | all stages kept up exactly |
+| PostgreSQL intake | 5,000 (10,000) | 5,280 | the **front door** capped (92,178 of 200,000 offered pairs dropped by the generator); every stage behind it exact |
+| in-memory intake, Netty | 3,000 (6,000) | 5,996 | all stages kept up exactly |
+| in-memory intake | 4,500 (9,000) | 8,989 | accepted for 25 s with no failure; all stages exact |
+| in-memory intake | 5,500 (11,000) | 10,975 for 16.6 s | **backpressure**: `429 STREAM_COMMAND_WORKER_BACKPRESSURE`, engine consumer lag over 50,000 |
+| in-memory intake | 6,000 (12,000) | 11,936 for 14.9 s | the same 429 at lag 50,103 |
+| in-memory intake | 5,000 (10,000) | 9,091 for 19.6 s | the same 429 after about 20 s |
+
+Reconciliation after the whole in-memory sequence (367,113 trades in total): 367,113 Phase 1 receipts and 734,228 finance decisions (4 fundings and preflight plus 2 x 367,112), exactly as expected; every stage drained completely after the load stopped.
+
+**What the series shows (6,000 pairs/s run, per-second deltas).** The engine consumed 7.3k to 12.5k orders/s while the load ran (about 5k trades/s on average) and the lag it could not clear is what the front door's backpressure reads; Phase 1 receipts followed at 3.4k to 6.2k trades/s; the finance lane trailed at 4k to 7k decisions/s during the burst and, once the other stages were idle, drained its backlog at **11.8k decisions/s (5.9k trades/s)**, level with its measured ceiling (CAL-FIN-P19). Container CPU at the edge: matching engine 87 to 116 percent of one core (the hot partition's runner is one thread), API 150 to 230, the capacity service 220 to 313 (its processor, projection threads and JVM), resolver 94 to 104.
+
+**Conclusion.** For one hot instrument on this machine the lane pipeline sustains about **4.5k trades/s (9k orders/s) for 25 s and about 5k trades/s as the edge**; the first stage to saturate is the **engine lane's runner** (one CPU-bound thread, about 100 microseconds of CPU per order), then the front door's backpressure protects it. The finance lane's ceiling (6.6k to 8.2k trades/s) is above it, so finance is not the first limit for a hot instrument; the contract's 10,000 trades/s on a single instrument would need roughly twice this engine lane (and a faster host does not double a single thread).
+
+Interpretation limits: one machine whose 10 CPUs also ran the load generator, Docker VM, Redpanda (SMP 2), three Postgres databases and idle workers and projectors; single short runs (20 to 40 s) at each rate, so a longer run could trip the backpressure at a lower rate (the lag grows without bound above the edge, and 4,500 was held only for 25 s); the engine's per-order CPU was read from `docker stats` snapshots, not profiled, so which part of the lane runner (consume, apply, JSON, checksum, transactional publish) is the cost is not established; the in-memory intake is the high-rate profile of the repository (CAL-P2-D7), not the dev default.
+
+
+## Engine lane profile, the batch checksum, and the message-size cliff, CAL-FIN-P21 (October 14, 2026)
+
+CAL-FIN-P20 found the hot instrument's first limit in the engine lane's runner. This entry profiles it. Same machine, stack and load tool as CAL-FIN-P20 (laptop, 10 CPUs shared by everything; repository compose stack with the in-memory front door and Netty; matching engine on four stream-direct partitions with batch 500; `calcify-load`, one instrument so every pair lands on one partition). The engine was run with a temporary pprof listener (never committed) for the profiles.
+
+**CPU profile of the hot partition at 9,000 orders/s** (20 s, 18.0 s of samples): the batch checksum `venueEventBatchChecksum` **5.2 s, 29 percent of the process and 63 percent of the 8.3 s the runner thread (`Processor.ProcessOnce`) was busy**, of which JSON unmarshal into generic values 4.2 s (23 percent of the process), marshal 1.0 s, the canonical re-encode 1.3 s, SHA-256 0.5 s; garbage collection (`gcBgMarkWorker`) 6.7 s, **37 percent of the process**; Kafka client (Sarama) about 11 percent; decoding the incoming commands (`processDelivery`) 8 percent; **the actual matching (`SubmitOrderInBatch`) 5 percent**. A second profile of the runner saturated by a pre-filled backlog agreed (checksum 30 percent of the process, garbage collection 45, matching 6).
+
+**Where the hot runner goroutine waits** (120 goroutine dumps over 24 s at 9k orders/s, the hot partition's runner): 47.5 percent in `Fetch` waiting for commands (slack at that rate), 37.5 percent in `buildBatch` (the CPU work above), 15.0 percent in the Kafka transaction publish. The runner is strictly serial: fetch, build the batch (match, then checksum), publish and acknowledge in one Kafka transaction, repeat. Quiet-machine drain of a pre-filled backlog (the engine paused while 84,000 orders queue, then released): 13k to 20k orders/s, 17k typical, full 500-command batches.
+
+**The change** (PR 562): the checksum walks the Go values directly with a per-type plan and falls back to the previous JSON route for any shape it does not fully cover; the hash is byte-identical (cross-language vector unchanged; 6,000 random adversarial batches agree with the JSON route and the reference; a wrong invalid-UTF-8 treatment fails the test). Benchmark, 200-command batch: 2.48 ms, 2.1 MB and 20,734 allocations before; **0.40 ms, 7 KB and 47 allocations** after (6.2 times).
+
+**A/B on the real stack** (same stack, same load tool, 25 s per rate, quiescence between rates, no finance service, producer `MaxMessageBytes` and the events topic's `max.message.bytes` at 4 MiB for both builds; a rate counts as sustained when the front door rejected nothing and dropped nothing):
+
+| Offered pairs/s (orders/s) | OLD checksum | NEW typed checksum |
+| --- | --- | --- |
+| 5,000 (10,000) | sustained, engine CPU 91 percent | sustained, **53** |
+| 5,500 (11,000) | sustained, 111 | sustained, **49** |
+| 6,000 (12,000) | sustained, 104 | sustained, **47** |
+| 7,000 (14,000) | **backpressure after 17.6 s**, 128 | sustained, **52** |
+| 8,000 (16,000) | not reached | sustained, **51** |
+| 9,000 (18,000) | not reached | backpressure after 9.6 s (accepted 16.0k orders/s) |
+
+The hot lane's sustained edge moves from about 6,000 to 6,500 pairs/s (12k to 13k orders/s) to between 8,000 and 9,000 pairs/s (16k to 17k orders/s) on this machine, **about +30 percent, at roughly half the engine CPU at equal load**. Every receipt, Phase 1 and Phase 2 stage downstream accepted the new checksums (the preflight and all runs passed the verifier). The edge is still the engine lane (it is the stage whose lag trips the front door's backpressure of 50,000); the finance lane (6.6k to 8.2k trades/s, CAL-FIN-P19) now sits at or below it.
+
+**The message-size cliff.** With the default producer limit (1 MiB, `MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES`) a full batch of 500 crossing commands, about 1.0 to 1.13 MB, can exceed `Producer.MaxMessageBytes`. The runner then retries the identical batch forever ("publish venue event batch in Kafka transaction: kafka: invalid configuration (Attempt to produce message larger than configured Producer.MaxMessageBytes: 1128080 > 1048576)"), its acknowledgement counter stops, the front door's backpressure (lag 53,355) rejects every request, and the lane does not recover without a restart. Observed once in this campaign, on the new build, after the engine fell behind; there is no byte-aware cap on the batch and no splitting. The repository's high-rate profile (CAL-P2-D7) raises the producer limit and the topic's `max.message.bytes` to 4 MiB; the A/B above does too. A hot lane at saturation fills batches, so the default is a cliff for a hot instrument.
+
+Interpretation limits: one machine, single 25 s runs per rate, so the edge is a bracket not a point; the profile samples are 20 s and 3 s windows and the dump sample is 120 snapshots; the old and new builds ran in separate stack runs (same image layers, same configuration, same machine state as far as can be controlled; the engine CPU column is one `docker stats` snapshot 12 s into each run); CPU percent is of one core and includes garbage collection and the Kafka client threads; the cliff was observed once and its cause (batch bytes over the producer limit) is read from the error message and batch size, not reproduced on demand.
