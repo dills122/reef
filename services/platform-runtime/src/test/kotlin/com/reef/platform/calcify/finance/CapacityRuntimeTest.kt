@@ -97,6 +97,16 @@ class CapacityRuntimeTest {
         refused("group-readable state directory") { k -> ok(k) }
     }
 
+    @Test fun plaintextKafkaIsForLocalDevelopmentStacksOnlyAndNeedsAnExplicitFlag() {
+        val dir = Files.createTempDirectory("capacity-runtime")
+        val base = env(dir, without = setOf("CALCIFY_CAPACITY_KAFKA_USERNAME", "CALCIFY_CAPACITY_OBSERVER_KAFKA_USERNAME"))
+        fun with(vararg extra: Pair<String, String>): (String) -> String? = { k -> extra.toMap()[k] ?: base(k) }
+        assertFailsWith<IllegalArgumentException>("no flag") { CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "PLAINTEXT")) }
+        assertFailsWith<IllegalArgumentException>("flag with the wrong value") { CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "PLAINTEXT", "CALCIFY_CAPACITY_DEV_PLAINTEXT" to "yes")) }
+        CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "PLAINTEXT", "CALCIFY_CAPACITY_DEV_PLAINTEXT" to "true"))      // no principals or passwords needed
+        assertFailsWith<RuntimeException>("the secured protocols still need principals") { CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "SASL_PLAINTEXT")) }
+    }
+
     @Test fun theRoleRefusesToShareAProcessWithAnotherCalcifyRole() {
         CapacityRuntime.requireExclusive { null }
         for (other in listOf("CALCIFY_STAGE", "CALCIFY_FINITE_BINDING_DIGEST", "CALCIFY_FINANCE_BINDING_DIGEST")) assertFailsWith<IllegalArgumentException>(other) { CapacityRuntime.requireExclusive { k -> if (k == other) "x" else null } }

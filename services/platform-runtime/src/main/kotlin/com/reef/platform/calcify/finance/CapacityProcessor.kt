@@ -115,7 +115,15 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
                 is CapacityItem.Run -> {
                     val outcome = ledger.decide(item.input)
                     val d = outcome.decision
-                    if (d == null) { refusals++; continue }
+                    if (d == null) {
+                        refusals++
+                        // A refused input that came from CAPTURE is an executed trade (or its settlement) the books do not hold: unknown account, conflicting economics, exhausted budget.
+                        // Only a redelivery the ledger already holds is benign. Stop the lane, as for an unusable record.
+                        check(!(config.failOnBadCapture && role == "CAPTURE" && outcome.disposition !in BENIGN_REFUSALS)) {
+                            "lane $lane: the ledger refused a captured input with ${outcome.disposition} at offset ${metadata.offset()}; the lane stops with the source retained"
+                        }
+                        continue
+                    }
                     for (e in ledger.lastWrites) writes[CapacityStore.entityKey(e)] = CapacityStore.entityValue(e)
                     forwards += LaneByKey.key(lane, d.sequence) to FinanceWire.toProto(d, item.input).toByteArray()
                     head = d
@@ -133,6 +141,9 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
     /** The ledger the processor is running on (tests and operators). */
     fun currentLedger(): CapacityLedger = ledger
 }
+
+/** Refusals that only mean "the ledger already holds this": a redelivered capture or settlement. Every other refusal of a captured input is a trade missing from the books. */
+private val BENIGN_REFUSALS = setOf(Disposition.PRIOR_RESULT, Disposition.EXECUTION_ALREADY_CAPTURED, Disposition.ALREADY_SETTLED, Disposition.PRIOR_ATTEMPT)
 
 internal object CapacityTopology {
     fun storeBuilder(config: CapacityProcessorConfig, persistent: Boolean): StoreBuilder<KeyValueStore<String, ByteArray>> =

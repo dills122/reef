@@ -83,11 +83,18 @@ internal object CapacityRuntime {
         val deployment = parsePlan(FiniteRuntime.privateBytes(Path.of(required("CALCIFY_CAPACITY_PLAN_FILE")), 65_536))
         val bootstrap = required("CALCIFY_CAPACITY_KAFKA_BOOTSTRAP_SERVERS")
         val protocol = lookup("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL")?.takeIf { it.isNotBlank() } ?: "SASL_PLAINTEXT"
-        val mechanism = lookup("CALCIFY_CAPACITY_KAFKA_SASL_MECHANISM")?.takeIf { it.isNotBlank() } ?: "PLAIN"
-        val financeUser = required("CALCIFY_CAPACITY_KAFKA_USERNAME"); val observerUser = required("CALCIFY_CAPACITY_OBSERVER_KAFKA_USERNAME")
-        require(financeUser != observerUser) { "the finance and observer principals must differ" }
-        val streamsProps = FiniteFinanceRuntime.clientProperties(bootstrap, protocol, mechanism, financeUser, secret("CALCIFY_CAPACITY_KAFKA_PASSWORD"))
-        val evidenceProps = FiniteFinanceRuntime.clientProperties(bootstrap, protocol, mechanism, observerUser, secret("CALCIFY_CAPACITY_OBSERVER_KAFKA_PASSWORD"))
+        val streamsProps: Properties; val evidenceProps: Properties
+        if (protocol == "PLAINTEXT") {
+            // Local development stacks only (the compose Redpanda has no authentication). Explicit and separate from the protocol so it cannot be selected by accident.
+            require(lookup("CALCIFY_CAPACITY_DEV_PLAINTEXT") == "true") { "PLAINTEXT Kafka needs CALCIFY_CAPACITY_DEV_PLAINTEXT=true (local development stacks only)" }
+            streamsProps = Properties().apply { put("bootstrap.servers", bootstrap) }; evidenceProps = Properties().apply { put("bootstrap.servers", bootstrap) }
+        } else {
+            val mechanism = lookup("CALCIFY_CAPACITY_KAFKA_SASL_MECHANISM")?.takeIf { it.isNotBlank() } ?: "PLAIN"
+            val financeUser = required("CALCIFY_CAPACITY_KAFKA_USERNAME"); val observerUser = required("CALCIFY_CAPACITY_OBSERVER_KAFKA_USERNAME")
+            require(financeUser != observerUser) { "the finance and observer principals must differ" }
+            streamsProps = FiniteFinanceRuntime.clientProperties(bootstrap, protocol, mechanism, financeUser, secret("CALCIFY_CAPACITY_KAFKA_PASSWORD"))
+            evidenceProps = FiniteFinanceRuntime.clientProperties(bootstrap, protocol, mechanism, observerUser, secret("CALCIFY_CAPACITY_OBSERVER_KAFKA_PASSWORD"))
+        }
         lookup("CALCIFY_CAPACITY_SESSION_TIMEOUT_MS")?.takeIf { it.isNotBlank() }?.let { raw ->
             val session = raw.toIntOrNull()?.takeIf { it in 6_000..45_000 } ?: error("CALCIFY_CAPACITY_SESSION_TIMEOUT_MS must be an integer in 6000..45000")
             streamsProps[StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)] = session
