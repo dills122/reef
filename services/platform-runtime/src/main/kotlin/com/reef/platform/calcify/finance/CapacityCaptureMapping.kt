@@ -71,10 +71,11 @@ internal class CapacityInputDecoders(private val plan: CapacityPlan, private val
     override fun decode(role: String, partition: Int, offset: Long, raw: ByteArray): List<CapacityItem> = if (role == "CAPTURE") capture(partition, raw) else control(raw)
 
     private fun capture(lane: Int, raw: ByteArray): List<CapacityItem> {
-        val bad = listOf<CapacityItem>(CapacityItem.Bad(FiniteLifecycleContract.sha(raw)))
-        val envelope = try { FiniteLifecycleCaptureV1.parseFrom(raw) } catch (e: com.google.protobuf.InvalidProtocolBufferException) { return bad }
-        if (envelope.schema != FiniteLifecycleContract.CAPTURE_SCHEMA || envelope.finiteBindingDigest != captureBindingDigest) return bad
-        if (verifyContentDigest && envelope.contentDigest != FiniteLifecycleContract.digest(envelope)) return bad
+        // hashed only when the record is unusable: the digest names the bad bytes, and every good record would otherwise pay for it
+        fun bad() = listOf<CapacityItem>(CapacityItem.Bad(FiniteLifecycleContract.sha(raw)))
+        val envelope = try { FiniteLifecycleCaptureV1.parseFrom(raw) } catch (e: com.google.protobuf.InvalidProtocolBufferException) { return bad() }
+        if (envelope.schema != FiniteLifecycleContract.CAPTURE_SCHEMA || envelope.finiteBindingDigest != captureBindingDigest) return bad()
+        if (verifyContentDigest && envelope.contentDigest != FiniteLifecycleContract.digest(envelope)) return bad()
         val mapped = CapacityCaptureMapping.map(envelope, plan, lane)
         if (mapped.isEmpty()) return listOf(CapacityItem.Skip)
         val out = ArrayList<CapacityItem>(mapped.size * 2)
