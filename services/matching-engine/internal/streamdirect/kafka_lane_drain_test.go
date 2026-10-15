@@ -48,6 +48,8 @@ func TestKafkaLaneDrainRate(t *testing.T) {
 		if err := EnsureKafkaTopic(config, commandTopic); err != nil {
 			t.Fatal(err)
 		}
+		// Registered before anything else can fail, so no failure path leaves the temporary topics behind.
+		t.Cleanup(func() { deleteKafkaIntegrationTopics(config, commandTopic, eventTopic) })
 		admin, err := sarama.NewClusterAdmin(kafkaBrokers(config), newKafkaClientConfig("reef-drain-admin"))
 		if err != nil {
 			t.Fatal(err)
@@ -63,10 +65,12 @@ func TestKafkaLaneDrainRate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() { _ = source.Close() })
 		publisher, err := NewKafkaTransactionalEventBatchPublisher(config, source)
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() { _ = publisher.Close() })
 		timedSrc := &drainTimedSource{inner: source}
 		timedPub := &drainTimedPublisher{inner: publisher}
 		processor := NewProcessor(app.NewService(), timedSrc, timedPub, ProcessorConfig{ShardID: "engine-drain", Partition: 0, BatchSize: size, FetchTimeout: 200 * time.Millisecond, CommandStream: commandTopic, EventStreamName: eventTopic, Source: "redpanda"})
@@ -85,9 +89,6 @@ func TestKafkaLaneDrainRate(t *testing.T) {
 		elapsed := time.Since(start)
 		fmt.Printf("LANE-DRAIN split: fetch=%.2fs publish=%.2fs build+other=%.2fs\n", timedSrc.nanos.Seconds(), timedPub.nanos.Seconds(), (elapsed - timedSrc.nanos - timedPub.nanos).Seconds())
 		fmt.Printf("LANE-DRAIN batch=%d commands=%d batches=%d elapsed=%.2fs commands/s=%.0f pairs/s=%.0f ms/batch=%.1f \n", size, total, calls, elapsed.Seconds(), float64(total)/elapsed.Seconds(), float64(total)/2/elapsed.Seconds(), float64(elapsed.Milliseconds())/float64(calls))
-		_ = publisher.Close()
-		_ = source.Close()
-		deleteKafkaIntegrationTopics(config, commandTopic, eventTopic)
 	}
 }
 
