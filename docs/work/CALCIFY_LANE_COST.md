@@ -50,7 +50,7 @@ Hash speed is also not the whole trie cost. The trie does 82 branch hashes per d
 
 ## What would move the number (not done)
 
-1. Fewer hashes per decision. The hash count is `entities written x path depth` less shared upper levels. A lagged commitment (design option B1) computes the root every K decisions, so the upper levels are hashed once per K instead of once per decision. That changes what each decision's `stateDigest` commits to, so it is a contract change for the owner to approve.
+1. A lagged commitment (design option B1): compute the root every K decisions instead of every decision. Measured with a throwaway patch (not committed) on the same harness, 150,000 trades, one run each: K=1 12.9k trades/s with 83.8 branch hashes per decision; K=8 13.8k (63.3 hashes); K=32 14.3k (54.2 hashes). The hash count falls by a third at most because the cost is the path of each newly inserted leaf, not the shared upper levels, so the gain is about 11 percent at K=32. It also changes what each decision's `stateDigest` commits to (a contract change). Recommendation: do not pursue B1 for throughput.
 2. Fewer entities per trade. Each trade creates four new leaves (execution, obligation, attempt, action) plus position updates. Folding the attempt into the obligation leaf is also a commitment change.
 3. Locality: hashing from one reused buffer instead of three `update` calls was tried and gave no measurable gain (12.8k trades/s against 12.8-13.6k). Storing the trie in arrays instead of linked heap nodes is contract-neutral and untried.
 4. A different hash (BLAKE3 etc.) is a contract change with no hardware support on this JVM, so it is not expected to beat SHA-256 here.
