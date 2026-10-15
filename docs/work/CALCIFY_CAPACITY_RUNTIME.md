@@ -7,7 +7,7 @@ One process (`CALCIFY_CAPACITY_PLAN_FILE` set; never together with `CALCIFY_STAG
 - a Kafka Streams app, exactly-once v2, **one stream thread per lane** (task N is lane N): reads partition N of the capture and control topics, keeps lane N's ledger in a RocksDB store with a changelog, writes partition N of the decisions topic;
 - one **projection** per lane (own binding digest, own owner epoch, own tailing thread) into `boundary.calcify_finance_*`.
 
-A lane is a set of instruments. With the production source the lanes are the **venue source partitions**: the Phase 2 resolver publishes each resolved match context to the partition of the venue event it came from, and the platform routes an instrument to its lane with `PartitionLaneHash.laneFor(instrumentId, lanes)`. Set `laneRouting` to `partition-lane-hash-v1` and the service refuses a plan whose instrument sets differ from that.
+A lane is a set of instruments. With the production source the lanes are the **venue source partitions**: the Phase 2 resolver publishes each resolved match context to the partition of the venue event it came from, and the platform chooses that partition with `StreamCommandEnvelopeBuilder.partition(run, session, instrument, partitions)` (a SHA-256 hash of the three; not the legacy `PartitionLaneHash`, which an earlier version of this service assumed and a real-stack run disproved). Set `laneRouting` to `stream-command-partition-v1` and the service refuses a plan whose instrument sets differ from that. Because the hash includes the run and session, the instrument sets of a plan are specific to its run and session.
 
 Every executed trade becomes two decisions in its lane's log: the capture and its first settlement attempt (`<executionId>/1`). A failed attempt (insufficient cash or shares) stays pending and is repaired by an operator control with attempt 2 or later. Cash is held **per lane**: fund each participant's cash in each lane with `CapacityControlWriter.fundCash`, and shares of an instrument in the lane that trades it (`fundSecurity`). There is no automatic cash rebalance between lanes yet.
 
@@ -18,7 +18,7 @@ Strict JSON, every field required, numbers as decimal text:
 
 ```json
 {"schema":"calcify-capacity-plan-v1","planId":"arena-1","run":"run-1","session":"session-1","cashAsset":"USD","openingAccount":"opening",
- "laneRouting":"partition-lane-hash-v1","laneInstruments":[["INS0","INS4"],["INS1","INS2"],["INS3"]],
+ "laneRouting":"stream-command-partition-v1","laneInstruments":[["INS0","INS4"],["INS1","INS2"],["INS3"]],
  "maxObligations":"4000000","maxCaptures":"4000000","maxSettleAttempts":"8000000","maxControls":"100000","sequenceBound":"8000000","autoSettle":true,
  "applicationId":"capacity-arena-1","topics":{"capture":"CAPACITY_CAPTURE","control":"CAPACITY_CONTROL","decisions":"CAPACITY_DECISIONS"},
  "captureSource":{"kind":"resolved-context-v1","policyVersion":"1"}}

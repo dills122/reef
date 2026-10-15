@@ -1972,7 +1972,7 @@ Interpretation limits: single runs per cell, 18 to 65 s each, so ramp effects ar
 
 ## Capacity path on the production source, engine-aligned lanes, CAL-FIN-P17 (October 14, 2026)
 
-The CAL-FIN-P16 path fed the production source: Phase 2 resolved match contexts (`MatchContextResolvedV1`) on lanes that are the matching engine's own partitions (`PartitionLaneHash`), instead of the finite lifecycle envelopes on evenly split lanes. Same machine, harness and conditions as P16 (shared 10-core laptop, Redpanda and Postgres 16 in containers, JaCoCo off, single runs of 6 to 42 s); `CAP_SOURCE=resolved`, 200 accounts.
+The CAL-FIN-P16 path fed the production source: Phase 2 resolved match contexts (`MatchContextResolvedV1`) on lanes assigned with `PartitionLaneHash` as a stand-in for the matching engine's partitioning (**superseded: a real-stack run showed the platform routes with `StreamCommandEnvelopeBuilder.partition(run, session, instrument, count)`; the per-lane splits quoted in this entry are those of the wrong hash, see CAL-FIN-P18 for the corrected ones; the per-lane rates are unaffected**), instead of the finite lifecycle envelopes on evenly split lanes. Same machine, harness and conditions as P16 (shared 10-core laptop, Redpanda and Postgres 16 in containers, JaCoCo off, single runs of 6 to 42 s); `CAP_SOURCE=resolved`, 200 accounts.
 
 | Instruments | Lanes | Trades per lane | Processed decisions/s | **Projected decisions/s** |
 | --- | --- | --- | --- | --- |
