@@ -2,6 +2,18 @@
 
 Prepared 2026-10-15 by the Claude session that did the lane work. Audience: a Codex session (or a person) picking this up cold. Everything you need to start is on this branch (`claude/footprint-handoff`); read this file top to bottom first, then `AGENTS.md`.
 
+## Pickup correction (2026-10-15)
+
+Codex pickup baseline is `f09f20c7e9699dcb4156fe67eaeaa19b009452ae` on
+`codex/footprint-investigations`. Owner authorized takeover of both investigations.
+Local spike branches exist; heap worktree contains an unfinished measurement harness,
+bytes worktree has no findings. No spike findings document is committed on either branch.
+PR571 merged at 22:19 UTC, but this handoff branch does **not** contain its lz4 default.
+Measurements therefore pin compression explicitly; do not call this branch's baseline lz4.
+PR573 remains open at pickup; safe-win PRs must wait for their prerequisite base to merge.
+The 1.2 KB/trade estimate below is mode/workload/collector dependent, not a universal
+upper bound: new forced-GC two-step measurements exceed it. See new footprint notes.
+
 ## 1. The task, in one paragraph
 
 The Calcify finance lane keeps **too much state in the JVM heap (about 1.2 KB per booked trade, an upper bound)** and writes **too many bytes (about 3.7 KB per booked trade: ~2.2 KB on the broker, ~1.5 KB in Postgres, plus ~1 GB of WAL per 450k trades)**. The arena sessions the owner cares about are **15 minutes (runs whose records are kept) and 30 minutes (top end)** at a target of **10,000 booked trades/s**, i.e. 9M and 18M trades. At today's footprint that is roughly 11 GB or more of heap and 33 GB of storage for 15 minutes, 22 GB or more of heap and 67 GB of storage for 30 minutes, which does not fit a modest host. Your job: **find out exactly why the footprint is that big, and slim it down**, measured, without breaking the verification contract. Two investigations, which can be done independently: (A) heap per trade, (B) bytes per trade.
