@@ -28,6 +28,10 @@ Result on the same harness: 10.7k to 12.8k and 13.6k trades/s (25.7k to 27.2k de
 
 One lane, resolved-context source, 64 instruments, 200 accounts, 300,000 trades, local Redpanda and Postgres 16 in containers, JaCoCo off, single run: the lane processed 18,971 decisions/s (9.5k trades/s; the earlier recorded per-lane ceiling at this state size was about 13.3k decisions/s) and the projector wrote 14,924 decisions/s (7.5k trades/s) with the chain digest verified. The lane is no longer the limit on this harness; the projector is.
 
+Where the projector's time goes (new counters `FinanceProjector.verifyNanos` and `sqlNanos`, printed by the throughput test as `verify_s` and `sql_s`): in four runs, in-memory verification was 1.3-1.5 s of a 36-48 s projection, and SQL (fence, the five set-based writes, checkpoint) was 33-42 s; the commit itself, not counted there, accounted for most of the rest of `apply_s`. The projector is bound by Postgres, not by its own CPU (the projection thread used 7-8.5 CPU-seconds).
+
+Levers tried on that harness, one run each: `synchronous_commit=off` (13.4k and 13.0k projected decisions/s with 2,000 and 8,000 record chunks), 8,000 record chunks (16.7k), against 14.9k and 12.5k for two unchanged runs. Run to run the same configuration varied by about 20 percent (processed 15.3k to 19.0k decisions/s) because Redpanda, Postgres and the Streams thread share ten cores with everything else on the laptop, so these runs do not rank the levers. A ranking needs repeated runs on a quiet dedicated host.
+
 ## Would a faster hash library help? No.
 
 Per branch hash (67 bytes, two SHA-256 blocks), measured with a warmed loop on JDK 21:

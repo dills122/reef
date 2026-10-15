@@ -28,6 +28,10 @@ internal class FinanceProjector(private val chain: DecisionChain, private val da
         const val MAX_SEQUENCE_BOUND = 1_000_000_000L
     }
 
+    /** Nanoseconds [apply] spent verifying records in memory (digest, chain link, row building) and in SQL (fence, writes, checkpoint), for operators and measurements. */
+    val verifyNanos = java.util.concurrent.atomic.AtomicLong()
+    val sqlNanos = java.util.concurrent.atomic.AtomicLong()
+
     /** The stored progress `(lastSequence, lastChain)`, or null before [open]. */
     fun checkpoint(bindingDigest: String): Pair<Long, String>? = dataSource.connection.use { c ->
         c.prepareStatement("SELECT last_sequence, last_chain FROM boundary.calcify_finance_checkpoint WHERE binding_digest = ?").use { ps ->
@@ -75,7 +79,9 @@ internal class FinanceProjector(private val chain: DecisionChain, private val da
      * per-record statements capped the projector at about 740 decisions/s (CAL-FIN-P1); the set-based form is the research variant that reached several thousand.
      */
     fun apply(bindingDigest: String, epoch: Long, records: List<Pair<Decision, FinanceInput>>): Int = tx { c ->
+        var t = System.nanoTime()
         var (lastSequence, lastChain) = fence(c, bindingDigest, epoch)
+        sqlNanos.addAndGet(System.nanoTime() - t); t = System.nanoTime()
         var previous = 0L
         val rows = Rows()
         val replays = ArrayList<Decision>()
@@ -97,11 +103,13 @@ internal class FinanceProjector(private val chain: DecisionChain, private val da
             }
         }
         val applied = rows.count
+        verifyNanos.addAndGet(System.nanoTime() - t); t = System.nanoTime()
         if (applied > 0) {
             write(c, bindingDigest, rows)
             c.prepareStatement("UPDATE boundary.calcify_finance_checkpoint SET last_sequence = ?, last_chain = ? WHERE binding_digest = ?")
                 .use { it.setLong(1, lastSequence); it.setString(2, lastChain); it.setString(3, bindingDigest); it.executeUpdate() }
         }
+        sqlNanos.addAndGet(System.nanoTime() - t)
         applied
     }
 
