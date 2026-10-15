@@ -79,10 +79,21 @@ class ReencodingMicroCostTest {
         // decision record published on the decisions topic: message objects then toByteArray (with the input digest checked a second time), versus encoded directly
         compare("forwarded record (decision+input) bytes", n, old = { val d = decisions[it and 511]; FinanceWire.toProto(d.copy(inputDigest = settles[it and 511].digest()), settles[it and 511].copy()).toByteArray() },
             new = { FinanceWire.encodeTrusted(decisions[it and 511], settles[it and 511]) })
+        // what the processor does for one consumed record of two decisions: two published records, one head record
+        compare("one trade: 2 published records + head", n / 2,
+            old = { i -> val k = i and 511; val d = decisions[k]; val s = settles[k]; val c = captures[k]
+                FinanceWire.toProto(d.copy(inputDigest = c.copy().digest()), c.copy()).toByteArray().size + FinanceWire.toProto(d.copy(inputDigest = s.copy().digest()), s.copy()).toByteArray().size + FinanceWire.toProto(d).toByteArray().size },
+            new = { i -> val k = i and 511; val d = decisions[k]; FinanceWire.withInput(FinanceWire.encode(d), captures[k]).size + FinanceWire.withInput(FinanceWire.encode(d), settles[k]).size })
         compare("head record (decision) bytes", n, old = { FinanceWire.toProto(decisions[it and 511]).toByteArray() }, new = { FinanceWire.encode(decisions[it and 511]) })
         // id validation on every construction of an account, asset, action or execution key
         compare("ExecutionKey+ActionKey construction", n, old = { i -> val c = captures[i and 511]; oldValidate(c.execution.runId) && oldValidate(c.execution.venueSessionId) && oldValidate(c.execution.instrumentId) && oldValidate(c.execution.executionId) && oldValidate(c.action.namespace) && oldValidate(c.action.domain) && oldValidate(c.action.actionId) },
             new = { i -> val c = captures[i and 511]; ExecutionKey(c.execution.runId, c.execution.venueSessionId, c.execution.instrumentId, c.execution.executionId); ActionKey(c.action.namespace, c.action.domain, c.action.actionId) })
+        // the lane configuration's digest was recomputed for every consumed record (sort of the security set with a byte-wise comparator, canonical encoding, SHA-256)
+        for (securities in listOf(8, 64, 256)) {
+            val config = CapacityConfig(null, AssetId("USD"), (0 until securities).map { AssetId("INS$it") }.toSet(), AccountId("opening"), 1000, 1000, 1000, 1000)
+            val cached = config.digest()
+            compare("CapacityConfig.digest per record ($securities securities)", n / 20, old = { config.digest() }, new = { cached })
+        }
         // the fixed price of reaching the thread's scratch (a ThreadLocal read) against holding it
         val held = Canon.Scratch()
         compare("scratch: ThreadLocal read vs held reference", n * 10, old = { Canon.digest() }, new = { held.md.also { m -> m.reset() } })

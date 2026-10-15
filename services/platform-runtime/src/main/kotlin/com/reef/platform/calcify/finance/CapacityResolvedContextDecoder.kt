@@ -18,9 +18,10 @@ import reef.contracts.calcify.v1.MatchContextResolvedV1
 internal class CapacityResolvedContextDecoder(private val plan: CapacityPlan) : CapacityInputDecoder {
     override fun decode(role: String, partition: Int, offset: Long, raw: ByteArray): List<CapacityItem> {
         if (role != "CAPTURE") return CapacityInputDecoders.controlItems(raw)
-        val bad = listOf<CapacityItem>(CapacityItem.Bad(FiniteLifecycleContract.sha(raw)))
-        val context = try { MatchContextResolvedV1.parseFrom(raw) } catch (e: com.google.protobuf.InvalidProtocolBufferException) { return bad }
-        val capture = try { map(context, partition) } catch (e: IllegalArgumentException) { return bad }
+        // hashed only when the record is unusable: the digest names the bad bytes, and every good record would otherwise pay for it
+        fun bad() = listOf<CapacityItem>(CapacityItem.Bad(FiniteLifecycleContract.sha(raw)))
+        val context = try { MatchContextResolvedV1.parseFrom(raw) } catch (e: com.google.protobuf.InvalidProtocolBufferException) { return bad() }
+        val capture = try { map(context, partition) } catch (e: IllegalArgumentException) { return bad() }
         return if (plan.autoSettle) listOf(CapacityItem.Run(capture), CapacityItem.Run(CapacityCaptureMapping.firstSettle(capture.execution))) else listOf(CapacityItem.Run(capture))
     }
 

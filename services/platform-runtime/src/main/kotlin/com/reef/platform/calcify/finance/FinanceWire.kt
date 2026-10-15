@@ -92,60 +92,79 @@ internal object FinanceWire {
     // ---- direct encoders: the same bytes as `toProto(...).toByteArray()` without building the message objects (differential-tested on random values) ----
     //
     // protobuf-java writes fields in field-number order and omits proto3 scalars at their default (empty string, zero number, enum 0); a message field that is set is
-    // written even when empty. Strings go through CodedOutputStream, the same code the generated messages use, so text is encoded identically.
+    // written even when empty. Everything is written forward into one reusable per-thread buffer (a nested message reserves one byte for its length and shifts only if
+    // the length needs more), so no size pass is needed and a record costs its result array. Text outside ASCII is written by CodedOutputStream, the code the generated
+    // messages use, so it is encoded identically; ASCII (every digest, nearly every id) is its own UTF-8 and is copied.
 
-    private fun strSize(field: Int, v: String) = if (v.isEmpty()) 0 else CodedOutputStream.computeStringSize(field, v)
-    private fun strWrite(out: CodedOutputStream, field: Int, v: String) { if (v.isNotEmpty()) out.writeString(field, v) }
-    private fun longSize(field: Int, v: Long) = if (v == 0L) 0 else CodedOutputStream.computeInt64Size(field, v)
-    private fun longWrite(out: CodedOutputStream, field: Int, v: Long) { if (v != 0L) out.writeInt64(field, v) }
-    private fun enumSize(field: Int, number: Int) = if (number == 0) 0 else CodedOutputStream.computeEnumSize(field, number)
-    private fun enumWrite(out: CodedOutputStream, field: Int, number: Int) { if (number != 0) out.writeEnum(field, number) }
-    private fun msgSize(field: Int, inner: Int) = CodedOutputStream.computeTagSize(field) + CodedOutputStream.computeUInt32SizeNoTag(inner) + inner
-    private fun msgHeader(out: CodedOutputStream, field: Int, inner: Int) { out.writeTag(field, WireFormat.WIRETYPE_LENGTH_DELIMITED); out.writeUInt32NoTag(inner) }
-
-    private fun actionSize(k: ActionKey) = strSize(1, k.namespace) + strSize(2, k.domain) + strSize(3, k.actionId)
-    private fun actionWrite(out: CodedOutputStream, field: Int, k: ActionKey) {
-        msgHeader(out, field, actionSize(k)); strWrite(out, 1, k.namespace); strWrite(out, 2, k.domain); strWrite(out, 3, k.actionId)
+    private class ProtoOut {
+        var buf = ByteArray(1024)
+        var pos = 0
+        fun reset() { pos = 0; if (buf.size > (1 shl 20)) buf = ByteArray(1024) }
+        private fun ensure(n: Int) { if (pos + n > buf.size) buf = buf.copyOf(maxOf(buf.size * 2, pos + n)) }
+        fun varint(value: Long) { ensure(10); var v = value; while (v and 0x7fL.inv() != 0L) { buf[pos++] = ((v and 0x7f) or 0x80).toByte(); v = v ushr 7 }; buf[pos++] = v.toByte() }
+        fun tag(field: Int, wireType: Int) = varint(((field shl 3) or wireType).toLong())
+        fun string(field: Int, v: String) {
+            if (v.isEmpty()) return
+            val n = v.length
+            var ascii = true
+            for (i in 0 until n) if (v[i].code >= 0x80) { ascii = false; break }
+            tag(field, WireFormat.WIRETYPE_LENGTH_DELIMITED)
+            if (ascii) {
+                varint(n.toLong()); ensure(n)
+                for (i in 0 until n) buf[pos + i] = v[i].code.toByte()
+                pos += n
+            } else {
+                val encoded = ByteArray(CodedOutputStream.computeStringSizeNoTag(v)); CodedOutputStream.newInstance(encoded).writeStringNoTag(v)
+                ensure(encoded.size); System.arraycopy(encoded, 0, buf, pos, encoded.size); pos += encoded.size
+            }
+        }
+        fun int64(field: Int, v: Long) { if (v != 0L) { tag(field, WireFormat.WIRETYPE_VARINT); varint(v) } }
+        /** int32 and enum fields: a negative value is a ten byte varint, as protobuf writes it. */
+        fun int32(field: Int, v: Int) { if (v != 0) { tag(field, WireFormat.WIRETYPE_VARINT); varint(v.toLong()) } }
+        /** Starts a nested message and returns where its length goes; [end] closes it. */
+        fun begin(field: Int): Int { tag(field, WireFormat.WIRETYPE_LENGTH_DELIMITED); ensure(1); return pos++ }
+        fun end(lengthAt: Int) {
+            val length = pos - lengthAt - 1
+            if (length < 128) { buf[lengthAt] = length.toByte(); return }
+            var extra = 0; var x = length ushr 7; while (x != 0) { extra++; x = x ushr 7 }       // the length varint takes 1 + extra bytes; one is already reserved
+            ensure(extra); System.arraycopy(buf, lengthAt + 1, buf, lengthAt + 1 + extra, length); pos += extra
+            var at = lengthAt; var v = length
+            while (v and 0x7f.inv() != 0) { buf[at++] = ((v and 0x7f) or 0x80).toByte(); v = v ushr 7 }
+            buf[at] = v.toByte()
+        }
+        fun copy(): ByteArray = buf.copyOf(pos)
     }
-    private fun executionSize(k: ExecutionKey) = strSize(1, k.runId) + strSize(2, k.venueSessionId) + strSize(3, k.instrumentId) + strSize(4, k.executionId)
-    private fun executionWrite(out: CodedOutputStream, field: Int, k: ExecutionKey) {
-        msgHeader(out, field, executionSize(k)); strWrite(out, 1, k.runId); strWrite(out, 2, k.venueSessionId); strWrite(out, 3, k.instrumentId); strWrite(out, 4, k.executionId)
+    private val scratch = ThreadLocal.withInitial { ProtoOut() }
+
+    private fun writeAction(out: ProtoOut, field: Int, k: ActionKey) { val at = out.begin(field); out.string(1, k.namespace); out.string(2, k.domain); out.string(3, k.actionId); out.end(at) }
+    private fun writeExecution(out: ProtoOut, field: Int, k: ExecutionKey) {
+        val at = out.begin(field); out.string(1, k.runId); out.string(2, k.venueSessionId); out.string(3, k.instrumentId); out.string(4, k.executionId); out.end(at)
     }
     private fun authorityNumber(a: Authority) = if (a == Authority.OPERATOR) FinanceAuthorityV1.FINANCE_AUTHORITY_V1_OPERATOR.number else FinanceAuthorityV1.FINANCE_AUTHORITY_V1_TRADING.number
     private val DISPOSITION_NUMBERS = IntArray(Disposition.entries.size).also { n -> for (d in Disposition.entries) n[d.ordinal] = toProto(d).number }
 
-    private fun captureSize(i: FinanceInput.Capture) = msgSize(1, executionSize(i.execution)) + strSize(2, i.buyer.value) + strSize(3, i.seller.value) + longSize(4, i.quantity) + longSize(5, i.priceNanos)
-    private fun fundSize(i: FinanceInput.Fund) = enumSize(1, authorityNumber(i.authority)) + strSize(2, i.account.value) + strSize(3, i.asset.value) + longSize(4, i.amount)
-    private fun settleSize(i: FinanceInput.Settle) = msgSize(1, executionSize(i.execution)) + (if (i.attempt == 0) 0 else CodedOutputStream.computeInt32Size(2, i.attempt)) + enumSize(3, authorityNumber(i.authority))
-    private fun inputSize(i: FinanceInput): Int = msgSize(1, actionSize(i.action)) + when (i) {
-        is FinanceInput.Capture -> msgSize(2, captureSize(i))
-        is FinanceInput.Fund -> msgSize(3, fundSize(i))
-        is FinanceInput.Settle -> msgSize(4, settleSize(i))
-    }
-    private fun inputWrite(out: CodedOutputStream, i: FinanceInput) {
-        actionWrite(out, 1, i.action)
+    private fun writeInput(out: ProtoOut, i: FinanceInput) {
+        writeAction(out, 1, i.action)
         when (i) {
-            is FinanceInput.Capture -> { msgHeader(out, 2, captureSize(i)); executionWrite(out, 1, i.execution); strWrite(out, 2, i.buyer.value); strWrite(out, 3, i.seller.value); longWrite(out, 4, i.quantity); longWrite(out, 5, i.priceNanos) }
-            is FinanceInput.Fund -> { msgHeader(out, 3, fundSize(i)); enumWrite(out, 1, authorityNumber(i.authority)); strWrite(out, 2, i.account.value); strWrite(out, 3, i.asset.value); longWrite(out, 4, i.amount) }
-            is FinanceInput.Settle -> { msgHeader(out, 4, settleSize(i)); executionWrite(out, 1, i.execution); if (i.attempt != 0) out.writeInt32(2, i.attempt); enumWrite(out, 3, authorityNumber(i.authority)) }
+            is FinanceInput.Capture -> { val at = out.begin(2); writeExecution(out, 1, i.execution); out.string(2, i.buyer.value); out.string(3, i.seller.value); out.int64(4, i.quantity); out.int64(5, i.priceNanos); out.end(at) }
+            is FinanceInput.Fund -> { val at = out.begin(3); out.int32(1, authorityNumber(i.authority)); out.string(2, i.account.value); out.string(3, i.asset.value); out.int64(4, i.amount); out.end(at) }
+            is FinanceInput.Settle -> { val at = out.begin(4); writeExecution(out, 1, i.execution); out.int32(2, i.attempt); out.int32(3, authorityNumber(i.authority)); out.end(at) }
         }
     }
-    private fun legSize(l: Leg) = strSize(1, l.account.value) + strSize(2, l.asset.value) + longSize(3, l.amount)
-    private fun decisionSize(d: Decision): Int {
-        var n = longSize(1, d.sequence) + msgSize(2, actionSize(d.action)) + strSize(3, d.inputDigest) + enumSize(4, DISPOSITION_NUMBERS[d.disposition.ordinal])
-        for (l in d.legs) n += msgSize(5, legSize(l))
-        return n + strSize(6, d.priorChain) + strSize(7, d.checksum) + strSize(8, d.stateDigest)
+    private fun writeDecision(out: ProtoOut, d: Decision) {
+        out.int64(1, d.sequence); writeAction(out, 2, d.action); out.string(3, d.inputDigest); out.int32(4, DISPOSITION_NUMBERS[d.disposition.ordinal])
+        for (l in d.legs) { val at = out.begin(5); out.string(1, l.account.value); out.string(2, l.asset.value); out.int64(3, l.amount); out.end(at) }
+        out.string(6, d.priorChain); out.string(7, d.checksum); out.string(8, d.stateDigest)
     }
-    private fun decisionWrite(out: CodedOutputStream, d: Decision) {
-        longWrite(out, 1, d.sequence); actionWrite(out, 2, d.action); strWrite(out, 3, d.inputDigest); enumWrite(out, 4, DISPOSITION_NUMBERS[d.disposition.ordinal])
-        for (l in d.legs) { msgHeader(out, 5, legSize(l)); strWrite(out, 1, l.account.value); strWrite(out, 2, l.asset.value); longWrite(out, 3, l.amount) }
-        strWrite(out, 6, d.priorChain); strWrite(out, 7, d.checksum); strWrite(out, 8, d.stateDigest)
+    private inline fun <T> encoded(write: (ProtoOut) -> Unit, result: (ProtoOut) -> T): T {
+        val out = scratch.get(); out.reset()
+        try { write(out); return result(out) } finally { out.reset() }
     }
 
     /** `toProto(i).toByteArray()`. */
-    fun encode(i: FinanceInput): ByteArray { val bytes = ByteArray(inputSize(i)); val out = CodedOutputStream.newInstance(bytes); inputWrite(out, i); out.checkNoSpaceLeft(); return bytes }
+    fun encode(i: FinanceInput): ByteArray = encoded({ writeInput(it, i) }) { it.copy() }
     /** `toProto(d).toByteArray()`: the decision without its input (the head record of the store). */
-    fun encode(d: Decision): ByteArray { val bytes = ByteArray(decisionSize(d)); val out = CodedOutputStream.newInstance(bytes); decisionWrite(out, d); out.checkNoSpaceLeft(); return bytes }
+    fun encode(d: Decision): ByteArray = encoded({ writeDecision(it, d) }) { it.copy() }
     /**
      * `toProto(d, input).toByteArray()` WITHOUT the digest check, for the processor that has just made [d] from [input] (the check would hash the input a second time to
      * learn what the ledger computed a moment ago). Anything that receives a decision and an input from outside must use [toProto] or [recordFromProto].
@@ -156,10 +175,8 @@ internal object FinanceWire {
      * The decision record from the decision's own bytes ([head], `encode(d)`): the input is field 9, the last field, so the published record is exactly the head record
      * followed by the input field. A lane that stores the head record and publishes the record encodes the decision once.
      */
-    fun withInput(head: ByteArray, input: FinanceInput): ByteArray {
-        val inner = inputSize(input)
-        val bytes = head.copyOf(head.size + msgSize(9, inner)); val out = CodedOutputStream.newInstance(bytes, head.size, bytes.size - head.size)
-        msgHeader(out, 9, inner); inputWrite(out, input); out.checkNoSpaceLeft(); return bytes
+    fun withInput(head: ByteArray, input: FinanceInput): ByteArray = encoded({ val at = it.begin(9); writeInput(it, input); it.end(at) }) { out ->
+        val bytes = ByteArray(head.size + out.pos); System.arraycopy(head, 0, bytes, 0, head.size); System.arraycopy(out.buf, 0, bytes, head.size, out.pos); bytes
     }
 
     /** Decodes a published record; the carried input must hash to the decision's input digest. */

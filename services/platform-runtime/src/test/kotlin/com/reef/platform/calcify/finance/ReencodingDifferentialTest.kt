@@ -57,7 +57,8 @@ class ReencodingDifferentialTest {
 
     // ---- random values ----
 
-    private fun text(rnd: Random, max: Int = 24): String {
+    private var textMax = 24
+    private fun text(rnd: Random, max: Int = textMax): String {
         while (true) { val t = rawText(rnd, max); if (oldBoundedText(t)) return t }
     }
     private fun rawText(rnd: Random, max: Int): String {
@@ -187,6 +188,24 @@ class ReencodingDifferentialTest {
             val back = FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(FinanceWire.encodeTrusted(good, i)))
             assertEquals(good, back.first); assertEquals(i, back.second)
         }
+    }
+
+    @Test fun directEncodersAgreeWhenNestedMessagesNeedMultiByteLengths() {
+        // ids up to 128 bytes make an action 300+ bytes, a capture 600+ and a record over 1,000: the one-byte length reserved for a nested message must grow
+        val rnd = Random(23); val before = textMax; textMax = 128
+        try {
+            repeat(3_000) {
+                val i = input(rnd); val d = decision(rnd, i.digest())
+                assertContentEquals(FinanceWire.toProto(i).toByteArray(), FinanceWire.encode(i))
+                assertContentEquals(FinanceWire.toProto(d).toByteArray(), FinanceWire.encode(d))
+                assertContentEquals(FinanceWire.toProto(d, i).toByteArray(), FinanceWire.encodeTrusted(d, i))
+            }
+            val big = "k".repeat(128)
+            val maxInput = FinanceInput.Capture(ActionKey(big, big, big), ExecutionKey(big, big, big, big), AccountId(big), AccountId(big), Long.MAX_VALUE, Long.MAX_VALUE)
+            val maxDecision = Decision(Long.MAX_VALUE, maxInput.action, maxInput.digest(), Disposition.SETTLED, List(4) { Leg(AccountId(big), AssetId(big), Long.MIN_VALUE) }, "a".repeat(64), "b".repeat(64), "c".repeat(64))
+            assertContentEquals(FinanceWire.toProto(maxDecision, maxInput).toByteArray(), FinanceWire.encodeTrusted(maxDecision, maxInput))
+            assertEquals(maxInput, FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(FinanceWire.encodeTrusted(maxDecision, maxInput))).second)
+        } finally { textMax = before }
     }
 
     @Test fun directEncodersCoverEveryDispositionAuthorityAndEmptyField() {
