@@ -49,14 +49,14 @@ class CapacityProcessorTest {
         val l = CapacityLedger(capacity); return l to inputs.mapNotNull { l.decide(it).decision }
     }
 
-    private inner class Harness(preload: Map<String, ByteArray> = emptyMap()) {
+    private inner class Harness(preload: Map<String, ByteArray> = emptyMap(), val config: CapacityProcessorConfig = cfg) {
         val context = MockProcessorContext<String, ByteArray>()
-        val store: KeyValueStore<String, ByteArray> = CapacityTopology.storeBuilder(cfg, persistent = false).withLoggingDisabled().build()
+        val store: KeyValueStore<String, ByteArray> = CapacityTopology.storeBuilder(config, persistent = false).withLoggingDisabled().build()
         val processor: CapacityProcessor
         init {
             store.init(context.getStateStoreContext(), store); context.addStateStore(store)
             preload.forEach { (k, v) -> store.put(k, v) }
-            processor = CapacityProcessor(cfg, decoder); processor.init(context)
+            processor = CapacityProcessor(config, decoder); processor.init(context)
         }
         private var offset = 0L
         fun send(raw: ByteArray, topic: String = "CAPTURE") { context.setRecordMetadata(topic, 0, offset++); processor.process(Record(ByteArray(0), raw, 0L)) }
@@ -85,6 +85,43 @@ class CapacityProcessorTest {
             val (_, expected) = direct(inputs)
             assertEquals(expected, first.decisions() + second.decisions(), "seed $seed cut $cut")
         }
+    }
+
+    @Test fun withCheckpointsEveryKDecisionsTheStoreIsRestoredFromTheLogHeadAndTheRunContinuesAsIfItNeverStopped() {
+        for (k in listOf(3, 8, 25)) for (seed in 1..25L) {
+            val rnd = Random(seed); val inputs = (0 until 120).map { input(rnd) }; val cut = rnd.nextInt(1, inputs.size)
+            val config = CapacityProcessorConfig(binding, capacity, "CAPTURE", "CONTROL", "DECISIONS", "capacity-test", checkpointEvery = k)
+            val first = Harness(config = config); inputs.take(cut).forEach { first.send(bytes(it)) }
+            val head = first.decisions().lastOrNull()
+            // The head and meta are rewritten only when the sequence crosses a multiple of k.
+            val meta = first.snapshot()[CapacityStore.META]?.let { CapacityStore.Meta.parse(it) }
+            if (head != null) assertTrue(meta != null && meta.sequence <= head.sequence && head.sequence - meta.sequence < k + 1, "k=$k seed=$seed: checkpoint ${meta?.sequence} head ${head.sequence}")
+            // Restart with the published log head, as the launcher supplies it.
+            val restarted = CapacityProcessorConfig(1, { CapacityLaneSpec(binding, capacity) }, "CAPTURE", "CONTROL", "DECISIONS", "capacity-test", logHead = { head }, checkpointEvery = k)
+            val second = Harness(preload = first.snapshot(), config = restarted); inputs.drop(cut).forEach { second.send(bytes(it)) }
+            val (ledger, expected) = direct(inputs)
+            assertEquals(expected, first.decisions() + second.decisions(), "k=$k seed=$seed cut $cut")
+            assertEquals(ledger.snapshot(), second.processor.currentLedger().snapshot())
+            // A store between checkpoints with no published head to check it against refuses to start.
+            if (head != null && meta!!.sequence != head.sequence) {
+                kotlin.test.assertFailsWith<IllegalArgumentException> { Harness(preload = first.snapshot(), config = config) }
+                kotlin.test.assertFailsWith<IllegalArgumentException>("a log that is behind the store") { Harness(preload = first.snapshot(), config = CapacityProcessorConfig(1, { CapacityLaneSpec(binding, capacity) }, "CAPTURE", "CONTROL", "DECISIONS", "capacity-test", logHead = { null }, checkpointEvery = k)) }
+            }
+        }
+    }
+
+    @Test fun headAndMetaAreTwoOfTheStorePutsOfARecordOnlyAtCheckpoints() {
+        val config = CapacityProcessorConfig(binding, capacity, "CAPTURE", "CONTROL", "DECISIONS", "capacity-test", checkpointEvery = 10)
+        val h = Harness(config = config)
+        fun fund(n: Int) = h.send(bytes(FinanceInput.Fund(ActionKey("n", "c", "f$n"), Authority.OPERATOR, AccountId("acct-0"), usd, 1)))
+        fun checkpoint() = CapacityStore.Meta.parse(h.snapshot().getValue(CapacityStore.META)).sequence
+        fund(1); assertEquals(1L, checkpoint(), "the first decision writes head and meta")
+        for (n in 2..9) fund(n)
+        assertEquals(1L, checkpoint(), "no checkpoint before the sequence crosses 10")
+        fund(10); assertEquals(10L, checkpoint(), "a checkpoint at the crossing")
+        for (n in 11..19) fund(n)
+        assertEquals(10L, checkpoint()); fund(20); assertEquals(20L, checkpoint())
+        assertEquals(20L, h.processor.currentLedger().sequence)
     }
 
     @Test fun refusedUnusableAndEmptyRecordsWriteAndForwardNothing() {

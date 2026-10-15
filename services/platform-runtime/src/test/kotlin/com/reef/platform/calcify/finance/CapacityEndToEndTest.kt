@@ -102,6 +102,15 @@ class CapacityEndToEndTest {
         withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityResolvedContextDecoder(plan), ::resolvedContext) }
     }
 
+    /**
+     * Head and meta written only every 25 decisions: the clean restart and the wiped-state restore (changelog replay) both land between checkpoints, so the lane restores
+     * from the published log head and must still be exactly at it and equal to the oracle.
+     */
+    @Test fun checkpointsEveryTwentyFiveDecisionsStillRestoreFromTheChangelogAndTheLogHead() {
+        val plan = planOver(CapacityRouting.engineLanes("p3-run", "p3-session", (0 until 12).map { "INS$it" }, lanes)).also { it.requireEngineAligned() }
+        withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityResolvedContextDecoder(plan), ::resolvedContext, checkpointEvery = 25) }
+    }
+
     @Test fun bufferedControlsAreProcessedBeforeBufferedCapturesSoAnOperatorCanUnstickALane() {
         val plan = planOver(listOf(setOf("INS0")))
         DisposableRedpanda().start().use { rp ->
@@ -142,7 +151,7 @@ class CapacityEndToEndTest {
         } finally { ProcessBuilder("docker", "rm", "-f", "-v", pgName).redirectErrorStream(true).start().also { it.inputStream.readAllBytes() }.waitFor() }
     }
 
-    private fun run(rp: DisposableRedpanda, ds: PGSimpleDataSource, plan: CapacityPlan, decoder: CapacityInputDecoder, record: (Int, String, AccountId, AccountId, Long, Long) -> ByteArray) {
+    private fun run(rp: DisposableRedpanda, ds: PGSimpleDataSource, plan: CapacityPlan, decoder: CapacityInputDecoder, record: (Int, String, AccountId, AccountId, Long, Long) -> ByteArray, checkpointEvery: Int = 1) {
         val instruments = plan.laneInstruments.flatten().sorted()
         rp.admin().use { admin ->
             val history = mapOf("retention.ms" to "-1", "retention.bytes" to "-1", "cleanup.policy" to "delete")
@@ -150,7 +159,7 @@ class CapacityEndToEndTest {
         }
         val client = Properties().apply { put("bootstrap.servers", rp.bootstrap) }
         val stateDir = Files.createTempDirectory("capacity-e2e-state").toFile()
-        fun launcher() = CapacityLauncher(plan, decoder, topics, appId, client, client, stateDir.path, ds)
+        fun launcher() = CapacityLauncher(plan, decoder, topics, appId, client, client, stateDir.path, ds, checkpointEvery = checkpointEvery)
         // The oracle: one independent ledger per lane, fed the inputs the lane must have seen, in order.
         val oracle = (0 until lanes).map { CapacityLedger(plan.capacity(it)) }
         val expected = (0 until lanes).map { ArrayList<Decision>() }

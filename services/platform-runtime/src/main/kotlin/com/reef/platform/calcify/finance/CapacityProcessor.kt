@@ -37,11 +37,12 @@ internal class CapacityProcessorConfig(
     val lanes: Int, val spec: (Int) -> CapacityLaneSpec,
     val captureTopic: String, val controlTopic: String, val decisionsTopic: String, val applicationId: String, val storeName: String = "capacity-finance",
     /**
-     * The last decision of each lane's published log as `(sequence, checksum)`, or null for an empty log, read by the launcher before the app starts. When supplied, a lane
+     * The last decision of each lane's published log, or null for an empty log, read by the launcher before the app starts. When supplied, a lane
      * whose restored store is not exactly at that head refuses to run (lost or rolled-back store, or a tampered one). Exactly-once makes the two agree whenever nothing
-     * has been lost; null for the function itself means "not checked" (tests).
+     * has been lost; null for the function itself means "not checked" (tests). With [checkpointEvery] above 1 the store may be ahead of its last head/meta checkpoint
+     * and restore then takes the chain head and the committed state digest from this decision, so the launcher must supply it.
      */
-    val logHead: ((Int) -> Pair<Long, String>?)? = null,
+    val logHead: ((Int) -> Decision?)? = null,
     /**
      * When true, a CAPTURE record (or member) the decoder calls unusable stops the lane instead of being counted and skipped: it is an executed trade the books would
      * silently lack (a routing fault, a corrupt or foreign record), and the design requires such a fault to block the lane with the source retained, never to erase the
@@ -49,13 +50,23 @@ internal class CapacityProcessorConfig(
      * mistakes and are only counted. The launcher turns this on; it is off here so the processor's own tests can exercise the counting path.
      */
     val failOnBadCapture: Boolean = false,
+    /**
+     * Head and meta are written with the entities only when a record carries the sequence across a multiple of this number (and for the first decision), not with every
+     * record: they are two of eleven puts of a booked trade and about a third of its changelog bytes, and the decision log already holds the same decision. 1 writes them
+     * with every record (the original layout). See [CapacityStore.restore] for how a store ahead of its last checkpoint is verified.
+     */
+    val checkpointEvery: Int = 1,
+    /** Streams' record cache in front of the changelog: repeated puts to one key between commits leave as one changelog record. Off by default (measured, docs/work/CALCIFY_STORE_WRITES_INVESTIGATION.md). */
+    val cachingEnabled: Boolean = false,
 ) {
-    /** One lane, lane 0. */
-    constructor(bindingDigest: String, capacity: CapacityConfig, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance") :
-        this(1, { lane -> require(lane == 0) { "single-lane configuration" }; CapacityLaneSpec(bindingDigest, capacity) }, captureTopic, controlTopic, decisionsTopic, applicationId, storeName)
+    init { require(checkpointEvery >= 1) { "checkpointEvery must be at least 1" } }
 
-    constructor(plan: CapacityPlan, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", logHead: ((Int) -> Pair<Long, String>?)? = null, failOnBadCapture: Boolean = false) :
-        this(plan.lanes, plan::spec, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, logHead, failOnBadCapture)
+    /** One lane, lane 0. */
+    constructor(bindingDigest: String, capacity: CapacityConfig, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", checkpointEvery: Int = 1) :
+        this(1, { lane -> require(lane == 0) { "single-lane configuration" }; CapacityLaneSpec(bindingDigest, capacity) }, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, checkpointEvery = checkpointEvery)
+
+    constructor(plan: CapacityPlan, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", logHead: ((Int) -> Decision?)? = null, failOnBadCapture: Boolean = false, checkpointEvery: Int = 1, cachingEnabled: Boolean = false) :
+        this(plan.lanes, plan::spec, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, logHead, failOnBadCapture, checkpointEvery, cachingEnabled)
 
     /** Streams names the store's changelog `<application.id>-<store>-changelog`. */
     val changelogTopic: String get() = "$applicationId-$storeName-changelog"
@@ -75,6 +86,8 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
     private lateinit var ledger: CapacityLedger
     private var lane = 0
     private lateinit var laneSpec: CapacityLaneSpec
+    /** The configuration digest sorts and hashes the whole configuration (about 6 percent of the processing thread when it was recomputed for every record's meta); it is fixed for the run. */
+    private lateinit var configDigest: String
     private lateinit var context: ProcessorContext<String, ByteArray>
     private lateinit var kv: StreamsLifecycleKv
 
@@ -87,12 +100,12 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
         kv = StreamsLifecycleKv(context.getStateStore(config.storeName))
         lane = context.taskId().partition()
         require(lane in 0 until config.lanes) { "partition $lane is outside the ${config.lanes} configured lanes" }
-        laneSpec = config.spec(lane)
-        ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest) ?: CapacityLedger(laneSpec.capacity)
-        config.logHead?.let { head ->
-            val expected = head(lane)
-            check(if (expected == null) ledger.sequence == 0L else ledger.sequence == expected.first && ledger.chain == expected.second) {
-                "lane $lane: the restored store (sequence ${ledger.sequence}) is not the head of the decision log (${expected?.first ?: 0})"
+        laneSpec = config.spec(lane); configDigest = laneSpec.capacity.digest()
+        val checked = config.logHead != null; val expected = config.logHead?.invoke(lane)
+        ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest, expected, checked) ?: CapacityLedger(laneSpec.capacity)
+        if (checked) {
+            check(if (expected == null) ledger.sequence == 0L else ledger.sequence == expected.sequence && ledger.chain == expected.checksum) {
+                "lane $lane: the restored store (sequence ${ledger.sequence}) is not the head of the decision log (${expected?.sequence ?: 0})"
             }
         }
     }
@@ -102,7 +115,8 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
         val role = when (metadata.topic()) { config.captureTopic -> "CAPTURE"; config.controlTopic -> "CONTROL"; else -> throw IllegalStateException("unexpected input topic") }
         require(metadata.partition() == lane) { "record from partition ${metadata.partition()} reached lane $lane" }
         val items = decoder.decode(role, metadata.partition(), metadata.offset(), record.value() ?: ByteArray(0))
-        val writes = LinkedHashMap<String, ByteArray>()
+        val startSequence = ledger.sequence
+        val entities = LinkedHashMap<String, StateCommitment.Entity>()
         val forwards = ArrayList<Pair<String, ByteArray>>()
         var head: Decision? = null
         for (item in items) {
@@ -124,15 +138,19 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
                         }
                         continue
                     }
-                    for (e in ledger.lastWrites) writes[CapacityStore.entityKey(e)] = CapacityStore.entityValue(e)
+                    for (e in ledger.lastWrites) entities[CapacityStore.entityKey(e)] = e
                     forwards += LaneByKey.key(lane, d.sequence) to FinanceWire.toProto(d, item.input).toByteArray()
                     head = d
                 }
             }
         }
         head?.let {
-            writes[CapacityStore.HEAD] = FinanceWire.toProto(it).toByteArray()
-            writes[CapacityStore.META] = CapacityStore.Meta(laneSpec.bindingDigest, laneSpec.capacity.digest(), ledger.sequence, ledger.chain, ledger.controls).bytes()
+            val writes = LinkedHashMap<String, ByteArray>(CapacityStore.storeWrites(ledger, entities))
+            val k = config.checkpointEvery
+            if (k <= 1 || startSequence == 0L || ledger.sequence / k > startSequence / k) {
+                writes[CapacityStore.HEAD] = FinanceWire.toProto(it).toByteArray()
+                writes[CapacityStore.META] = CapacityStore.Meta(laneSpec.bindingDigest, configDigest, ledger.sequence, ledger.chain, ledger.controls).bytes()
+            }
             kv.apply(writes)
         }
         forwards.forEach { (key, value) -> context.forward(record.withKey(key).withValue(value)) }
@@ -149,7 +167,7 @@ internal object CapacityTopology {
     fun storeBuilder(config: CapacityProcessorConfig, persistent: Boolean): StoreBuilder<KeyValueStore<String, ByteArray>> =
         Stores.keyValueStoreBuilder(
             if (persistent) Stores.persistentKeyValueStore(config.storeName) else Stores.inMemoryKeyValueStore(config.storeName),
-            Serdes.String(), Serdes.ByteArray()).withCachingDisabled()
+            Serdes.String(), Serdes.ByteArray()).let { if (config.cachingEnabled) it.withCachingEnabled() else it.withCachingDisabled() }
 
     fun build(config: CapacityProcessorConfig, decoder: CapacityInputDecoder, persistent: Boolean = true): Topology = Topology().apply {
         // Streams merges the two inputs of a task by record timestamp. Controls (funding, repairs) must win whenever both are buffered, whatever the capture timestamps are

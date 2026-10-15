@@ -42,6 +42,8 @@ internal class CapacityLauncher(
     private val maxTransientProjectionFailures: Int = 10, private val persistent: Boolean = true,
     /** Decisions per projector transaction. Position rows are coalesced per transaction, so a larger chunk writes fewer rows per decision (and makes each commit, and the read lag behind it, longer). */
     private val maxApply: Int = 2_000,
+    /** Head and meta are written to the store every this many decisions instead of with every record; see [CapacityProcessorConfig.checkpointEvery]. */
+    private val checkpointEvery: Int = 1,
 ) {
     class Running internal constructor(
         private val streams: KafkaStreams, private val loops: List<Thread>, private val failure: AtomicReference<Throwable?>,
@@ -65,8 +67,8 @@ internal class CapacityLauncher(
     fun start(): Running {
         val lanes = plan.lanes
         val reader = FinanceEvidenceReader(evidenceProperties, applicationId, plan.planId, topics.capture, topics.control, topics.decisions, "$applicationId-capacity-finance-changelog")
-        val heads: List<Pair<Long, String>?> = (0 until lanes).map { lane ->
-            reader.lastValue(topics.decisions, lane)?.let { raw -> FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raw)).first.let { it.sequence to it.checksum } }
+        val heads: List<Decision?> = (0 until lanes).map { lane ->
+            reader.lastValue(topics.decisions, lane)?.let { raw -> FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raw)).first }
         }
         val properties = CapacityStreams.properties(applicationId, requireNotNull(streamsClientProperties["bootstrap.servers"]) { "bootstrap.servers required" }.toString(), stateDir, threads)
             .apply { streamsClientProperties.forEach { (k, v) -> if (k != "bootstrap.servers") put(k, v) } }
@@ -85,7 +87,7 @@ internal class CapacityLauncher(
                 val log = reader.logReader(topics.decisions, lane).also { logs += it }
                 FinanceProjectionRunner.tailing({ val s = System.nanoTime(); FinanceProjectionRunner.decode(log.readNext()).also { readNanos.addAndGet(System.nanoTime() - s) } }, projector, digest, epoch, maxApply = maxApply, sequenceBound = plan.sequenceBound).also { it.open() }
             }
-            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] }, failOnBadCapture = true)
+            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] }, failOnBadCapture = true, checkpointEvery = checkpointEvery)
             streams = KafkaStreams(CapacityTopology.build(config, decoder, persistent), properties)
         } catch (e: Throwable) { logs.forEach { runCatching { it.close() } }; throw e }
         val streamsFailed = AtomicBoolean(false); val closing = AtomicBoolean(false); val failure = AtomicReference<Throwable?>(null)

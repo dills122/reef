@@ -24,6 +24,8 @@ import org.postgresql.ds.PGSimpleDataSource
  * write it. The rate is projected decisions per second: decisions the projections hold, divided by the time from the first trade record sent to the last decision
  * projected (funding is decided before the clock starts). Compare CAL-FIN-P5 (stand-in ledger, one history entry per record): 1 lane 11.1k, 2 lanes 15.3k, 3 lanes 17.5k.
  *
+ * CAP_CHECKPOINT_EVERY (1) writes head and meta to the store every that many decisions; CAP_STREAMS_PROPS (comma separated key=value) adds Streams properties, for example
+ * `producer.compression.type=lz4`.
  * CAP_LANES (1), CAP_TRADES (100000), CAP_ACCOUNTS (200), CAP_INSTRUMENTS (16), CAP_VERIFY_DIGEST (true). Shares the machine with the broker, the database and the
  * load generator, as the stand-in measurements did. S4_RP_DOCKER / S4_PG_DOCKER add `docker run` options (for example a tmpfs data directory).
  */
@@ -114,9 +116,9 @@ class CapacityLaneThroughputTest {
             val ds = PGSimpleDataSource().apply { setUrl("jdbc:postgresql://127.0.0.1:$pgPort/reef"); user = "postgres"; password = "cap"; reWriteBatchedInserts = true }
             DisposableRedpanda(smp = env("S4_SMP", "1").toInt(), memory = env("S4_BROKER_MEM", "2G")).start().use { rp ->
                 rp.admin().use { admin -> admin.createTopics(listOf(topics.capture, topics.control, topics.decisions).map { NewTopic(it, lanes, 1.toShort()).configs(mapOf("retention.ms" to "-1", "retention.bytes" to "-1")) }).all().get(30, TimeUnit.SECONDS) }
-                val client = Properties().apply { put("bootstrap.servers", rp.bootstrap) }
+                val client = Properties().apply { put("bootstrap.servers", rp.bootstrap); env("CAP_STREAMS_PROPS", "").split(",").filter { it.contains("=") }.forEach { put(it.substringBefore("="), it.substringAfter("=")) } }
                 val stateDir = Files.createTempDirectory("capacity-rate-state").toFile()
-                val launcher = CapacityLauncher(plan, if (resolved) CapacityResolvedContextDecoder(plan) else CapacityInputDecoders(plan, captureBinding, verifyDigest), topics, "capacity-rate", client, client, stateDir.path, ds, maxApply = env("CAP_MAX_APPLY", "2000").toInt()).start()
+                val launcher = CapacityLauncher(plan, if (resolved) CapacityResolvedContextDecoder(plan) else CapacityInputDecoders(plan, captureBinding, verifyDigest), topics, "capacity-rate", client, client, stateDir.path, ds, maxApply = env("CAP_MAX_APPLY", "2000").toInt(), checkpointEvery = env("CAP_CHECKPOINT_EVERY", "1").toInt()).start()
                 val producer = KafkaProducer<ByteArray, ByteArray>(Properties().apply {
                     put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rp.bootstrap); put(ProducerConfig.ACKS_CONFIG, "all"); put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
                     put(ProducerConfig.LINGER_MS_CONFIG, 5); put(ProducerConfig.BATCH_SIZE_CONFIG, 131_072)

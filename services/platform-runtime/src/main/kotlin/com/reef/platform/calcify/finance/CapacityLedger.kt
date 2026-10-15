@@ -79,9 +79,23 @@ internal class CapacityLedger(val config: CapacityConfig) {
 
     private fun commit(e: StateCommitment.Entity) { writes += e; val k = StateCommitment.keyOf(e); trie.put(k, StateCommitment.leafOf(e, k)) }
     private fun commitPosition(k: Pair<AccountId, AssetId>, v: Long) = commit(StateCommitment.Entity("P", Canon.bytes { str(k.first.value); str(k.second.value) }, Canon.bytes { long(v) }))
-    private fun commitExecution(k: ExecutionKey, c: Captured) = commit(StateCommitment.Entity("X", Canon.bytes { execution(k) }, Canon.bytes { str(c.buyer.value); str(c.seller.value); long(c.quantity); long(c.priceNanos) }))
-    private fun commitObligation(k: ExecutionKey, o: Obligation) = commit(StateCommitment.Entity("O", Canon.bytes { execution(k) }, Canon.bytes { str(o.status.name); long(o.cashResidual); long(o.shareResidual) }))
-    private fun commitAttempt(k: ExecutionKey, n: Int, d: Disposition) = commit(StateCommitment.Entity("A", Canon.bytes { execution(k); int(n) }, Canon.bytes { str(d.name) }))
+    private fun xValue(c: Captured) = Canon.bytes { str(c.buyer.value); str(c.seller.value); long(c.quantity); long(c.priceNanos) }
+    private fun oValue(o: Obligation) = Canon.bytes { str(o.status.name); long(o.cashResidual); long(o.shareResidual) }
+    private fun aValue(d: Disposition) = Canon.bytes { str(d.name) }
+    private fun commitExecution(k: ExecutionKey, c: Captured) = commit(StateCommitment.Entity("X", Canon.bytes { execution(k) }, xValue(c)))
+    private fun commitObligation(k: ExecutionKey, o: Obligation) = commit(StateCommitment.Entity("O", Canon.bytes { execution(k) }, oValue(o)))
+    private fun commitAttempt(k: ExecutionKey, n: Int, d: Disposition) = commit(StateCommitment.Entity("A", Canon.bytes { execution(k); int(n) }, aValue(d)))
+
+    private fun executionOf(keyBytes: ByteArray): ExecutionKey { val f = DecodedFields(keyBytes); return ExecutionKey(f.text(), f.text(), f.text(), f.text()).also { f.end() } }
+
+    /** Whether the execution has its first settlement attempt (for the store's merged execution record). */
+    fun hasFirstAttempt(executionKeyBytes: ByteArray): Boolean = (executionOf(executionKeyBytes) to 1) in attempts
+
+    /** The entity values the ledger holds now for one execution: captured economics, obligation and first attempt (null before it is made). */
+    fun executionParts(executionKeyBytes: ByteArray): Triple<ByteArray, ByteArray, ByteArray?> {
+        val k = executionOf(executionKeyBytes)
+        return Triple(xValue(executions.getValue(k)), oValue(obligations.getValue(k)), attempts[k to 1]?.let { aValue(it) })
+    }
     private fun commitAction(k: ActionKey, r: ActionRecord) = commit(StateCommitment.Entity("K", Canon.bytes { str(k.namespace); str(k.domain); str(k.actionId) }, Canon.bytes { str(r.digest); str(r.disposition.name) }))
 
     private fun pos(a: AccountId, s: AssetId) = positions[a to s] ?: 0L
@@ -200,19 +214,24 @@ internal class CapacityLedger(val config: CapacityConfig) {
          * a well-formed, duplicate-free state. It does NOT decide that the state is the one a decision committed to: the caller compares
          * [commitment] with the head decision's `stateDigest` and the chain head with the head decision's checksum (see [CapacityStore]).
          */
-        fun restore(config: CapacityConfig, entities: Iterable<StateCommitment.Entity>, sequence: Long, controls: Int, chain: String): CapacityLedger {
+        fun restore(config: CapacityConfig, entities: Iterable<StateCommitment.Entity>, sequence: Long, controls: Int, chain: String, allowAhead: Boolean = false): CapacityLedger {
             require(sequence >= 0 && controls >= 0) { "negative scalar" }
             val ledger = CapacityLedger(config)
             for (e in entities) ledger.load(e)
-            require(ledger.actions.size.toLong() == sequence) { "action count differs from sequence" }
-            require(ledger.actions.values.count { it.disposition == Disposition.FUNDED } == controls) { "funded action count differs from controls" }
+            // With [allowAhead] the scalars are those of a checkpoint and the entities may hold later decisions (one action each, and a control for each fund): the ledger takes the derived values.
+            val derivedControls = ledger.actions.values.count { it.disposition == Disposition.FUNDED }
+            if (allowAhead) require(ledger.actions.size.toLong() >= sequence && derivedControls >= controls) { "the stored entities are behind the checkpoint" }
+            else { require(ledger.actions.size.toLong() == sequence) { "action count differs from sequence" }; require(derivedControls == controls) { "funded action count differs from controls" } }
             require(ledger.executions.keys == ledger.obligations.keys) { "an execution without an obligation or the reverse" }
-            ledger.sequence = sequence; ledger.controls = controls; ledger.chain = chain
+            ledger.sequence = ledger.actions.size.toLong(); ledger.controls = derivedControls; ledger.chain = chain
             if (config.accounts == null) for (k in ledger.positions.keys) if (k.first != config.openingAccount) ledger.admitted += k.first
             ledger.checkRestoredPositions()
             return ledger
         }
     }
+
+    /** Sets the chain head of a ledger restored between checkpoints, from the decision the published log holds for its sequence. */
+    fun adoptChain(head: String) { chain = head }
 
     /** `C(S)` of the current state (the value the head decision's `stateDigest` must equal in the synchronous profile). */
     fun commitment(): String = StateCommitment.commitment(sequence, controls, trie.root())
