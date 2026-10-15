@@ -21,9 +21,9 @@ internal data class CapacityDeployment(val plan: CapacityPlan, val decoder: Capa
  * private `*_FILE` paths; the plan from a private file. Binding v3 will replace the plan file with a registered, signed opening; until then the plan file is the
  * operator's statement of the deployment and its digest is the lane bindings' identity.
  *
- * Plan file (strict JSON, every field required, numbers spelled as decimal text as in the finite contract):
+ * Plan file (strict JSON, every field required except the optional `decisionMode`, numbers spelled as decimal text as in the finite contract):
  * `{"schema":"calcify-capacity-plan-v1","planId","run","session","cashAsset","openingAccount","laneRouting":"stream-command-partition-v1"|"explicit","laneInstruments":[["A","B"],["C"]],
- *   "maxObligations","maxCaptures","maxSettleAttempts","maxControls","sequenceBound","autoSettle":true,"applicationId","topics":{"capture","control","decisions"},
+ *   "maxObligations","maxCaptures","maxSettleAttempts","maxControls","sequenceBound","autoSettle":true,["decisionMode":"two-step"|"capture-settle-v1",]"applicationId","topics":{"capture","control","decisions"},
  *   "captureSource":{"kind":"resolved-context-v1","policyVersion":"1"} | {"kind":"finite-lifecycle-capture-v1","bindingDigest":"<64 hex>","verifyContentDigest":true}}`
  * `stream-command-partition-v1` makes the file refuse any instrument assignment that is not the platform's stream-command routing (run, session, instrument hash), which is required for the production
  * source (resolved match contexts arrive on the venue source partition = the lane).
@@ -33,8 +33,10 @@ internal object CapacityRuntime {
 
     fun parsePlan(bytes: ByteArray): CapacityDeployment {
         val root = FiniteBindingContract.strictObject(bytes, 65_536)
+        // `decisionMode` is the one optional field (absent means "two-step", and then every digest is what it was before the field existed)
         FiniteBindingContract.fields(root, listOf("schema", "planId", "run", "session", "cashAsset", "openingAccount", "laneInstruments", "maxObligations", "maxCaptures", "maxSettleAttempts",
-            "maxControls", "sequenceBound", "autoSettle", "laneRouting", "captureSource", "applicationId", "topics"))
+            "maxControls", "sequenceBound", "autoSettle", "laneRouting", "captureSource", "applicationId", "topics") + if (root.has("decisionMode")) listOf("decisionMode") else emptyList())
+        val decisionMode = if (root.has("decisionMode")) DecisionMode.ofWire(FiniteBindingContract.text(root, "decisionMode", 32)) else DecisionMode.TWO_STEP
         require(FiniteBindingContract.text(root, "schema") == "calcify-capacity-plan-v1") { "unknown capacity plan schema" }
         fun t(k: String) = FiniteBindingContract.text(root, k, 128)
         fun n(k: String, max: Long) = FiniteBindingContract.number(root, k, max)
@@ -51,7 +53,7 @@ internal object CapacityRuntime {
         require(setOf(topics.capture, topics.control, topics.decisions).size == 3) { "the three topics must differ" }
         val plan = CapacityPlan(t("planId"), t("run"), t("session"), AssetId(t("cashAsset")), AccountId(t("openingAccount")), laneSets,
             n("maxObligations", Int.MAX_VALUE.toLong()).toInt(), n("maxCaptures", Int.MAX_VALUE.toLong()).toInt(), n("maxSettleAttempts", Int.MAX_VALUE.toLong()).toInt(), n("maxControls", Int.MAX_VALUE.toLong()).toInt(),
-            root["autoSettle"].booleanValue(), n("sequenceBound", FinanceProjector.MAX_SEQUENCE_BOUND))
+            root["autoSettle"].booleanValue(), n("sequenceBound", FinanceProjector.MAX_SEQUENCE_BOUND), decisionMode)
         val routing = t("laneRouting"); require(routing == CapacityRouting.EXPLICIT || routing == CapacityRouting.ENGINE_PARTITIONS) { "unknown laneRouting" }
         if (routing == CapacityRouting.ENGINE_PARTITIONS) plan.requireEngineAligned()
         val source = root["captureSource"]; require(source != null && source.isObject) { "captureSource must be an object" }
