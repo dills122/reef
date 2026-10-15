@@ -84,6 +84,44 @@ class CapacitySoakTest {
 
     private class Heads(val sequence: Long, val checksum: String)
 
+    /**
+     * The sampler's decision-log head reader: [FinanceEvidenceReader.lastValue]'s algorithm (the last read-committed data record, backing off over transaction markers) on a consumer kept
+     * open for the whole run, because the production method opens a consumer per call (hundreds of milliseconds), which would skew a sample taken while 10,000 trades/s arrive. The
+     * end-of-run integrity check uses the production method itself. Synchronized: the sampler and the drain loop both read.
+     */
+    private class HeadReader(client: Properties, private val topic: String) : AutoCloseable {
+        private val consumer = org.apache.kafka.clients.consumer.KafkaConsumer<ByteArray, ByteArray>(Properties().apply {
+            putAll(client)
+            put(org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"); put(org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
+            put(org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none"); put(org.apache.kafka.clients.consumer.ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, false)
+            put(org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.ByteArrayDeserializer::class.java.name)
+            put(org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.ByteArrayDeserializer::class.java.name)
+        })
+        private val timeout = Duration.ofSeconds(30)
+        private val cache = HashMap<Int, Pair<Long, Heads?>>()      // lane -> (end offset the head was read at, head)
+
+        @Synchronized fun read(lane: Int): Heads? {
+            val tp = org.apache.kafka.common.TopicPartition(topic, lane); consumer.assign(listOf(tp))
+            val start = consumer.beginningOffsets(listOf(tp), timeout).getValue(tp); val end = consumer.endOffsets(listOf(tp), timeout).getValue(tp)
+            cache[lane]?.let { if (it.first == end) return it.second }
+            var back = 64L; var head: Heads? = null
+            while (end > start && head == null) {
+                val from = maxOf(start, end - back); consumer.seek(tp, from)
+                var last: ByteArray? = null; val deadline = System.nanoTime() + timeout.toNanos()
+                while (consumer.position(tp, timeout) < end) { consumer.poll(Duration.ofMillis(100)).forEach { last = it.value() }; check(System.nanoTime() < deadline) { "timed out reading the tail of $topic-$lane" } }
+                last?.let { raw -> head = FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raw)).first.let { Heads(it.sequence, it.checksum) } }
+                if (from == start) break
+                back *= 8
+            }
+            cache[lane] = end to head; return head
+        }
+
+        override fun close() = consumer.close(Duration.ofSeconds(5))
+    }
+
+    /** Data-directory sizes in KiB from `du` inside the containers; a field is null when its probe failed. */
+    private class Sizes(val rpTotal: Long?, val rpCapture: Long?, val rpDecisions: Long?, val rpChangelog: Long?, val pgDir: Long?, val pgWal: Long?)
+
     @Test fun pacedSoakHoldsTheTargetRate() {
         // ---- configuration ----
         val seconds = env("CAP_SOAK_SECONDS", "120").toLong(); val rate = env("CAP_SOAK_RATE", "10000").toLong(); val lanes = env("CAP_LANES", "1").toInt()
@@ -142,13 +180,30 @@ class CapacitySoakTest {
                 val reader = FinanceEvidenceReader(client, appId, plan.planId, topics.capture, topics.control, topics.decisions, "$appId-capacity-finance-changelog")
                 val stop = AtomicBoolean(false)
                 val senderThread = AtomicReference<Thread?>(null); val generatorThread = AtomicReference<Thread?>(null); val samplerThread = AtomicReference<Thread?>(null)
+                val headReader = HeadReader(client, topics.decisions)
                 try {
                     // ---- state readers ----
-                    fun readHeads(): List<Heads?> = (0 until lanes).map { lane -> reader.lastValue(topics.decisions, lane)?.let { raw -> FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raw)).first.let { Heads(it.sequence, it.checksum) } } }
+                    fun readHeads(): List<Heads?> = (0 until lanes).map { headReader.read(it) }
+                    fun readHeadsProduction(): List<Heads?> = (0 until lanes).map { lane -> reader.lastValue(topics.decisions, lane)?.let { raw -> FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raw)).first.let { Heads(it.sequence, it.checksum) } } }
                     fun readCheckpoints(): List<Heads?> = ds.connection.use { c -> c.createStatement().use { s -> s.executeQuery("SELECT binding_digest, last_sequence, last_chain FROM boundary.calcify_finance_checkpoint").use { rs ->
                         val byDigest = HashMap<String, Heads>(); while (rs.next()) byDigest[rs.getString(1)] = Heads(rs.getLong(2), rs.getString(3)); (0 until lanes).map { byDigest[plan.bindingDigest(it)] } } } }
                     fun tradesOf(h: List<Heads?>): Long = h.withIndex().sumOf { (l, x) -> SoakAccounting.trades(x?.sequence ?: 0, fundsPerLane[l], mode) }
                     fun projectedSequences(): Long = readCheckpoints().sumOf { it?.sequence ?: 0 }
+                    fun sizes(): Sizes {
+                        val rpOut = probe("docker", "exec", rp.name, "sh", "-c", "du -sk /var/lib/redpanda/data; du -sk /var/lib/redpanda/data/kafka/* 2>/dev/null")
+                        var rpTotal: Long? = null; var rpCapture: Long? = null; var rpDecisions: Long? = null; var rpChangelog: Long? = null
+                        if (rpOut != null) {
+                            rpTotal = 0L; rpCapture = 0L; rpDecisions = 0L; rpChangelog = 0L
+                            for (line in rpOut.lines()) {
+                                val parts = line.trim().split(Regex("\\s+"), 2); if (parts.size < 2) continue; val kib = parts[0].toLongOrNull() ?: continue; val name = parts[1].substringAfterLast('/')
+                                when { parts[1].endsWith("/data") -> rpTotal = kib; name == topics.capture -> rpCapture = kib; name == topics.decisions -> rpDecisions = kib; name.contains("changelog") -> rpChangelog = (rpChangelog ?: 0L) + kib }
+                            }
+                        }
+                        val pgOut = probe("docker", "exec", pgName, "sh", "-c", "du -sk /var/lib/postgresql/data; du -sk /var/lib/postgresql/data/pg_wal")
+                        var pgDir: Long? = null; var pgWal: Long? = null
+                        if (pgOut != null) for (line in pgOut.lines()) { val parts = line.trim().split(Regex("\\s+"), 2); if (parts.size < 2) continue; val kib = parts[0].toLongOrNull() ?: continue; if (parts[1].endsWith("pg_wal")) pgWal = kib else pgDir = kib }
+                        return Sizes(rpTotal, rpCapture, rpDecisions, rpChangelog, pgDir, pgWal)
+                    }
 
                     // ---- funding (before the clock starts), sized so no account runs out during the whole soak ----
                     CapacityControlWriter(client, topics.control, plan).use { w ->
@@ -156,6 +211,9 @@ class CapacitySoakTest {
                     }
                     val fundDeadline = System.nanoTime() + Duration.ofMinutes(5).toNanos()
                     while (projectedSequences() < funds) { check(launcher.healthy()) { "service unhealthy during funding: ${launcher.projectionFailure()}" }; check(System.nanoTime() < fundDeadline) { "funding not projected: ${projectedSequences()} of $funds" }; Thread.sleep(200) }
+
+                    val baseline = sizes()          // an idle broker already holds preallocated segments for its internal topics: per-trade sizes below are net of this
+                    println("CAPACITY-SOAK-BASELINE after_funding rp_kib=${baseline.rpTotal} pg_dir_kib=${baseline.pgDir} pg_wal_kib=${baseline.pgWal}")
 
                     // ---- the lazy generator and the paced sender ----
                     val queue = ArrayBlockingQueue<SoakTrade>(131_072)
@@ -203,29 +261,19 @@ class CapacitySoakTest {
                     var lastRp = LongArray(4); var lastPg = LongArray(2)
 
                     fun collect(): SoakSample {
-                        val t = (System.nanoTime() - t0) / 1e9; val dt = (t - prevT).coerceAtLeast(1e-3)
-                        val nowNanos = System.nanoTime()
-                        val sentNow = sent.get(); val ackedNow = acked.get()
+                        // Read the lane state first and the producer's counters last, so projected <= booked <= sent <= due holds in every row whatever the reads cost; the row's time is that of the counters.
+                        var booked = prevBooked; var projected = prevProjected
+                        try { projected = tradesOf(readCheckpoints()); booked = tradesOf(readHeads()); consecutiveReadErrors = 0 }
+                        catch (e: Exception) { sampleErrors++; println("CAPACITY-SOAK-WARN sample could not read the lane state: $e"); check(++consecutiveReadErrors < 3) { "lane state unreadable three samples in a row: $e" } }
+                        val nowNanos = System.nanoTime(); val sentNow = sent.get(); val ackedNow = acked.get()
+                        val t = (nowNanos - t0) / 1e9; val dt = (t - prevT).coerceAtLeast(1e-3)
                         val phase = phaseRef.get()
                         val behind = if (phase == "run") pacer.behindTrades(sentNow, nowNanos).coerceAtMost(limit - sentNow) else 0L
-                        var booked = prevBooked; var projected = prevProjected
-                        try { booked = tradesOf(readHeads()); projected = tradesOf(readCheckpoints()); consecutiveReadErrors = 0 }
-                        catch (e: Exception) { sampleErrors++; println("CAPACITY-SOAK-WARN sample at t=${"%.1f".format(t)}s could not read the lane state: $e"); check(++consecutiveReadErrors < 3) { "lane state unreadable three samples in a row: $e" } }
                         val mem = ManagementFactory.getMemoryMXBean().heapMemoryUsage.used shr 20; maxHeapMib = maxOf(maxHeapMib, mem)
                         val gcCount = gcBeans.sumOf { it.collectionCount.coerceAtLeast(0) }; val gcMs = gcBeans.sumOf { it.collectionTime.coerceAtLeast(0) }
                         val cpu = cpuByGroup(); val processCpu = os.processCpuTime
                         fun pct(g: String) = ((cpu[g] ?: 0) - (prevCpu[g] ?: 0)).coerceAtLeast(0) / 1e9 / dt * 100
-                        // sizes (null when a probe fails: the CSV leaves those fields blank)
-                        val rpOut = probe("docker", "exec", rp.name, "sh", "-c", "du -sk /var/lib/redpanda/data; du -sk /var/lib/redpanda/data/kafka/* 2>/dev/null")
-                        var rpTotal: Long? = null; var rpCapture: Long? = null; var rpDecisions: Long? = null; var rpChangelog: Long? = null
-                        if (rpOut != null) {
-                            rpTotal = 0L; rpCapture = 0L; rpDecisions = 0L; rpChangelog = 0L
-                            for (line in rpOut.lines()) { val parts = line.trim().split(Regex("\\s+"), 2); if (parts.size < 2) continue; val kib = parts[0].toLongOrNull() ?: continue; val name = parts[1].substringAfterLast('/')
-                                when { parts[1].endsWith("/data") -> rpTotal = kib; name == topics.capture -> rpCapture = kib; name == topics.decisions -> rpDecisions = kib; name.contains("changelog") -> rpChangelog = (rpChangelog ?: 0L) + kib } }
-                        }
-                        val pgOut = probe("docker", "exec", pgName, "sh", "-c", "du -sk /var/lib/postgresql/data; du -sk /var/lib/postgresql/data/pg_wal")
-                        var pgDir: Long? = null; var pgWal: Long? = null
-                        if (pgOut != null) for (line in pgOut.lines()) { val parts = line.trim().split(Regex("\\s+"), 2); if (parts.size < 2) continue; val kib = parts[0].toLongOrNull() ?: continue; if (parts[1].endsWith("pg_wal")) pgWal = kib else pgDir = kib }
+                        val sz = sizes(); val rpTotal = sz.rpTotal; val pgDir = sz.pgDir
                         val pgBytes = try { ds.connection.use { c -> c.createStatement().use { s -> s.executeQuery("SELECT pg_database_size('reef')").use { rs -> rs.next(); rs.getLong(1) } } } } catch (_: Exception) { null }
                         val disk = diskBytesWritten()
                         val rpGrowth = if (rpTotal != null && prevRp != null) (rpTotal - prevRp!!) / dt else null; val pgGrowth = if (pgDir != null && prevPg != null) (pgDir - prevPg!!) / dt else null
@@ -233,7 +281,7 @@ class CapacitySoakTest {
                             phase, t, sentNow, ackedNow, booked, projected, behind,
                             (sentNow - prevSent) / dt, (booked - prevBooked) / dt, (projected - prevProjected) / dt, if (t > 0) sentNow / t else 0.0, if (t > 0) booked / t else 0.0, if (t > 0) projected / t else 0.0,
                             mem, gcCount - prevGcCount, gcMs - prevGcMs, (processCpu - prevProcessCpu).coerceAtLeast(0) / 1e9 / dt * 100, pct("streams"), pct("projection"), pct("kafka-clients"), pct("harness"),
-                            rpTotal, rpCapture, rpDecisions, rpChangelog, pgDir, pgWal, pgBytes, dirKib(stateDir),
+                            rpTotal, sz.rpCapture, sz.rpDecisions, sz.rpChangelog, pgDir, sz.pgWal, pgBytes, dirKib(stateDir),
                             rpGrowth, pgGrowth, if (disk != null && prevDisk != null) (disk - prevDisk!!) / dt / (1 shl 20) else null, launcher.healthy() && sendError.get() == null,
                         )
                         totalGcMs += s.gcMsDelta
@@ -251,7 +299,8 @@ class CapacitySoakTest {
                                 val why = when (verdict) {
                                     SoakVerdict.PRODUCER_BEHIND -> "PRODUCER BEHIND (the load generator, not the lane): at t=${"%.0f".format(t)}s the sender is ${"%.1f".format(pLag)} s of rate ($behind trades) behind its own schedule, over the ${maxLagSeconds.toInt()} s limit for at least ${sustainSeconds.toInt()} s. " +
                                         "Sent $sentNow of ${pacer.due(nowNanos)} due; sent-acked=${sentNow - ackedNow} (large means broker acknowledgements are slowing the producer); generator-starved sends=${starved.get()} (large means the generator is slower than the target); " +
-                                        "harness CPU ${"%.0f".format(s.harnessCpuPct)}% of one core. The lane was not offered the target load, so this run does NOT measure the lane's capacity: lower CAP_SOAK_RATE or move the load generator."
+                                        "harness CPU ${"%.0f".format(s.harnessCpuPct)}% of one core. The lane was not offered the target load, so this run does NOT measure the lane's capacity: lower CAP_SOAK_RATE or move the load generator. " +
+                                        "(Lane lag at the same moment: booking ${"%.1f".format(bLag)} s, projection ${"%.1f".format(jLag)} s of rate; the lane was fed ${"%.0f".format(s.instSent)}/s and booked ${"%.0f".format(s.instBooked)}/s.)"
                                     SoakVerdict.LANE_BEHIND_BOOKING -> "LANE BEHIND, BOOKING: at t=${"%.0f".format(t)}s sent-booked=${s.lagSentBooked} trades = ${"%.1f".format(bLag)} s of rate, over the ${maxLagSeconds.toInt()} s limit for at least ${sustainSeconds.toInt()} s. " +
                                         "The producer is on schedule (behind by ${"%.2f".format(pLag)} s) but the Streams lane books ${"%.0f".format(s.instBooked)}/s against ${"%.0f".format(s.instSent)}/s sent: it cannot hold $rate trades/s on this host."
                                     else -> "LANE BEHIND, PROJECTION: at t=${"%.0f".format(t)}s booked-projected=${s.lagBookedProjected} trades = ${"%.1f".format(jLag)} s of rate, over the ${maxLagSeconds.toInt()} s limit for at least ${sustainSeconds.toInt()} s. " +
@@ -318,7 +367,7 @@ class CapacitySoakTest {
 
                     // ---- integrity ----
                     val problems = ArrayList<String>()
-                    val heads = readHeads(); val checkpoints = readCheckpoints()
+                    val heads = readHeadsProduction(); val checkpoints = readCheckpoints()
                     val expectedSent = limit
                     if (sent.get() != expectedSent) problems += "sent ${sent.get()} != planned $expectedSent"
                     if (acked.get() != sent.get()) problems += "acked ${acked.get()} != sent ${sent.get()}"
@@ -347,7 +396,8 @@ class CapacitySoakTest {
                     if (!launcher.healthy() || launcher.projectionFailure() != null || launcher.streamsState() != KafkaStreams.State.RUNNING) problems += "a lane stopped: streams=${launcher.streamsState()} projection=${launcher.projectionFailure()}"
 
                     // ---- report ----
-                    val perTradeRp = finalSample.rpTotalKib?.let { "%.0f".format(it * 1024.0 / sent.get()) } ?: "?"; val perTradePg = finalSample.pgDirKib?.let { "%.0f".format(it * 1024.0 / sent.get()) } ?: "?"
+                    fun perTrade(final: Long?, base: Long?) = if (final != null && base != null) "%.0f".format((final - base) * 1024.0 / sent.get()) else "?"      // net of the after-funding baseline; du counts allocated blocks
+                    val perTradeRp = perTrade(finalSample.rpTotalKib, baseline.rpTotal); val perTradePg = perTrade(finalSample.pgDirKib, baseline.pgDir)
                     println("CAPACITY-SOAK-RESULT label=$label mode=${mode.wire} source=$source lanes=$lanes target_rate=$rate seconds=$seconds sent=${sent.get()} booked=$bookedTrades projected=$projectedTrades " +
                         "producer_rate=${"%.0f".format(sent.get() / sentSeconds)}/s drain_s=${"%.1f".format(drainTotal)} booked_after_producer_s=${"%.1f".format(bookedAt)} projected_after_producer_s=${"%.1f".format(projectedAt)} " +
                         "end_to_end_projected_per_s=${"%.0f".format(sent.get() / (sentSeconds + drainTotal))} max_producer_behind_s=${"%.2f".format(maxProducerBehindS)} max_booking_lag_s=${"%.2f".format(maxBookingLagS)} max_projection_lag_s=${"%.2f".format(maxProjectionLagS)} " +
@@ -358,7 +408,7 @@ class CapacitySoakTest {
                 } finally {
                     stop.set(true)
                     for (t in listOf(generatorThread, senderThread, samplerThread)) t.get()?.let { it.interrupt(); it.join(10_000) }
-                    runCatching { launcher.close() }; runCatching { producer.close(Duration.ofSeconds(10)) }
+                    runCatching { launcher.close() }; runCatching { producer.close(Duration.ofSeconds(10)) }; runCatching { headReader.close() }
                 }
             }
         } finally {
