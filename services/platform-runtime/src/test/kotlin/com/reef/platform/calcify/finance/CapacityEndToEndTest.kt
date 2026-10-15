@@ -98,7 +98,7 @@ class CapacityEndToEndTest {
     }
 
     @Test fun resolvedMatchContextsOnEngineAlignedLanesGiveTheSameGuarantees() {
-        val plan = planOver(CapacityRouting.engineLanes((0 until 12).map { "INS$it" }, lanes)).also { it.requireEngineAligned() }
+        val plan = planOver(CapacityRouting.engineLanes("p3-run", "p3-session", (0 until 12).map { "INS$it" }, lanes)).also { it.requireEngineAligned() }
         withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityResolvedContextDecoder(plan), ::resolvedContext) }
     }
 

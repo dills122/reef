@@ -7,7 +7,7 @@ import reef.contracts.calcify.v1.MatchContextResolvedV1
 
 class CapacityResolvedContextDecoderTest {
     private val instruments = (0 until 9).map { "INS$it" }
-    private val plan = CapacityPlan("p", "run-1", "session-1", AssetId("USD"), AccountId("opening"), CapacityRouting.engineLanes(instruments, 3), 100, 100, 200, 50)
+    private val plan = CapacityPlan("p", "run-1", "session-1", AssetId("USD"), AccountId("opening"), CapacityRouting.engineLanes("run-1", "session-1", instruments, 3), 100, 100, 200, 50)
     private val decoder = CapacityResolvedContextDecoder(plan)
     private val laneOf = instruments.associateWith { plan.laneOf(it)!! }
     private val anInstrument = instruments.first()
@@ -60,10 +60,18 @@ class CapacityResolvedContextDecoderTest {
         assertTrue(decoder.decode("CONTROL", 0, 0, byteArrayOf(9, 9)).single() is CapacityItem.Bad)
     }
 
+    @Test fun theRoutingIsTheOneTheRealEngineStackUsed() {
+        // Observed in the compose stack (make dev-smoke-calcify-full-path, DEV_CALCIFY_PHASE2=1, id capsmoke1, four partitions): the real trade of AAPL-capsmoke1 was published
+        // to venue event partition 2 and its resolved context to resolved partition 2.
+        assertEquals(2, com.reef.platform.api.StreamCommandEnvelopeBuilder.partition("capsmoke1", "session-capsmoke1", "AAPL-capsmoke1", 4))
+        val observed = CapacityPlan("p", "capsmoke1", "session-capsmoke1", AssetId("USD"), AccountId("opening"), CapacityRouting.engineLanes("capsmoke1", "session-capsmoke1", listOf("AAPL-capsmoke1", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"), 4), 100, 100, 200, 50)
+        assertEquals(2, observed.laneOf("AAPL-capsmoke1"))
+    }
+
     @Test fun enginePartitioningGivesEveryLaneInstrumentsAndPlansAreCheckedAgainstIt() {
         plan.requireEngineAligned()
         val misaligned = CapacityPlan("p", "run-1", "session-1", AssetId("USD"), AccountId("opening"), plan.laneInstruments.reversed(), 100, 100, 200, 50)
         kotlin.test.assertFailsWith<IllegalArgumentException> { misaligned.requireEngineAligned() }
-        kotlin.test.assertFailsWith<IllegalArgumentException> { CapacityRouting.engineLanes(listOf("ONLY"), 3) }
+        kotlin.test.assertFailsWith<IllegalArgumentException> { CapacityRouting.engineLanes("run-1", "session-1", listOf("ONLY"), 3) }
     }
 }

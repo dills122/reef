@@ -22,10 +22,10 @@ internal data class CapacityDeployment(val plan: CapacityPlan, val decoder: Capa
  * operator's statement of the deployment and its digest is the lane bindings' identity.
  *
  * Plan file (strict JSON, every field required, numbers spelled as decimal text as in the finite contract):
- * `{"schema":"calcify-capacity-plan-v1","planId","run","session","cashAsset","openingAccount","laneRouting":"partition-lane-hash-v1"|"explicit","laneInstruments":[["A","B"],["C"]],
+ * `{"schema":"calcify-capacity-plan-v1","planId","run","session","cashAsset","openingAccount","laneRouting":"stream-command-partition-v1"|"explicit","laneInstruments":[["A","B"],["C"]],
  *   "maxObligations","maxCaptures","maxSettleAttempts","maxControls","sequenceBound","autoSettle":true,"applicationId","topics":{"capture","control","decisions"},
  *   "captureSource":{"kind":"resolved-context-v1","policyVersion":"1"} | {"kind":"finite-lifecycle-capture-v1","bindingDigest":"<64 hex>","verifyContentDigest":true}}`
- * `partition-lane-hash-v1` makes the file refuse any instrument assignment that is not the matching engine's own partitioning, which is required for the production
+ * `stream-command-partition-v1` makes the file refuse any instrument assignment that is not the platform's stream-command routing (run, session, instrument hash), which is required for the production
  * source (resolved match contexts arrive on the venue source partition = the lane).
  */
 internal object CapacityRuntime {
@@ -59,7 +59,7 @@ internal object CapacityRuntime {
             "resolved-context-v1" -> {
                 FiniteBindingContract.fields(source, listOf("kind", "policyVersion"))
                 require(FiniteBindingContract.number(source, "policyVersion", 1_000) == CapacityResolvedContextDecoder.POLICY_VERSION.toLong()) { "unsupported resolved-context policyVersion" }
-                require(routing == CapacityRouting.ENGINE_PARTITIONS) { "resolved contexts arrive on the engine's partitions: laneRouting must be partition-lane-hash-v1" }
+                require(routing == CapacityRouting.ENGINE_PARTITIONS) { "resolved contexts arrive on the engine's partitions: laneRouting must be stream-command-partition-v1" }
                 CapacityResolvedContextDecoder(plan)
             }
             "finite-lifecycle-capture-v1" -> {

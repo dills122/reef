@@ -42,7 +42,7 @@ class CapacityLaneThroughputTest {
         val instrumentCount = env("CAP_INSTRUMENTS", "16").toInt(); val verifyDigest = env("CAP_VERIFY_DIGEST", "true").toBoolean()
         val instruments = (0 until instrumentCount).map { "INS$it" }
         val resolved = env("CAP_SOURCE", "lifecycle") == "resolved"
-        val laneSets = if (resolved) CapacityRouting.engineLanes(instruments, lanes) else (0 until lanes).map { l -> instruments.filterIndexed { i, _ -> i % lanes == l }.toSet() }
+        val laneSets = if (resolved) CapacityRouting.engineLanes("p3-run", "p3-session", instruments, lanes) else (0 until lanes).map { l -> instruments.filterIndexed { i, _ -> i % lanes == l }.toSet() }
         val plan = CapacityPlan("rate-plan", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), laneSets,
             trades + 10, trades + 10, 2 * trades + 10, accountCount * (lanes + instrumentCount) + 10, sequenceBound = 1_000_000_000L)
         val accounts = (0 until accountCount).map { AccountId("u$it") }

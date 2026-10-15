@@ -23,8 +23,8 @@ class CapacityRuntimeTest {
     }
 
     @Test fun anEngineAlignedPlanWithResolvedContextsIsAccepted() {
-        val instruments = (0 until 12).map { "INS$it" }; val lanes = CapacityRouting.engineLanes(instruments, 3)
-        val json = plan { it.replace("\"explicit\"", "\"partition-lane-hash-v1\"").replace(Regex("\"captureSource\":\\{[^}]*\\}"), "\"captureSource\":{\"kind\":\"resolved-context-v1\",\"policyVersion\":\"1\"}")
+        val instruments = (0 until 12).map { "INS$it" }; val lanes = CapacityRouting.engineLanes("run-1", "session-1", instruments, 3)
+        val json = plan { it.replace("\"explicit\"", "\"stream-command-partition-v1\"").replace(Regex("\"captureSource\":\\{[^}]*\\}"), "\"captureSource\":{\"kind\":\"resolved-context-v1\",\"policyVersion\":\"1\"}")
             .replace(Regex("\"laneInstruments\":\\[.*?\\]\\],"), "\"laneInstruments\":[" + lanes.joinToString(",") { l -> l.sorted().joinToString(",", "[", "]") { "\"$it\"" } } + "],") }
         val d = CapacityRuntime.parsePlan(json)
         assertEquals(3, d.plan.lanes); assertTrue(d.decoder is CapacityResolvedContextDecoder); d.plan.requireEngineAligned()
@@ -40,7 +40,7 @@ class CapacityRuntimeTest {
             "unknown source kind" to { it.replace("finite-lifecycle-capture-v1", "other-v1") },
             "resolved source needs engine routing" to { it.replace(Regex("\"captureSource\":\\{[^}]*\\}"), "\"captureSource\":{\"kind\":\"resolved-context-v1\",\"policyVersion\":\"1\"}") },
             "unknown routing" to { it.replace("\"explicit\"", "\"hash\"") },
-            "not the engine's partitioning" to { it.replace("\"explicit\"", "\"partition-lane-hash-v1\"") },
+            "not the engine's partitioning" to { it.replace("\"explicit\"", "\"stream-command-partition-v1\"") },
             "verify flag as text" to { it.replace("\"verifyContentDigest\":true", "\"verifyContentDigest\":\"true\"") },
             "number as number" to { it.replace("\"maxControls\":\"50000\"", "\"maxControls\":50000") },
             "negative number" to { it.replace("\"maxControls\":\"50000\"", "\"maxControls\":\"-1\"") },
