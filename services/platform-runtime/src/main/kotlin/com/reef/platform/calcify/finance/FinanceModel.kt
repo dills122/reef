@@ -97,7 +97,7 @@ internal object Canon {
         private var size = 0
         private fun room(extra: Int) {
             val needed = Math.addExact(size, extra)
-            if (needed > buffer.size) buffer = buffer.copyOf(maxOf(Math.multiplyExact(buffer.size, 2).coerceAtLeast(0), needed))
+            if (needed > buffer.size) buffer = buffer.copyOf(maxOf(if (buffer.size <= Int.MAX_VALUE / 2) buffer.size * 2 else Int.MAX_VALUE, needed))
         }
         fun str(v: String) {
             val length = v.length

@@ -65,7 +65,7 @@ class CapacityLaneCostTest {
                 Thread.sleep(1)
             }
         }.also { it.isDaemon = true; it.start() }
-        fun branchHashes(): Long { val f = CapacityLedger::class.java.getDeclaredField("trie"); f.isAccessible = true; return (f.get(processor.currentLedger()) as StateTrie).branchHashes }
+        fun branchHashes(): Long = processor.currentLedger().branchHashes
         val hashesBefore = branchHashes()
         val t0 = System.nanoTime()
         val base = 20_000
