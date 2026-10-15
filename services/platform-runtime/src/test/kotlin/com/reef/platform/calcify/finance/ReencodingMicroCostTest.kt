@@ -107,7 +107,8 @@ class ReencodingMicroCostTest {
         compare("projector: parse + reflective unknown-field check", n, old = { val p = FinanceDecisionV1.parseFrom(raws[it and 511]); oldNoUnknownFields(p); p }, new = { FinanceDecisionV1.parseFrom(raws[it and 511]) })
         compare("projector: 4 digest format checks", n, old = { val d = decisions[it and 511]; listOf(d.inputDigest, d.priorChain, d.stateDigest, d.checksum).all { s -> regex.matches(s) } },
             new = { val d = decisions[it and 511]; hexOk(d.inputDigest) && hexOk(d.priorChain) && hexOk(d.stateDigest) && hexOk(d.checksum) })
-        compare("projector: recordFromProto (whole)", n, old = { FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raws[it and 511])) }, new = { FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raws[it and 511])) })
+        // Identical code on both sides on purpose: this is the noise control (two runs of the same code), not a before/after comparison; the delta it prints is the measurement error.
+        compare("projector: recordFromProto (identical-code control)", n, old = { FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raws[it and 511])) }, new = { FinanceWire.recordFromProto(FinanceDecisionV1.parseFrom(raws[it and 511])) })
         println("MICRO sink=$sink")
     }
 
