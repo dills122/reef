@@ -2143,3 +2143,10 @@ The lane gain on the real stack (1.33 to 1.39 times CPU, 1.25 to 1.39 times proc
 
 Correctness: the combined mode's differential test (160 seeds x 2 account modes x 140 steps) shows equal state, equal dispositions and a state digest equal to the reference commitment after every decision; the broker-backed `CapacityEndToEndTest` runs it for both capture sources, with shortfalls and operator repairs, clean restart and wiped-state restart, logs and projections equal to independent replays and the projection tables equal to a two-step shadow oracle.
 
+## Dedicated hosts: the merged lane code and the combined decision on an EPYC and a Xeon, CAL-FIN-P26 (October 15, 2026)
+
+Two droplets, the same code and cases, about $0.65 in total, both destroyed and verified (`docs/work/CALCIFY_DEDICATED_HOST_P26.md`, raw output in `docs/work/evidence/CAL-FIN-P26-*`). Code: the flat state trie and removed re-encoding (CAL-FIN-P24) and the opt-in `capture-settle-v1` mode (one decision per booked trade, CAL-FIN-P25). Finance lane and projector only, broker and Postgres on tmpfs, 600,000 trades per hot-lane case, chain digest verified in every run.
+
+**One hot lane, projected booked trades/s.** AMD EPYC 9555P (`g5-8vcpu-32gb-50gb`, $0.36/hr, SHA-256 of 64 bytes 81 ns): `two-step` **9.9k to 10.0k** (processed 13.4k), `capture-settle-v1` **16.5k** (processed 19.1k to 19.3k). Intel Xeon 8168 (`c-32`, 454 ns): `two-step` 4.1k (processed 4.65k), `capture-settle-v1` 6.7k to 6.9k. Four uniform lanes on the Xeon: 12.6k (`two-step`), **20.1k** (`capture-settle-v1`). On the same Xeon the earlier code (CAL-FIN-P23) gave 3.5k and 11.0k.
+
+**Reading.** The Xeon was the hot-lane problem (single thread 2.6 times slower, no fast SHA): on the EPYC one instrument reaches the 10k trades/s target with the lane changes alone and 1.65 times it with the combined decision. The combined decision gains most at the projector (two decision rows per trade become one). Short runs on tmpfs: nothing here shows a lane holding a rate for 15 or 30 minutes (the paced soak harness is the next step), and the engine lane has not been measured on the EPYC.
