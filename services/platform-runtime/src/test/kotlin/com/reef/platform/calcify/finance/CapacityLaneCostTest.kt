@@ -65,11 +65,14 @@ class CapacityLaneCostTest {
                 Thread.sleep(1)
             }
         }.also { it.isDaemon = true; it.start() }
+        fun branchHashes(): Long { val f = CapacityLedger::class.java.getDeclaredField("trie"); f.isAccessible = true; return (f.get(processor.currentLedger()) as StateTrie).branchHashes }
+        val hashesBefore = branchHashes()
         val t0 = System.nanoTime()
         val base = 20_000
         for (i in 0 until trades) { trade(base + i); if (i % 5_000 == 0) context.resetForwards() }
         val seconds = (System.nanoTime() - t0) / 1e9; running = false; sampler.join()
         println("LANE-COST $trades trades ($accountCount accounts, $instrumentCount instruments) in ${"%.2f".format(seconds)} s = ${"%.0f".format(trades / seconds)} trades/s, ${"%.0f".format(2 * trades / seconds)} decisions/s; ${total} samples; ledger entities started at $stateBefore records")
+        println("LANE-COST trie branch hashes per decision: ${"%.1f".format((branchHashes() - hashesBefore) / (2.0 * trades))}")
         val top = samples.entries.sortedByDescending { it.value }.filter { it.key.contains("Capacity") || it.key.contains("State") || it.key.contains("Canon") || it.key.contains("Finance") || it.key.contains("Message") || it.key.contains("Digest") || it.key.contains("Proto") || it.key.contains("HashMap") || it.key.contains("Lifecycle") || it.key.contains("update") || it.key.contains("digest") }.take(40)
         for ((name, n) in top) println("LANE-COST %5.1f%%  %s".format(100.0 * n / total, name))
     }

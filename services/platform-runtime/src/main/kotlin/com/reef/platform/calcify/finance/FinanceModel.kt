@@ -95,7 +95,10 @@ internal object Canon {
     class Writer internal constructor() {
         private var buffer = ByteArray(160)
         private var size = 0
-        private fun room(extra: Int) { if (size + extra > buffer.size) buffer = buffer.copyOf(maxOf(buffer.size * 2, size + extra)) }
+        private fun room(extra: Int) {
+            val needed = Math.addExact(size, extra)
+            if (needed > buffer.size) buffer = buffer.copyOf(maxOf(Math.multiplyExact(buffer.size, 2).coerceAtLeast(0), needed))
+        }
         fun str(v: String) {
             val length = v.length
             var ascii = true

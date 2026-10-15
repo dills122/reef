@@ -69,11 +69,43 @@ class CanonEncodingTest {
         }
     }
 
-    @Test fun shaMatchesAFreshDigestAndSurvivesInterleavedUse() {
+    @Test fun shaMatchesAFreshDigest() {
         val rnd = Random(3)
         repeat(2_000) {
             val bytes = ByteArray(rnd.nextInt(300)).also(rnd::nextBytes)
             assertEquals(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)), Canon.sha(bytes))
         }
+    }
+
+    @Test fun shaIsCorrectWhenManyThreadsHashDifferentInputsAtOnce() {
+        val threads = 8; val failures = java.util.concurrent.atomic.AtomicInteger()
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(threads)
+        try {
+            val futures = (0 until threads).map { t ->
+                pool.submit {
+                    val rnd = Random(100L + t)
+                    repeat(20_000) {
+                        val bytes = ByteArray(1 + rnd.nextInt(200)).also(rnd::nextBytes)
+                        if (HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)) != Canon.sha(bytes)) failures.incrementAndGet()
+                    }
+                }
+            }
+            futures.forEach { it.get() }
+        } finally { pool.shutdownNow() }
+        assertEquals(0, failures.get(), "a digest shared between threads corrupts results")
+    }
+
+    @Test fun aLoneSurrogateAnywhereInARandomStringIsRefused() {
+        val rnd = Random(11); var refused = 0
+        repeat(2_000) {
+            val text = StringBuilder(randomText(rnd))
+            text.insert(rnd.nextInt(text.length + 1), if (rnd.nextBoolean()) '\uD800' else '\uDC00')
+            val s = text.toString()
+            // the inserted surrogate may have joined a neighbour into a valid pair; the reference decides which strings are invalid
+            val invalid = try { referenceUtf8(s); false } catch (_: IllegalArgumentException) { true }
+            if (invalid) { refused++; assertFailsWith<IllegalArgumentException> { Canon.bytes { str(s) } } }
+            else assertContentEquals(referenceBytes { out -> val b = referenceUtf8(s); out.writeInt(b.size); out.write(b) }, Canon.bytes { str(s) })
+        }
+        assert(refused > 500) { "the test must actually exercise invalid text ($refused)" }
     }
 }
