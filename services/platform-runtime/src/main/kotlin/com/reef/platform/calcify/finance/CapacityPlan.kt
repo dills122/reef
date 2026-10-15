@@ -28,9 +28,14 @@ internal class CapacityPlan(
 
     val lanes: Int get() = laneInstruments.size
 
-    /** Refuses a plan whose instrument-to-lane assignment is not the matching engine's own ([com.reef.platform.infrastructure.partition.PartitionLaneHash]). Resolved match contexts arrive on the venue source partition, so the lane an instrument trades in must be that partition. */
+    /**
+     * Refuses a plan whose instrument-to-lane assignment is not the platform's own stream-command routing ([com.reef.platform.api.StreamCommandEnvelopeBuilder.partition]:
+     * a hash of run, session and instrument). That function chooses the command partition, the matching engine lane that consumes it, the venue event partition it
+     * publishes to and therefore the partition of the resolved match context, so it is the lane an instrument trades in. Verified against a real engine run: the trade of
+     * a smoke instrument landed on the partition this function gives.
+     */
     fun requireEngineAligned() = laneInstruments.forEachIndexed { lane, set ->
-        set.forEach { require(com.reef.platform.infrastructure.partition.PartitionLaneHash.laneFor(it, lanes) == lane) { "instrument $it does not route to lane $lane in the engine's partitioning" } }
+        set.forEach { require(com.reef.platform.api.StreamCommandEnvelopeBuilder.partition(run, session, it, lanes) == lane) { "instrument $it does not route to lane $lane in the platform's stream-command partitioning" } }
     }
     private val laneByInstrument: Map<String, Int> = laneInstruments.withIndex().flatMap { (i, set) -> set.map { it to i } }.toMap()
 
@@ -53,11 +58,11 @@ internal data class CapacityLaneSpec(val bindingDigest: String, val capacity: Ca
 
 internal object CapacityRouting {
     const val EXPLICIT = "explicit"
-    const val ENGINE_PARTITIONS = "partition-lane-hash-v1"
+    const val ENGINE_PARTITIONS = "stream-command-partition-v1"
 
-    /** The lane sets the matching engine's partitioning gives these instruments over [lanes] lanes. Every lane must receive at least one instrument. */
-    fun engineLanes(instruments: Collection<String>, lanes: Int): List<Set<String>> =
-        instruments.groupBy { com.reef.platform.infrastructure.partition.PartitionLaneHash.laneFor(it, lanes) }.let { byLane ->
+    /** The lane sets the platform's stream-command routing gives these instruments of a run and session over [lanes] lanes. Every lane must receive at least one instrument. */
+    fun engineLanes(run: String, session: String, instruments: Collection<String>, lanes: Int): List<Set<String>> =
+        instruments.groupBy { com.reef.platform.api.StreamCommandEnvelopeBuilder.partition(run, session, it, lanes) }.let { byLane ->
             (0 until lanes).map { lane -> byLane[lane]?.toSet() ?: throw IllegalArgumentException("no instrument routes to lane $lane of $lanes") }
         }
 }

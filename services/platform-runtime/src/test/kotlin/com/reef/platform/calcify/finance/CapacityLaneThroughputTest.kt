@@ -41,8 +41,9 @@ class CapacityLaneThroughputTest {
         val lanes = env("CAP_LANES", "1").toInt(); val trades = env("CAP_TRADES", "100000").toInt(); val accountCount = env("CAP_ACCOUNTS", "200").toInt()
         val instrumentCount = env("CAP_INSTRUMENTS", "16").toInt(); val verifyDigest = env("CAP_VERIFY_DIGEST", "true").toBoolean()
         val instruments = (0 until instrumentCount).map { "INS$it" }
+        val hotShare = env("CAP_HOT_SHARE", "0").toDouble()      // fraction of all trades sent to INS0; the rest are uniform over every instrument (INS0 included)
         val resolved = env("CAP_SOURCE", "lifecycle") == "resolved"
-        val laneSets = if (resolved) CapacityRouting.engineLanes(instruments, lanes) else (0 until lanes).map { l -> instruments.filterIndexed { i, _ -> i % lanes == l }.toSet() }
+        val laneSets = if (resolved) CapacityRouting.engineLanes("p3-run", "p3-session", instruments, lanes) else (0 until lanes).map { l -> instruments.filterIndexed { i, _ -> i % lanes == l }.toSet() }
         val plan = CapacityPlan("rate-plan", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), laneSets,
             trades + 10, trades + 10, 2 * trades + 10, accountCount * (lanes + instrumentCount) + 10, sequenceBound = 1_000_000_000L)
         val accounts = (0 until accountCount).map { AccountId("u$it") }
@@ -66,7 +67,7 @@ class CapacityLaneThroughputTest {
         val rnd = Random(3)
         val schedule = ArrayList<Pair<Int, ByteArray>>(trades)
         for (i in 0 until trades) {
-            val ins = instruments[rnd.nextInt(instrumentCount)]; val b = accounts[rnd.nextInt(accountCount)]; var s = accounts[rnd.nextInt(accountCount)]; if (s == b) s = accounts[(accounts.indexOf(b) + 1) % accountCount]
+            val ins = if (rnd.nextDouble() < hotShare) instruments[0] else instruments[rnd.nextInt(instrumentCount)]; val b = accounts[rnd.nextInt(accountCount)]; var s = accounts[rnd.nextInt(accountCount)]; if (s == b) s = accounts[(accounts.indexOf(b) + 1) % accountCount]
             val units = 1L + rnd.nextInt(4); val nanos = 1_000L + rnd.nextInt(50)
             if (resolved) { schedule += plan.laneOf(ins)!! to resolvedContext(i, ins, b, s, units, nanos); continue }
             val edited = one.toBuilder().also { bld ->
@@ -91,7 +92,14 @@ class CapacityLaneThroughputTest {
                     EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.t, r.conname);
                   END LOOP;
                 END ${'$'}${'$'};""")
-            val lean = env("CAP_PG_LEAN", "false")      // false | unique | regex | both: drop the decision table's UNIQUE(action key) and/or its three hex-format CHECKs (measurement only)
+            if (env("CAP_PG_LEAN", "false") == "heap") sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = """
+                DO ${'$'}${'$'} DECLARE r record; BEGIN
+                  FOR r IN SELECT conname FROM pg_constraint WHERE conrelid = 'boundary.calcify_finance_decision'::regclass LOOP
+                    EXECUTE format('ALTER TABLE boundary.calcify_finance_decision DROP CONSTRAINT %I', r.conname);
+                  END LOOP;
+                END ${'$'}${'$'};
+                ALTER TABLE boundary.calcify_finance_decision SET UNLOGGED;""")
+            val lean = env("CAP_PG_LEAN", "false").let { if (it == "heap") "false" else it }      // false | unique | regex | both: drop the decision table's UNIQUE(action key) and/or its three hex-format CHECKs (measurement only)
             if (lean != "false") {
                 val predicate = when (lean) { "unique" -> "contype = 'u'"; "regex" -> "contype = 'c' AND pg_get_constraintdef(oid) LIKE '%~%'"; else -> "contype = 'u' OR (contype = 'c' AND pg_get_constraintdef(oid) LIKE '%~%')" }
                 sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = """

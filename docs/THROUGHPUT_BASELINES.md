@@ -1972,7 +1972,7 @@ Interpretation limits: single runs per cell, 18 to 65 s each, so ramp effects ar
 
 ## Capacity path on the production source, engine-aligned lanes, CAL-FIN-P17 (October 14, 2026)
 
-The CAL-FIN-P16 path fed the production source: Phase 2 resolved match contexts (`MatchContextResolvedV1`) on lanes that are the matching engine's own partitions (`PartitionLaneHash`), instead of the finite lifecycle envelopes on evenly split lanes. Same machine, harness and conditions as P16 (shared 10-core laptop, Redpanda and Postgres 16 in containers, JaCoCo off, single runs of 6 to 42 s); `CAP_SOURCE=resolved`, 200 accounts.
+The CAL-FIN-P16 path fed the production source: Phase 2 resolved match contexts (`MatchContextResolvedV1`) on lanes assigned with `PartitionLaneHash` as a stand-in for the matching engine's partitioning (**superseded: a real-stack run showed the platform routes with `StreamCommandEnvelopeBuilder.partition(run, session, instrument, count)`; the per-lane splits quoted in this entry are those of the wrong hash, see CAL-FIN-P18 for the corrected ones; the per-lane rates are unaffected**), instead of the finite lifecycle envelopes on evenly split lanes. Same machine, harness and conditions as P16 (shared 10-core laptop, Redpanda and Postgres 16 in containers, JaCoCo off, single runs of 6 to 42 s); `CAP_SOURCE=resolved`, 200 accounts.
 
 | Instruments | Lanes | Trades per lane | Processed decisions/s | **Projected decisions/s** |
 | --- | --- | --- | --- | --- |
@@ -1988,3 +1988,50 @@ The CAL-FIN-P16 path fed the production source: Phase 2 resolved match contexts 
 Interpretation limits: those of CAL-FIN-P16, plus: one hash-induced split per cell (a different instrument naming gives a different split), uniform choice of instrument per trade (a hot instrument loads its lane alone and is not addressed by instrument sharding), cash funded per lane, no hot-instrument or skewed-participant variant. Not a capacity claim.
 
 **Where the per-lane projection time goes, and migration 0017.** One lane, resolved source, 480,000 decisions, same machine: projected 11,849 decisions/s as shipped; 11,601 without the sequence-bound statement trigger (it costs nothing measurable); 12,853 without the decision table's `UNIQUE (binding, action key)` index (+8 percent); 14,685 without its three hex-format regular-expression CHECKs (+24 percent); 15,897 without both (+34 percent, level with the 16.6k the processor decides). Migration 0017 replaces the three regex CHECKs with length checks (`octet_length = 64`): the projector writes only values it has just verified in memory (checksum recomputed from the decision, prior chain equal to the stored chain, input digest equal to the digest of the input it carries), so hex spelling is established there; the length guard stays in the database. The UNIQUE index stays (the action key is the audit identity). After 0017, 64 instruments: one lane 12,917 projected (13,080 processed; the ledger is larger at 64 instruments), **three lanes 28,245 projected decisions/s against 30,451 processed** (busiest lane 44 percent of the trades), up from 23,513. The projection no longer trails the processor by more than a few percent at three lanes.
+
+
+## Capacity service on the real compose stack, and the corrected lane routing, CAL-FIN-P18 (October 14, 2026)
+
+**The run.** `make dev-smoke-calcify-full-path` with `DEV_CALCIFY_PHASE2=1` brought up the repository's own stack on the laptop (HTTP intake, Redpanda, Go matching engine on four stream-direct partitions, Phase 1 extractor, verifier and receipt worker, the Phase 2 managed resolver, three Postgres databases) and submitted real orders. The capacity service (`CapacityRuntime`, the process role from `Main`) ran in a container on the stack's network with `captureSource` `resolved-context-v1` reading the resolver's own output topic, four lanes, the plan from `mkplan`-style generation, funding written by `CapacityControlCli`, and projecting into the stack's boundary Postgres through migrations 0014, 0016 and 0017. Correctness only; one machine, nothing else measured.
+
+| Run | Real trades | What was checked | Result |
+| --- | --- | --- | --- |
+| Preflight | 1 | positions, obligation, decisions | buyer paid 100 x 150,250,000,000 = 15,025,000,000,000 and received 100 shares; seller the reverse; obligation SETTLED; lane decisions fund, fund, capture, settle |
+| Burst | 3,001 (3,000 pairs, accepted in 4.2 s) | decision count, obligations, positions | 6,004 decisions in one lane (3,001 captures, 3,001 settles, 2 fundings), 3,001 obligations SETTLED, positions equal to 3,001 x 100 x 150,250,000,000 on both sides to the unit |
+| Restarts after the burst | none new | duplicate decisions | a wiped local state (restored from the changelog) and a SIGKILL with the state kept both started healthy and left the checkpoint at 6,004 and the decision topic's high watermark unchanged |
+| Crash under load | 20,001 (20,000 pairs) | exactness after SIGKILL at 8,822 of 40,004 decisions, restart | 40,004 distinct sequences and distinct action ids, 20,001 CAPTURED, 20,001 SETTLED, 2 FUNDED, 20,001 obligations SETTLED, positions equal to the expected values to the unit (buyer USD 699,484,975,000,000,000, seller USD 300,515,025,000,000,000, buyer 2,000,100 and seller 7,999,900 shares) |
+
+**What the run found, and what was fixed (all before the numbers above).**
+1. **The routing assumption was wrong.** The real trade of the smoke instrument landed on partition 2; `PartitionLaneHash` (the legacy HTTP lane hash used in CAL-FIN-P17's splits) predicted lane 1. The Calcify direct stream path chooses the command partition with `StreamCommandEnvelopeBuilder.partition(run, session, instrument, count)`, a SHA-256 hash of the three, the engine lane that consumes it publishes the venue event there, and the resolver writes the resolved context there. Fixed (`stream-command-partition-v1`); a test pins the observed placement. A wrong assumption would have made every lane stop on its first trade (fail closed), not lose trades.
+2. **A refused captured input vanished silently.** The ledger does not record a refusal (for example UNKNOWN_ACCOUNT for an unfunded participant), so an executed trade would have been counted and dropped. With the production flag the lane now stops unless the refusal only says the ledger already holds the input.
+3. **Ordering of funding and trades.** The resolver writes timestamp 0, so after a backlog or restart Streams would present a buffered trade before buffered funding, and a lane stopped on an unfunded account could never be unstuck by funding it. Controls now sort first (CONTROL stamped 0, CAPTURE at least 1); the end-to-end test fails without the change.
+4. **Restart refused by the role's own check.** Kafka Streams widens the permissions of its state directory to group read/execute on its first run, so the owner-only check refused every restart. Streams now gets a subdirectory of the owner-only configured directory.
+
+**The corrected lane split** (64 instruments, run `p3-run`, session `p3-session`, resolved source, the CAL-FIN-P16/P17 machine and harness, single runs): 
+
+| Lanes | Trades per lane | Processed decisions/s | **Projected decisions/s** |
+| --- | --- | --- | --- |
+| 2 | 163,890 / 136,110 | 25,041 | **23,307** |
+| 3 | 83,916 / 102,939 / 113,145 | 35,255 | **30,619** |
+| 4 | 74,724 / 75,305 / 89,166 / 60,805 | 42,652 | **34,742** |
+
+The SHA-based routing spreads 64 instruments more evenly than the legacy hash did (busiest lane 38 percent at three lanes against 44, 30 percent at four against 36), so the rates are higher than CAL-FIN-P17's. The per-lane rates are unchanged; only the split moved.
+
+Interpretation limits: the stack run is a correctness run on a laptop (no rate claim from it; the load generator uses one instrument and one buyer/seller pair, so it exercises one lane); the routing hash includes the run and session, so a lane's instrument set is specific to its run; the rate table has the limits of CAL-FIN-P16 and P17 (single short runs, shared machine, uniform instrument choice, no hot instrument).
+
+
+## Hot instrument: how much of the flow one lane can carry, CAL-FIN-P19 (October 14, 2026)
+
+Same machine, harness and conditions as CAL-FIN-P16 to P18 (shared 10-core laptop, Redpanda and Postgres 16 in containers, JaCoCo off, resolved-context source, four lanes, 64 instruments with the platform's stream-command routing, 200 accounts, 300,000 pre-generated trades, single runs). `CAP_HOT_SHARE` sends that fraction of all trades to one instrument and the rest uniformly. Design and decisions: `docs/work/CALCIFY_HOT_INSTRUMENT_DESIGN.md`.
+
+| Trades on the hot instrument | Trades per lane | Processed decisions/s | **Projected decisions/s** |
+| --- | --- | --- | --- |
+| none | 74,724 / 75,305 / 89,166 / 60,805 | 42,652 | 34,742 |
+| 50 percent | 37,525 / 37,399 / 44,504 / 180,572 | 26,096 | **23,120** |
+| 100 percent | 0 / 0 / 0 / 300,000 | 16,600 | **16,393** |
+
+One lane, 64 instruments, 600,000 decisions, no skew: processed 13,330 and projected 13,192 decisions/s; with the decision table reduced to a bare unlogged heap 13,425 and 13,280 (the projection is not the limit at one lane). Processor thread by section over that run (seconds, 600,000 decisions plus funding): `decide` 22.2, head, meta and store puts 18.8, encode 2.5, decode 1.5, entity bytes 1.1, forward 0.6. A caching store cut the put time to 16.4 s but the run was not faster (12,441 processed against 13,330; not shipped).
+
+What it says: the lane ceiling is about 16.4k decisions/s (8.2k trades/s) with a small state and 13.2k (6.6k trades/s) with 64 instruments' state; the limit is the processor thread. At the contract's 10,000 trades/s the hottest lane can carry roughly 65 to 80 percent of the trades; half the flow on one instrument (the hot lane at 60 percent) still projects 23.1k decisions/s against the 20k need.
+
+Interpretation limits: those of CAL-FIN-P16 to P18, plus: one hash outcome per cell (a different run or session id gives different lane sets); the hot instrument's lane also carries its share of the uniform flow; the matching engine's single-book rate is not measured here (the design note says why it decides whether this matters); the timers used for the section breakdown were temporary and are not in the product.

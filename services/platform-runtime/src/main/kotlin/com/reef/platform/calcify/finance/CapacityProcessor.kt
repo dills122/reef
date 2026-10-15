@@ -115,7 +115,15 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
                 is CapacityItem.Run -> {
                     val outcome = ledger.decide(item.input)
                     val d = outcome.decision
-                    if (d == null) { refusals++; continue }
+                    if (d == null) {
+                        refusals++
+                        // A refused input that came from CAPTURE is an executed trade (or its settlement) the books do not hold: unknown account, conflicting economics, exhausted budget.
+                        // Only a redelivery the ledger already holds is benign. Stop the lane, as for an unusable record.
+                        check(!(config.failOnBadCapture && role == "CAPTURE" && outcome.disposition !in BENIGN_REFUSALS)) {
+                            "lane $lane: the ledger refused a captured input with ${outcome.disposition} at offset ${metadata.offset()}; the lane stops with the source retained"
+                        }
+                        continue
+                    }
                     for (e in ledger.lastWrites) writes[CapacityStore.entityKey(e)] = CapacityStore.entityValue(e)
                     forwards += LaneByKey.key(lane, d.sequence) to FinanceWire.toProto(d, item.input).toByteArray()
                     head = d
@@ -134,6 +142,9 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
     fun currentLedger(): CapacityLedger = ledger
 }
 
+/** Refusals that only mean "the ledger already holds this": a redelivered capture or settlement. Every other refusal of a captured input is a trade missing from the books. */
+private val BENIGN_REFUSALS = setOf(Disposition.PRIOR_RESULT, Disposition.EXECUTION_ALREADY_CAPTURED, Disposition.ALREADY_SETTLED, Disposition.PRIOR_ATTEMPT)
+
 internal object CapacityTopology {
     fun storeBuilder(config: CapacityProcessorConfig, persistent: Boolean): StoreBuilder<KeyValueStore<String, ByteArray>> =
         Stores.keyValueStoreBuilder(
@@ -141,8 +152,11 @@ internal object CapacityTopology {
             Serdes.String(), Serdes.ByteArray()).withCachingDisabled()
 
     fun build(config: CapacityProcessorConfig, decoder: CapacityInputDecoder, persistent: Boolean = true): Topology = Topology().apply {
-        addSource("capture-in", ByteArrayDeserializer(), ByteArrayDeserializer(), config.captureTopic)
-        addSource("control-in", ByteArrayDeserializer(), ByteArrayDeserializer(), config.controlTopic)
+        // Streams merges the two inputs of a task by record timestamp. Controls (funding, repairs) must win whenever both are buffered, whatever the capture timestamps are
+        // (the resolver writes its records with timestamp 0): otherwise a restart or a backlog could present a trade before the funding that makes its accounts known, and
+        // a lane stopped on an unfunded account could never be unstuck by funding it. Controls are stamped 0 and captures at least 1.
+        addSource(org.apache.kafka.streams.AutoOffsetReset.earliest(), "capture-in", org.apache.kafka.streams.processor.TimestampExtractor { record, _ -> maxOf(1L, record.timestamp()) }, ByteArrayDeserializer(), ByteArrayDeserializer(), config.captureTopic)
+        addSource(org.apache.kafka.streams.AutoOffsetReset.earliest(), "control-in", org.apache.kafka.streams.processor.TimestampExtractor { _, _ -> 0L }, ByteArrayDeserializer(), ByteArrayDeserializer(), config.controlTopic)
         addProcessor("capacity", { CapacityProcessor(config, decoder) }, "capture-in", "control-in")
         addStateStore(storeBuilder(config, persistent), "capacity")
         addSink("decisions-out", config.decisionsTopic, org.apache.kafka.common.serialization.StringSerializer(), ByteArraySerializer(), LaneByKey, "capacity")

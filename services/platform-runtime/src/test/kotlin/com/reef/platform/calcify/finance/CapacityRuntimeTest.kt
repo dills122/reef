@@ -23,8 +23,8 @@ class CapacityRuntimeTest {
     }
 
     @Test fun anEngineAlignedPlanWithResolvedContextsIsAccepted() {
-        val instruments = (0 until 12).map { "INS$it" }; val lanes = CapacityRouting.engineLanes(instruments, 3)
-        val json = plan { it.replace("\"explicit\"", "\"partition-lane-hash-v1\"").replace(Regex("\"captureSource\":\\{[^}]*\\}"), "\"captureSource\":{\"kind\":\"resolved-context-v1\",\"policyVersion\":\"1\"}")
+        val instruments = (0 until 12).map { "INS$it" }; val lanes = CapacityRouting.engineLanes("run-1", "session-1", instruments, 3)
+        val json = plan { it.replace("\"explicit\"", "\"stream-command-partition-v1\"").replace(Regex("\"captureSource\":\\{[^}]*\\}"), "\"captureSource\":{\"kind\":\"resolved-context-v1\",\"policyVersion\":\"1\"}")
             .replace(Regex("\"laneInstruments\":\\[.*?\\]\\],"), "\"laneInstruments\":[" + lanes.joinToString(",") { l -> l.sorted().joinToString(",", "[", "]") { "\"$it\"" } } + "],") }
         val d = CapacityRuntime.parsePlan(json)
         assertEquals(3, d.plan.lanes); assertTrue(d.decoder is CapacityResolvedContextDecoder); d.plan.requireEngineAligned()
@@ -40,7 +40,7 @@ class CapacityRuntimeTest {
             "unknown source kind" to { it.replace("finite-lifecycle-capture-v1", "other-v1") },
             "resolved source needs engine routing" to { it.replace(Regex("\"captureSource\":\\{[^}]*\\}"), "\"captureSource\":{\"kind\":\"resolved-context-v1\",\"policyVersion\":\"1\"}") },
             "unknown routing" to { it.replace("\"explicit\"", "\"hash\"") },
-            "not the engine's partitioning" to { it.replace("\"explicit\"", "\"partition-lane-hash-v1\"") },
+            "not the engine's partitioning" to { it.replace("\"explicit\"", "\"stream-command-partition-v1\"") },
             "verify flag as text" to { it.replace("\"verifyContentDigest\":true", "\"verifyContentDigest\":\"true\"") },
             "number as number" to { it.replace("\"maxControls\":\"50000\"", "\"maxControls\":50000") },
             "negative number" to { it.replace("\"maxControls\":\"50000\"", "\"maxControls\":\"-1\"") },
@@ -95,6 +95,27 @@ class CapacityRuntimeTest {
         Files.setPosixFilePermissions(loose, PosixFilePermissions.fromString("rw-------"))
         Files.setPosixFilePermissions(dir.resolve("state"), PosixFilePermissions.fromString("rwxr-x---"))
         refused("group-readable state directory") { k -> ok(k) }
+    }
+
+    @Test fun plaintextKafkaIsForLocalDevelopmentStacksOnlyAndNeedsAnExplicitFlag() {
+        val dir = Files.createTempDirectory("capacity-runtime")
+        val base = env(dir, without = setOf("CALCIFY_CAPACITY_KAFKA_USERNAME", "CALCIFY_CAPACITY_OBSERVER_KAFKA_USERNAME"))
+        fun with(vararg extra: Pair<String, String>): (String) -> String? = { k -> extra.toMap()[k] ?: base(k) }
+        assertFailsWith<IllegalArgumentException>("no flag") { CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "PLAINTEXT")) }
+        assertFailsWith<IllegalArgumentException>("flag with the wrong value") { CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "PLAINTEXT", "CALCIFY_CAPACITY_DEV_PLAINTEXT" to "yes")) }
+        CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "PLAINTEXT", "CALCIFY_CAPACITY_DEV_PLAINTEXT" to "true"))      // no principals or passwords needed
+        assertFailsWith<RuntimeException>("the secured protocols still need principals") { CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "SASL_PLAINTEXT")) }
+    }
+
+    @Test fun streamsGetsASubdirectoryAndTheOwnerOnlyParentSurvivesItsPermissionChange() {
+        val dir = Files.createTempDirectory("capacity-runtime")
+        val lookup = env(dir)
+        CapacityRuntime.create(lookup)
+        val sub = CapacityRuntime.streamsStateDirectory(dir.resolve("state"))
+        assertEquals(dir.resolve("state").resolve("streams"), sub)
+        // What Kafka Streams does on its first run: it widens the permissions of the directory it was given. That must not be the configured one.
+        Files.createDirectories(sub); Files.setPosixFilePermissions(sub, PosixFilePermissions.fromString("rwxr-x---"))
+        CapacityRuntime.create(lookup)      // a restart: the configured parent is still owner-only
     }
 
     @Test fun theRoleRefusesToShareAProcessWithAnotherCalcifyRole() {

@@ -115,6 +115,27 @@ class CapacityProcessorTest {
         assertEquals(1, context.forwarded().size, "and forwarded nothing")
     }
 
+    @Test fun aRefusedCapturedInputStopsTheLaneUnlessItIsOnlyARedeliveryTheLedgerAlreadyHolds() {
+        val strict = CapacityProcessorConfig(1, { CapacityLaneSpec(binding, capacity) }, "CAPTURE", "CONTROL", "DECISIONS", "capacity-test", failOnBadCapture = true)
+        val context = MockProcessorContext<String, ByteArray>(); val store = CapacityTopology.storeBuilder(strict, persistent = false).withLoggingDisabled().build()
+        store.init(context.getStateStoreContext(), store); context.addStateStore(store)
+        val processor = CapacityProcessor(strict, decoder); processor.init(context)
+        fun send(topic: String, i: FinanceInput) { context.setRecordMetadata(topic, 0, 0); processor.process(Record(ByteArray(0), bytes(i), 0L)) }
+        send("CONTROL", FinanceInput.Fund(ActionKey("n", "c", "f1"), Authority.OPERATOR, AccountId("acct-0"), usd, 100))
+        send("CONTROL", FinanceInput.Fund(ActionKey("n", "c", "f2"), Authority.OPERATOR, AccountId("acct-1"), aapl, 100))
+        val capture = FinanceInput.Capture(ActionKey("n", "cap", "c1"), keys[0], AccountId("acct-0"), AccountId("acct-1"), 1, 2)
+        send("CAPTURE", capture)
+        send("CAPTURE", capture)                                                                    // a redelivery: PRIOR_RESULT, benign
+        val settled = forwardedCount(context)
+        val unknown = FinanceInput.Capture(ActionKey("n", "cap", "c2"), keys[1], AccountId("ghost"), AccountId("acct-1"), 1, 2)
+        val failure = kotlin.test.assertFailsWith<IllegalStateException> { send("CAPTURE", unknown) }
+        assertTrue(failure.message!!.contains("UNKNOWN_ACCOUNT") && failure.message!!.contains("the lane stops"), failure.message)
+        assertEquals(settled, forwardedCount(context), "nothing was forwarded for the refused trade")
+        send("CONTROL", FinanceInput.Fund(ActionKey("n", "c", "f3"), Authority.TRADING, AccountId("acct-0"), usd, 1))      // a refused CONTROL is only counted
+        assertEquals(3L, processor.refusals, "the redelivery, the refused trade and the refused control were all counted")
+    }
+    private fun forwardedCount(context: MockProcessorContext<String, ByteArray>) = context.forwarded().size
+
     @Test fun aRecordWithSeveralInputsIsDecidedInOrderAndWrittenAsOneBatch() {
         val twin = CapacityInputDecoder { _, _, _, raw -> val a = FinanceWire.fromProto(FinanceInputV1.parseFrom(raw)) as FinanceInput.Fund
             listOf(CapacityItem.Run(a), CapacityItem.Run(a.copy(action = ActionKey("n", "c", a.action.actionId + "-b"), account = AccountId("acct-1")))) }
