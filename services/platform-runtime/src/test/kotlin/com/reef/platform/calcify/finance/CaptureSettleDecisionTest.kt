@@ -214,6 +214,29 @@ class CaptureSettleDecisionTest {
         assertEquals(Disposition.CAPTURED, one.decide(t.capture()).disposition)
     }
 
+    @Test fun aSettleThatOverflowsTheSellersCashIsRecordedAsBalanceOverflowAndTheTradeStaysPending() {
+        // Funding moves value out of the opening account, so these three fundings leave it at exactly Long.MIN cash; the trade then credits the seller past Long.MAX.
+        val buyer = AccountId("acct-0"); val seller = AccountId("acct-1")
+        fun fund(l: CapacityLedger) {
+            val sent = listOf(
+                FinanceInput.Fund(ActionKey("n", "f", "1"), Authority.OPERATOR, seller, usd, Long.MAX_VALUE - 99),
+                FinanceInput.Fund(ActionKey("n", "f", "2"), Authority.OPERATOR, buyer, usd, 100),
+                FinanceInput.Fund(ActionKey("n", "f", "3"), Authority.OPERATOR, seller, aapl, 1),
+            ).map { l.decide(it).disposition }
+            assertEquals(List(3) { Disposition.FUNDED }, sent)
+        }
+        val t = Trade("ovf", "AAPL", buyer, seller, 1, 100)
+        val two = CapacityLedger(config(false, DecisionMode.TWO_STEP)).also(::fund)
+        assertEquals(Disposition.BALANCE_OVERFLOW, twoSteps(two, t))
+        val one = CapacityLedger(config(false, DecisionMode.CAPTURE_SETTLE)).also(::fund)
+        val o = one.decide(t.combined())
+        assertEquals(Disposition.BALANCE_OVERFLOW, o.disposition)
+        assertEquals(Disposition.BALANCE_OVERFLOW, o.decision?.disposition, "the recorded disposition is the settle outcome, not the capture's")
+        assertEquals(ObligationStatus.PENDING, one.snapshot().obligations[t.execution]?.status)
+        assertEquals(two.snapshot().positions, one.snapshot().positions)
+        assertEquals(two.snapshot().obligations, one.snapshot().obligations)
+    }
+
     @Test fun theFiniteProfileRefusesTheCombinedInput() {
         val finite = FinanceLedger(FinanceConfig(setOf(AccountId("acct-0"), AccountId("acct-1")), usd, aapl, opening))
         val t = Trade("e1", "AAPL", AccountId("acct-0"), AccountId("acct-1"), 1, 1)

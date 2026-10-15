@@ -72,7 +72,7 @@ class CaptureSettleProcessorTest {
             val h = Harness(); inputs.forEachIndexed { n, i -> h.send(i, if (i is FinanceInput.Fund || n % 5 == 0) "CONTROL" else "CAPTURE") }
             val (ledger, expected) = direct(inputs)
             assertEquals(expected, h.decisions(), "seed $seed")
-            assertEquals(ledger.snapshot(), h.restored()?.snapshot() ?: ledger.snapshot(), "seed $seed: the store holds exactly the ledger's state")
+            if (ledger.sequence > 0) assertEquals(ledger.snapshot(), assertNotNull(h.restored(), "seed $seed: a ledger that decided something has a restorable store").snapshot(), "seed $seed: the store holds exactly the ledger's state")
             assertEquals(ledger.snapshot(), h.processor.currentLedger().snapshot())
             h.decisions().forEach { d -> assertEquals(1, h.decisions().count { it.action == d.action }, "one decision per action key") }
             val ch = CapacityChain(capacity); var prior = ch.genesisChain

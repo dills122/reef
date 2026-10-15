@@ -49,6 +49,21 @@ class CaptureSettleModeTest {
         assertEquals(binding, p.bindingDigest(0))
     }
 
+    @Test fun theTwoStepBindingDigestsArePinnedAsLiterals() {
+        // Computed on the code BEFORE decisionMode existed (the base commit) and on this one: the default mode must never move an existing binding.
+        val p = plan(DecisionMode.TWO_STEP)
+        assertEquals("f43795bee460403fe51676081a514ebecf7f7bd84fad316a1d4e1eb98c898450", p.bindingDigest(0))
+        assertEquals("f57091aab1079f9ddc95d24437d3305d44129fd55b556e1634456855f1dc15b2", p.bindingDigest(1))
+    }
+
+    @Test fun theControlWriterRefusesACaptureSettleBodyBeforeAnythingIsSent() {
+        val capture = FinanceInput.Capture(ActionKey("calcify-finance", "capture", "e1"), ExecutionKey("p3-run", "p3-session", "INS0", "e1"), AccountId("a"), AccountId("b"), 1, 1)
+        CapacityControlWriter(java.util.Properties().apply { put("bootstrap.servers", "127.0.0.1:1") }, "CONTROL", plan(DecisionMode.CAPTURE_SETTLE)).use { w ->
+            assertFailsWith<IllegalArgumentException> { w.submit(0, CapacityCaptureMapping.captureSettle(capture)) }
+            assertFailsWith<IllegalArgumentException> { w.submit(0, capture) }
+        }
+    }
+
     @Test fun captureSettleNeedsAutoSettle() {
         assertFailsWith<IllegalArgumentException> { plan(DecisionMode.CAPTURE_SETTLE, autoSettle = false) }
         plan(DecisionMode.TWO_STEP, autoSettle = false)
