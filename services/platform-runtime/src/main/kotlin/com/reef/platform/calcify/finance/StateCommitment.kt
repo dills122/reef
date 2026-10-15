@@ -23,7 +23,11 @@ internal object StateCommitment {
     class Entity(val tag: String, val keyBytes: ByteArray, val valueBytes: ByteArray)
 
     private val hex = HexFormat.of()
-    private fun sha(vararg parts: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").also { md -> parts.forEach { md.update(it) } }.digest()
+    private fun sha(vararg parts: ByteArray): ByteArray = Canon.digest().also { md -> parts.forEach { md.update(it) } }.digest()
+    /** `frame(KEY_LABEL) || frame(tag)` per tag: constant, so it is encoded once instead of once per entity. */
+    private val keyPrefixes = HashMap<String, ByteArray>().also { m -> for (tag in listOf("P", "X", "O", "A", "K")) m[tag] = Canon.bytes { str(KEY_LABEL); str(tag) } }
+    private fun keyPrefix(tag: String): ByteArray = keyPrefixes[tag] ?: Canon.bytes { str(KEY_LABEL); str(tag) }
+    private val LEAF_PREFIX = byteArrayOf(0x00); private val VALUE_PREFIX = byteArrayOf(0x01)
     private val hexDigest = Regex("^[0-9a-f]{64}$")
 
     /**
@@ -42,10 +46,16 @@ internal object StateCommitment {
     }
 
     /** `K(e) = SHA-256(frame(KEY_LABEL) || frame(tag) || keyBytes(e))`: the 256-bit trie key; bit 0 is the most significant. */
-    fun keyOf(e: Entity): ByteArray = sha(Canon.bytes { str(KEY_LABEL); str(e.tag) }, e.keyBytes)
+    fun keyOf(e: Entity): ByteArray { val md = Canon.digest(); md.update(keyPrefix(e.tag)); md.update(e.keyBytes); return md.digest() }
 
     /** `L(e) = SHA-256(0x00 || K(e) || SHA-256(0x01 || valueBytes(e)))`. */
-    fun leafOf(e: Entity, key: ByteArray = keyOf(e)): ByteArray = sha(byteArrayOf(0x00), key, sha(byteArrayOf(0x01), e.valueBytes))
+    fun leafOf(e: Entity, key: ByteArray = keyOf(e)): ByteArray {
+        val md = Canon.digest()
+        md.update(VALUE_PREFIX); md.update(e.valueBytes)
+        val value = md.digest()
+        md.update(LEAF_PREFIX); md.update(key); md.update(value)
+        return md.digest()
+    }
 
     /** `SHA-256(0x03)`: the trie digest of the empty set. */
     val emptyTrie: ByteArray get() = sha(byteArrayOf(0x03))
@@ -83,7 +93,7 @@ internal object StateCommitment {
     /** `C(S) = SHA-256(frame(LABEL) || int64(sequence) || int32(controls) || T)` as 64 lowercase hex, the decision's `stateDigest` field. */
     fun commitment(sequence: Long, controls: Int, trie: ByteArray): String {
         require(trie.size == 32) { "T is 32 bytes" }
-        return hex.formatHex(sha(Canon.bytes { str(LABEL); long(sequence); int(controls) }, trie))
+        return hex.formatHex(Canon.digestBytes(trie) { str(LABEL); long(sequence); int(controls) })
     }
 
     /** The reference: `C(S)` of a state, built from scratch. [keyOf] is injectable so crowded and degenerate key sets can be tested. */

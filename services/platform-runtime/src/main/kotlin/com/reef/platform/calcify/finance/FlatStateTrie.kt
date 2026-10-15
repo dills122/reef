@@ -1,0 +1,169 @@
+package com.reef.platform.calcify.finance
+
+import java.security.MessageDigest
+
+/**
+ * [StateTrie] with the same shape, the same hashes and the same API, stored in flat chunked arrays instead of linked heap objects (design section 4.1 is
+ * unchanged: this is a contract-neutral layout change, proven by differential test to give the same digest as [StateTrie] and [StateCommitment.trieRoot]).
+ *
+ * Why. Measured (docs/work/CALCIFY_STATE_COMMITMENT_INVESTIGATION.md): of the roughly 20 us a decision spends on the commitment at 10^6 entities, only about 6 us
+ * is SHA-256; the rest is memory latency. A linked trie chases a Branch object, its two children and their separate digest arrays on the way down (`put`) and again
+ * when it re-hashes (`root`), and every hash allocates. Here
+ *  - a leaf is its 32-byte key in a chunk of keys;
+ *  - a branch is four ints (left, right, bit index, stale flag) in a chunk of branch metadata, and **its two child digests sit next to each other in 64 bytes of a
+ *    parallel chunk, which is exactly the 64-byte tail of the branch's hash input**. A node's own digest therefore lives in its parent's slot (or in `rootDigest`
+ *    for the root), so re-hashing a branch reads one record, not a record plus a sibling object plus a sibling digest array;
+ *  - a child reference is `>= 0` for a branch id and `< 0` for `~leafId`;
+ *  - the descent of `put` also touches each visited branch's digest record, so those cache misses are issued in parallel with the dependent pointer chase instead
+ *    of one after the other when `root` runs;
+ *  - a branch hash assembles its 67 input bytes in one reused buffer and writes the digest straight into its slot: no allocation per hash.
+ * Chunks (64 Ki nodes each) keep growth O(chunk) with no large array copy, so a lane never pauses to grow the trie.
+ *
+ * Invariant: if a branch is not stale, the digest in its parent's slot (or `rootDigest`) is its current digest; a stale branch's slot is garbage until `root` re-hashes it.
+ *
+ * Not thread-safe: one writer.
+ */
+internal class FlatStateTrie {
+    private companion object {
+        const val CHUNK_BITS = 16
+        const val CHUNK = 1 shl CHUNK_BITS
+        const val MASK = CHUNK - 1
+        const val NO_ROOT = Int.MIN_VALUE
+    }
+
+    private var keyChunks = arrayOfNulls<ByteArray>(16)     // 32 bytes per leaf: its key
+    private var metaChunks = arrayOfNulls<IntArray>(16)     // 4 ints per branch: left, right, bit index, stale
+    private var digChunks = arrayOfNulls<ByteArray>(16)     // 64 bytes per branch: digest of the left child, digest of the right child
+    private var leafCount = 0
+    private var branchCount = 0
+    private var rootRef = NO_ROOT
+    private val rootDigest = ByteArray(32)
+    private val md = MessageDigest.getInstance("SHA-256")
+    private val buf = ByteArray(67).also { it[0] = 0x02 }
+    private var touched = 0                                 // sink for the cache-warming reads, so they are not optimised away
+
+    val size: Int get() = leafCount
+
+    /** Branch hashes computed so far; same meaning as [StateTrie.branchHashes]. */
+    var branchHashes = 0L
+        private set
+
+    private fun bit(key: ByteArray, index: Int): Int = (key[index ushr 3].toInt() ushr (7 - (index and 7))) and 1
+
+    private fun newLeaf(key: ByteArray): Int {
+        val id = leafCount++
+        val c = id ushr CHUNK_BITS
+        if (c >= keyChunks.size) keyChunks = keyChunks.copyOf(keyChunks.size * 2)
+        val chunk = keyChunks[c] ?: ByteArray(CHUNK * 32).also { keyChunks[c] = it }
+        System.arraycopy(key, 0, chunk, (id and MASK) shl 5, 32)
+        return id.inv()
+    }
+
+    private fun newBranch(index: Int, left: Int, right: Int): Int {
+        val id = branchCount++
+        val c = id ushr CHUNK_BITS
+        if (c >= metaChunks.size) { metaChunks = metaChunks.copyOf(metaChunks.size * 2); digChunks = digChunks.copyOf(digChunks.size * 2) }
+        val meta = metaChunks[c] ?: IntArray(CHUNK * 4).also { metaChunks[c] = it }
+        if (digChunks[c] == null) digChunks[c] = ByteArray(CHUNK * 64)
+        val o = (id and MASK) shl 2
+        meta[o] = left; meta[o + 1] = right; meta[o + 2] = index; meta[o + 3] = 1
+        return id
+    }
+
+    private fun meta(branch: Int) = metaChunks[branch ushr CHUNK_BITS]!!
+    private fun metaOff(branch: Int) = (branch and MASK) shl 2
+    private fun digs(branch: Int) = digChunks[branch ushr CHUNK_BITS]!!
+    private fun digOff(branch: Int) = (branch and MASK) shl 6
+    private fun keyChunk(ref: Int) = keyChunks[ref.inv() ushr CHUNK_BITS]!!
+    private fun keyOff(ref: Int) = (ref.inv() and MASK) shl 5
+
+    private fun firstDifferingBit(key: ByteArray, ref: Int): Int {
+        val chunk = keyChunk(ref); val off = keyOff(ref)
+        for (i in 0 until 32) { val x = (key[i].toInt() xor chunk[off + i].toInt()) and 0xff; if (x != 0) return i * 8 + Integer.numberOfLeadingZeros(x) - 24 }
+        return -1
+    }
+
+    /** Follows [key]'s bits to the closest leaf, touching each branch's digest record on the way so its cache line is already in flight when `root` needs it. */
+    private fun closestLeaf(key: ByteArray): Int {
+        var r = rootRef; var t = 0
+        while (r >= 0) {
+            val m = meta(r); val o = metaOff(r)
+            t += digs(r)[digOff(r)].toInt()
+            r = if (bit(key, m[o + 2]) == 0) m[o] else m[o + 1]
+        }
+        touched = t
+        return r
+    }
+
+    /** The leaf digest stored for [key], or null. */
+    fun get(key: ByteArray): ByteArray? {
+        require(key.size == 32) { "keys are 32 bytes" }
+        if (rootRef == NO_ROOT) return null
+        var r = rootRef; var from = rootDigest; var at = 0
+        while (r >= 0) {
+            val m = meta(r); val o = metaOff(r)
+            val right = bit(key, m[o + 2]) != 0
+            from = digs(r); at = digOff(r) + (if (right) 32 else 0)
+            r = if (right) m[o + 1] else m[o]
+        }
+        return if (firstDifferingBit(key, r) < 0) from.copyOfRange(at, at + 32) else null
+    }
+
+    /** Inserts the pair, or replaces the leaf digest of an existing key; the branches on the path are marked stale. */
+    fun put(key: ByteArray, leaf: ByteArray) {
+        require(key.size == 32 && leaf.size == 32) { "keys and leaf digests are 32 bytes" }
+        if (rootRef == NO_ROOT) { rootRef = newLeaf(key); System.arraycopy(leaf, 0, rootDigest, 0, 32); return }
+        val d = firstDifferingBit(key, closestLeaf(key))
+        // Descend again (the path is hot now), marking the branches stale, to the first branch whose index is not below d (for a new key) or to the leaf (for the same key).
+        var parent = -1; var parentRight = false; var cur = rootRef
+        while (cur >= 0) {
+            val m = meta(cur); val o = metaOff(cur)
+            if (d >= 0 && m[o + 2] >= d) break
+            m[o + 3] = 1
+            parent = cur; parentRight = bit(key, m[o + 2]) != 0
+            cur = if (parentRight) m[o + 1] else m[o]
+        }
+        if (d < 0) {                                         // the same key: replace the leaf digest where its parent keeps it
+            if (parent < 0) System.arraycopy(leaf, 0, rootDigest, 0, 32)
+            else System.arraycopy(leaf, 0, digs(parent), digOff(parent) + (if (parentRight) 32 else 0), 32)
+            return
+        }
+        // a new key: the branch at bit d takes the fresh leaf on one side and the subtree [cur] on the other; [cur]'s digest moves with it
+        val fresh = newLeaf(key)
+        val freshRight = bit(key, d) != 0
+        val branch = if (freshRight) newBranch(d, cur, fresh) else newBranch(d, fresh, cur)
+        val bd = digs(branch); val bo = digOff(branch)
+        System.arraycopy(leaf, 0, bd, bo + (if (freshRight) 32 else 0), 32)
+        val curAt = bo + (if (freshRight) 0 else 32)
+        if (parent < 0) System.arraycopy(rootDigest, 0, bd, curAt, 32)
+        else System.arraycopy(digs(parent), digOff(parent) + (if (parentRight) 32 else 0), bd, curAt, 32)
+        if (parent < 0) rootRef = branch else meta(parent)[metaOff(parent) + (if (parentRight) 1 else 0)] = branch
+    }
+
+    /** The trie digest `T`: the root's digest, or `SHA-256(0x03)` for the empty set. Re-hashes only the stale branches. */
+    fun root(): ByteArray {
+        val r = rootRef
+        if (r == NO_ROOT) return StateCommitment.emptyTrie
+        if (r >= 0) clean(r, rootDigest, 0)
+        return rootDigest.copyOf()
+    }
+
+    /** Ensures the digest of [branch], kept at [dest]`[at]`, is current, re-hashing stale branches below it. */
+    private fun clean(branch: Int, dest: ByteArray, at: Int) {
+        val m = meta(branch); val o = metaOff(branch)
+        if (m[o + 3] == 0) return
+        val left = m[o]; val right = m[o + 1]; val index = m[o + 2]
+        val bd = digs(branch); val bo = digOff(branch)
+        if (left >= 0) clean(left, bd, bo)
+        if (right >= 0) clean(right, bd, bo + 32)
+        buf[1] = (index ushr 8).toByte(); buf[2] = index.toByte()
+        System.arraycopy(bd, bo, buf, 3, 64)
+        md.update(buf, 0, 67)
+        md.digest(dest, at, 32)
+        branchHashes++
+        m[o + 3] = 0
+    }
+
+    /** The depth (number of branches) on the path to [key]'s leaf or its closest leaf; a test aid. */
+    fun depthOf(key: ByteArray): Int { var r = rootRef; var depth = 0; while (r >= 0) { depth++; val m = meta(r); val o = metaOff(r); r = if (bit(key, m[o + 2]) == 0) m[o] else m[o + 1] }; return depth }
+}
