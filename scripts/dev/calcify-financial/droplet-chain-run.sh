@@ -4,6 +4,7 @@
 # installs a JDK on the host, runs a short matrix, fetches the outputs, and destroys the droplet on every exit path.
 #
 #   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | compare | tmpfs | baseline | smoke | s1smoke)
+#   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then one finance lane with its projector on tmpfs stores; `lanesmoke` is the same at a few seconds each.
 #   `compare` runs the single-thread microbenchmarks first, then lanes 1 to 4 with the projector and lanes 1 and 3 without it, all with -XX:+UseParallelGC, then the S1 shard cases.
 #
 # Needs DIGITALOCEAN_TOKEN in .env or the environment, an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
@@ -107,6 +108,29 @@ run_case() {
   remote "sudo rm -rf /mnt/pgvol/pg/* /mnt/pgvol/rp/* 2>/dev/null; (bash /tmp/droplet-sizes.sh /tmp/sizes-$label.txt & echo \$! > /tmp/sizes.pid) ; cd $REMOTE_DIR/services/platform-runtime && env S4_TRADES=${S4_TRADES:-100000} $* S0_OUT_DIR=/tmp/s4out S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.wholeChainOnOneMachine' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; kill \$(cat /tmp/sizes.pid) 2>/dev/null; grep '^topic:' /tmp/sizes-$label.txt | sort -k1,1 -k2,2nr | awk '!seen[\$1]++' | sed 's/^/MAX-TOPIC-KIB /'; for d in redpanda postgres; do echo \"MAX-DATA-DIR \$d KiB: \$(grep \"^\$d \" /tmp/sizes-$label.txt | cut -d' ' -f2 | sort -n | tail -1)\"; done; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
 }
 
+run_engine_drain() {
+  # run_engine_drain LABEL PAIRS BATCHES [ENV...]  -- the Go lane drain test (real source, real transactional publisher) against a Redpanda whose data directory is tmpfs.
+  # The Go toolchain runs in the golang image matching go.mod so the host needs no Go; the event topic's max.message.bytes and the producer limit are raised by the test itself.
+  local label="$1" pairs="$2" batches="$3"; shift 3
+  if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
+  log "case $label (pairs $pairs batches $batches $*)"
+  remote "docker rm -f -v reef-it-rp >/dev/null 2>&1; docker run -d --rm --name reef-it-rp --network host --tmpfs /var/lib/redpanda/data:rw,size=16g,uid=101,gid=101,mode=0777 redpandadata/redpanda:v26.2.3 redpanda start --mode dev-container --smp 4 --memory 8G --reserve-memory 0M --overprovisioned --node-id 0 --check=false --kafka-addr 0.0.0.0:19092 --advertise-kafka-addr 127.0.0.1:19092 >/dev/null && for i in \$(seq 1 60); do docker exec reef-it-rp rpk cluster info >/dev/null 2>&1 && break; sleep 2; done; GOV=\$(awk '/^go /{print \$2}' $REMOTE_DIR/services/matching-engine/go.mod); mkdir -p /tmp/gocache /tmp/gomod; docker run --rm --network host -v \$PWD/$REMOTE_DIR/services/matching-engine:/src -v /tmp/gocache:/root/.cache/go-build -v /tmp/gomod:/go/pkg/mod -w /src -e REEF_KAFKA_INTEGRATION_BOOTSTRAP=127.0.0.1:19092 -e KAFKA_DRAIN=1 -e KAFKA_DRAIN_PAIRS=$pairs -e KAFKA_DRAIN_BATCHES=$batches $(for e in "$@"; do printf -- '-e %s ' "$e"; done) golang:\$GOV go test ./internal/streamdirect -run TestKafkaLaneDrainRate -v -count=1 -timeout 40m 2>&1 | grep -E 'LANE-DRAIN|FAIL|panic|^ok'; docker rm -f -v reef-it-rp >/dev/null 2>&1; docker ps -a --format 'LEFTOVER {{.Names}}'" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+}
+
+run_engine_cpu() {
+  # The engine lane's CPU per crossing pair without a broker, on this host's cores (compare with the laptop's 27 us).
+  log "case engine-cpu"
+  remote "GOV=\$(awk '/^go /{print \$2}' $REMOTE_DIR/services/matching-engine/go.mod); mkdir -p /tmp/gocache /tmp/gomod; docker run --rm -v \$PWD/$REMOTE_DIR/services/matching-engine:/src -v /tmp/gocache:/root/.cache/go-build -v /tmp/gomod:/go/pkg/mod -w /src golang:\$GOV go test ./internal/streamdirect -run xxx -bench LaneProcessOnce -benchtime 15x 2>&1 | grep -E 'Benchmark|FAIL|ok'" | sed 's/^/engine-cpu: /' | tee -a "$OUT_DIR/matrix.txt" || log "case engine-cpu failed"
+}
+
+run_cap() {
+  # run_cap LABEL ENV...  -- CapacityLaneThroughputTest (real Streams lanes, per-lane projection into Postgres, resolved-context source) with broker and Postgres data on tmpfs.
+  local label="$1"; shift
+  if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
+  log "case $label ($*)"
+  remote "cd $REMOTE_DIR/services/platform-runtime && env JAVA_TOOL_OPTIONS=-XX:+UseParallelGC S4_PG_DOCKER=--tmpfs=/var/lib/postgresql/data:rw,size=8g,mode=1777 S4_RP_DOCKER=--tmpfs=/var/lib/redpanda/data:rw,size=16g,uid=101,gid=101,mode=0777 CAP_INSTRUMENTS=64 CAP_ACCOUNTS=200 CAP_SOURCE=resolved $* timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*CapacityLaneThroughputTest*' -i --no-daemon 2>&1 | grep -E 'CAPACITY-(CPU|RATE|LANES)|FAILED|AssertionFailed|BUILD' ; docker ps -a --format 'LEFTOVER {{.Names}}'" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+}
+
 run_s1() {
   # run_s1 LABEL ENV...   -- the S1 instrument-shard prototype (ample cash, so no cross-shard cash moves), 300,000 trades over 1,000 participants
   local label="$1"; shift
@@ -154,6 +178,22 @@ case "$MATRIX" in
     run_case "base-l$MID-again" $G S4_LANES=$MID
     # Is one broker core the limit? Same lanes with a four-core broker (only meaningful with the stores off the slow disk).
     if [ "${REEF_BASELINE_STORE:-root}" != root ]; then run_case "base-l$MID-smp4" $G S4_LANES=$MID S4_SMP=4 S4_BROKER_MEM=4G; fi
+    ;;
+  lane)
+    # CAL-FIN-P23: what one quiet, dedicated host says about the engine lane and the finance lane. Three interleaved sweeps of the engine drain (the laptop's three agreed within 2 percent),
+    # one sweep with compression off, then one hot finance lane with its projector (default and 8,000 record chunks, twice each), then four uniform lanes for the aggregate.
+    run_engine_cpu
+    for r in 1 2 3; do run_engine_drain "engine-drain-$r" 200000 500,1000,2000,4000; done
+    run_engine_drain "engine-drain-nocompress" 200000 500,2000 MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE=none
+    for r in 1 2; do
+      run_cap "cap-hot-lane-$r" CAP_LANES=1 CAP_TRADES=600000
+      run_cap "cap-hot-lane-apply8000-$r" CAP_LANES=1 CAP_TRADES=600000 CAP_MAX_APPLY=8000
+    done
+    run_cap "cap-4lanes" CAP_LANES=4 CAP_TRADES=1200000
+    ;;
+  lanesmoke)
+    run_engine_drain "engine-smoke" 5000 500,2000
+    run_cap "cap-smoke" CAP_LANES=1 CAP_TRADES=20000
     ;;
   smoke) run_case "smoke-1lane" S4_LANES=1 S4_TRADES=5000 ;;
   s1smoke) run_s1 "s1-smoke" S1_SHARDS=2 ;;
