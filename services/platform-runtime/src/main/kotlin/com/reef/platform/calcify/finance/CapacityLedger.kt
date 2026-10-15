@@ -65,6 +65,9 @@ internal class CapacityLedger(val config: CapacityConfig) {
     /** The abstract state as an immutable [FinanceState] (O(n); tests, restore checks and the reference commitment). */
     fun snapshot(): FinanceState = FinanceState(HashMap(positions), HashMap(executions), HashMap(obligations), HashMap(attempts), HashMap(actions), sequence, chain, controls)
 
+    /** Branch hashes the commitment trie has computed so far (a metric: the cost of a commitment update is the stale branches it re-hashes). */
+    val branchHashes: Long get() = trie.branchHashes
+
     fun position(account: AccountId, asset: AssetId): Long = positions[account to asset] ?: 0L
 
     // ---- entity writes: the maps hold the state, the trie holds its commitment ----
