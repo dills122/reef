@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash"
+	"reflect"
 	"sort"
 	"strconv"
 )
@@ -25,6 +26,15 @@ var venueEventBatchChecksumExcludedFields = map[string]struct{}{
 // wall-clock timing and checksum metadata are excluded; routing,
 // sequence identity, outcome status, and the complete result body are included.
 func venueEventBatchChecksum(batch VenueEventBatch) (string, error) {
+	if plan, ok := venueEventBatchTypedPlan(); ok {
+		return typedCanonicalChecksum(plan, reflect.ValueOf(batch))
+	}
+	return venueEventBatchChecksumViaJSON(batch)
+}
+
+// venueEventBatchChecksumViaJSON is the general route: marshal the batch, decode it into generic values and hash those canonically. It defines the
+// algorithm for any shape the typed walk does not cover, and is the oracle the typed walk is tested against.
+func venueEventBatchChecksumViaJSON(batch VenueEventBatch) (string, error) {
 	payload, err := json.Marshal(batch)
 	if err != nil {
 		return "", err
