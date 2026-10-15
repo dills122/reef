@@ -129,9 +129,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
         val priorChain = chain
         chain = checksumOf(sequence, input.action, digest, disposition, legs, priorChain, stateDigest)
         // Local invariants in place of the whole-state check (design 5.5).
-        val net = HashMap<AssetId, BigInteger>()
-        for (l in legs) net.merge(l.asset, BigInteger.valueOf(l.amount), BigInteger::add)
-        check(net.values.all { it.signum() == 0 }) { "legs do not balance" }
+        check(legsBalance(legs)) { "legs do not balance" }
         check(sequence == actions.size.toLong()) { "action count differs from sequence" }
         return CapacityOutcome(disposition, Decision(sequence, input.action, digest, disposition, legs, priorChain, stateDigest, chain))
     }
@@ -190,10 +188,30 @@ internal class CapacityLedger(val config: CapacityConfig) {
 
     companion object {
         /** The decision checksum (the same layout as [FinanceLedger]'s, so the finite chain verifier accepts capacity decisions). */
-        fun checksumOf(sequence: Long, action: ActionKey, inputDigest: String, disposition: Disposition, legs: List<Leg>, priorChain: String, stateDigest: String): String = Canon.sha(Canon.bytes {
+        fun checksumOf(sequence: Long, action: ActionKey, inputDigest: String, disposition: Disposition, legs: List<Leg>, priorChain: String, stateDigest: String): String = Canon.digestHex {
             str("calcify-finance-decision-v1"); str(priorChain); long(sequence); str(stateDigest)
             str(action.namespace); str(action.domain); str(action.actionId); str(inputDigest); str(disposition.name); int(legs.size); legs.forEach { leg(it) }
-        })
+        }
+
+        /** True when the legs sum to zero per asset, exactly: the sums stay in `Long` (at most four legs) and fall back to `BigInteger` only if one would overflow. */
+        internal fun legsBalance(legs: List<Leg>): Boolean {
+            val n = legs.size
+            if (n == 0) return true
+            val assets = arrayOfNulls<String>(n); val sums = LongArray(n); var kinds = 0
+            try {
+                for (l in legs) {
+                    var j = 0
+                    while (j < kinds && assets[j] != l.asset.value) j++
+                    if (j == kinds) { assets[kinds] = l.asset.value; sums[kinds++] = l.amount } else sums[j] = Math.addExact(sums[j], l.amount)
+                }
+                for (j in 0 until kinds) if (sums[j] != 0L) return false
+                return true
+            } catch (_: ArithmeticException) {
+                val net = HashMap<AssetId, BigInteger>()
+                for (l in legs) net.merge(l.asset, BigInteger.valueOf(l.amount), BigInteger::add)
+                return net.values.all { it.signum() == 0 }
+            }
+        }
 
         /**
          * Rebuilds a ledger from its entity set and scalars (restore): decodes each entity by class, rebuilds the maps and the trie, and refuses anything that is not
