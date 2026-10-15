@@ -102,6 +102,33 @@ class CapacityEndToEndTest {
         withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityResolvedContextDecoder(plan), ::resolvedContext) }
     }
 
+    @Test fun bufferedControlsAreProcessedBeforeBufferedCapturesSoAnOperatorCanUnstickALane() {
+        val plan = planOver(listOf(setOf("INS0")))
+        DisposableRedpanda().start().use { rp ->
+            rp.admin().use { admin -> admin.createTopics(listOf(topics.capture, topics.control, topics.decisions).map { NewTopic(it, 1, 1.toShort()).configs(mapOf("retention.ms" to "-1", "retention.bytes" to "-1")) }).all().get(30, TimeUnit.SECONDS) }
+            val client = Properties().apply { put("bootstrap.servers", rp.bootstrap) }
+            val producer = producer(rp.bootstrap)
+            // The trade is written first, with the oldest timestamp, and its accounts are funded only afterwards; both are buffered when the service starts.
+            producer.send(ProducerRecord(topics.capture, 0, 0L, ByteArray(0), envelope(1, "INS0", AccountId("alice"), AccountId("bob"), 2, 10))).get(15, TimeUnit.SECONDS)
+            CapacityControlWriter(client, topics.control, plan).use { w -> w.fundCash("f", AccountId("alice"), listOf(1_000L)); w.fundSecurity("f", AccountId("bob"), "INS0", 10L) }
+            val stateDir = Files.createTempDirectory("capacity-e2e-state2").toFile()
+            val withBadCapture = CapacityInputDecoders(plan, captureBinding)
+            val dummyDs = PGSimpleDataSource()
+            // Only the Streams side is under test here: run the processor topology directly (the launcher also needs a database).
+            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, "capacity-priority", failOnBadCapture = true)
+            val props = CapacityStreams.properties("capacity-priority", rp.bootstrap, stateDir.path, 1)
+            val streams = org.apache.kafka.streams.KafkaStreams(CapacityTopology.build(config, withBadCapture), props)
+            val failed = java.util.concurrent.atomic.AtomicBoolean(false)
+            streams.setUncaughtExceptionHandler { failed.set(true); org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT }
+            try {
+                streams.start()
+                waitFor("three decisions") { check(!failed.get()) { "the lane stopped: the trade was presented before its funding" }; decisions(rp.bootstrap, 0).size >= 4 }
+                val dispositions = decisions(rp.bootstrap, 0).map { it.disposition }
+                assertEquals(listOf(Disposition.FUNDED, Disposition.FUNDED, Disposition.CAPTURED, Disposition.SETTLED), dispositions, "funding first, then the trade, which settles")
+            } finally { streams.close(Duration.ofSeconds(20)); producer.close() }
+        }
+    }
+
     private fun withInfrastructure(body: (DisposableRedpanda, PGSimpleDataSource) -> Unit) {
         val pgName = "cap-e2e-pg-${System.nanoTime().toString(36)}"; val pgPort = java.net.ServerSocket(0).use { it.localPort }
         sh("docker", "run", "-d", "--rm", "--name", pgName, "-e", "POSTGRES_PASSWORD=cap", "-e", "POSTGRES_DB=reef", "-p", "$pgPort:5432", *dockerExtraArgs("S4_PG_DOCKER"), "postgres:16-alpine")

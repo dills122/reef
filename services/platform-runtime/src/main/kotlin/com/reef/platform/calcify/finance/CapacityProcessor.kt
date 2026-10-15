@@ -152,8 +152,11 @@ internal object CapacityTopology {
             Serdes.String(), Serdes.ByteArray()).withCachingDisabled()
 
     fun build(config: CapacityProcessorConfig, decoder: CapacityInputDecoder, persistent: Boolean = true): Topology = Topology().apply {
-        addSource("capture-in", ByteArrayDeserializer(), ByteArrayDeserializer(), config.captureTopic)
-        addSource("control-in", ByteArrayDeserializer(), ByteArrayDeserializer(), config.controlTopic)
+        // Streams merges the two inputs of a task by record timestamp. Controls (funding, repairs) must win whenever both are buffered, whatever the capture timestamps are
+        // (the resolver writes its records with timestamp 0): otherwise a restart or a backlog could present a trade before the funding that makes its accounts known, and
+        // a lane stopped on an unfunded account could never be unstuck by funding it. Controls are stamped 0 and captures at least 1.
+        addSource(org.apache.kafka.streams.AutoOffsetReset.earliest(), "capture-in", org.apache.kafka.streams.processor.TimestampExtractor { record, _ -> maxOf(1L, record.timestamp()) }, ByteArrayDeserializer(), ByteArrayDeserializer(), config.captureTopic)
+        addSource(org.apache.kafka.streams.AutoOffsetReset.earliest(), "control-in", org.apache.kafka.streams.processor.TimestampExtractor { _, _ -> 0L }, ByteArrayDeserializer(), ByteArrayDeserializer(), config.controlTopic)
         addProcessor("capacity", { CapacityProcessor(config, decoder) }, "capture-in", "control-in")
         addStateStore(storeBuilder(config, persistent), "capacity")
         addSink("decisions-out", config.decisionsTopic, org.apache.kafka.common.serialization.StringSerializer(), ByteArraySerializer(), LaneByKey, "capacity")
