@@ -73,6 +73,13 @@ internal object CapacityRuntime {
         return CapacityDeployment(plan, decoder, topics, t("applicationId"))
     }
 
+    /**
+     * Kafka Streams widens the permissions of its own state directory to group read and execute the first time it runs, so the configured directory itself would fail the
+     * owner-only check on every later start. Streams gets a subdirectory instead; the configured parent stays owner-only (0700), which keeps group and others from
+     * traversing into the ledger whatever the permissions below it are. Found by restarting the service on a real stack.
+     */
+    internal fun streamsStateDirectory(configured: Path): Path = configured.resolve("streams")
+
     /** Builds (does not start) the launcher. Reads files and the environment only: no broker or database connection is opened here. */
     fun create(lookup: (String) -> String? = System::getenv): CapacityLauncher {
         fun required(key: String) = lookup(key)?.takeIf { it.isNotBlank() } ?: error("missing $key")
@@ -113,7 +120,7 @@ internal object CapacityRuntime {
             setURL(jdbcUrl); user = required("CALCIFY_CAPACITY_POSTGRES_USER"); password = secret("CALCIFY_CAPACITY_POSTGRES_PASSWORD")
             connectTimeout = 5; socketTimeout = 120; reWriteBatchedInserts = true
         }
-        return CapacityLauncher(deployment.plan, deployment.decoder, deployment.topics, deployment.applicationId, evidenceProps, streamsProps, stateDir.toString(), dataSource,
+        return CapacityLauncher(deployment.plan, deployment.decoder, deployment.topics, deployment.applicationId, evidenceProps, streamsProps, streamsStateDirectory(stateDir).toString(), dataSource,
             threads = threads, projectionIntervalMs = interval, maxApply = maxApply)
     }
 

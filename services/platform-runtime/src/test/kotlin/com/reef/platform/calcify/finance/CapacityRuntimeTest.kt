@@ -107,6 +107,17 @@ class CapacityRuntimeTest {
         assertFailsWith<RuntimeException>("the secured protocols still need principals") { CapacityRuntime.create(with("CALCIFY_CAPACITY_KAFKA_SECURITY_PROTOCOL" to "SASL_PLAINTEXT")) }
     }
 
+    @Test fun streamsGetsASubdirectoryAndTheOwnerOnlyParentSurvivesItsPermissionChange() {
+        val dir = Files.createTempDirectory("capacity-runtime")
+        val lookup = env(dir)
+        CapacityRuntime.create(lookup)
+        val sub = CapacityRuntime.streamsStateDirectory(dir.resolve("state"))
+        assertEquals(dir.resolve("state").resolve("streams"), sub)
+        // What Kafka Streams does on its first run: it widens the permissions of the directory it was given. That must not be the configured one.
+        Files.createDirectories(sub); Files.setPosixFilePermissions(sub, PosixFilePermissions.fromString("rwxr-x---"))
+        CapacityRuntime.create(lookup)      // a restart: the configured parent is still owner-only
+    }
+
     @Test fun theRoleRefusesToShareAProcessWithAnotherCalcifyRole() {
         CapacityRuntime.requireExclusive { null }
         for (other in listOf("CALCIFY_STAGE", "CALCIFY_FINITE_BINDING_DIGEST", "CALCIFY_FINANCE_BINDING_DIGEST")) assertFailsWith<IllegalArgumentException>(other) { CapacityRuntime.requireExclusive { k -> if (k == other) "x" else null } }
