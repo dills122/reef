@@ -120,6 +120,7 @@ internal class ScaleLedger(val accounts: Set<AccountId>, val cash: AssetId, val 
             is FinanceInput.Capture -> capture(input, digest)
             is FinanceInput.Fund -> fund(input, digest)
             is FinanceInput.Settle -> settle(input, digest)
+            is FinanceInput.CaptureSettle -> throw IllegalStateException("capture-settle is not part of this test")
         }
     }
 

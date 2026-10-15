@@ -89,6 +89,16 @@ internal sealed interface FinanceInput {
         private var digestMemo: String? = null
         override fun digest(): String = digestMemo ?: super.digest().also { digestMemo = it }
     }
+    /**
+     * Capacity profile, decision mode `capture-settle-v1` (docs/work/CALCIFY_CAPACITY_PROFILE.md): a captured execution AND its first settlement attempt (authority
+     * OPERATOR, attempt 1, both implied) as one input, hence one decision, one state commitment and one chain link per booked trade. The fields are [Capture]'s. Only the
+     * capture source produces it; the finite profile and the CONTROL role refuse it.
+     */
+    data class CaptureSettle(override val action: ActionKey, val execution: ExecutionKey, val buyer: AccountId, val seller: AccountId,
+                             val quantity: Long, val priceNanos: Long) : FinanceInput {
+        private var digestMemo: String? = null
+        override fun digest(): String = digestMemo ?: super.digest().also { digestMemo = it }
+    }
     data class Fund(override val action: ActionKey, val authority: Authority, val account: AccountId, val asset: AssetId,
                     val amount: Long) : FinanceInput {
         private var digestMemo: String? = null
@@ -107,6 +117,7 @@ internal sealed interface FinanceInput {
         str(action.namespace); str(action.domain); str(action.actionId)
         when (val i = this@FinanceInput) {
             is Capture -> { str("CAPTURE"); execution(i.execution); str(i.buyer.value); str(i.seller.value); long(i.quantity); long(i.priceNanos) }
+            is CaptureSettle -> { str("CAPTURE_SETTLE"); execution(i.execution); str(i.buyer.value); str(i.seller.value); long(i.quantity); long(i.priceNanos) }
             is Fund -> { str("FUND"); str(i.authority.name); str(i.account.value); str(i.asset.value); long(i.amount) }
             is Settle -> { str("SETTLE"); str(i.authority.name); execution(i.execution); int(i.attempt) }
         }

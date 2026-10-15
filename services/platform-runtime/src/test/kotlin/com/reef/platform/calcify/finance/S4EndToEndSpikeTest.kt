@@ -147,6 +147,7 @@ class S4EndToEndSpikeTest {
                             aRun += e.runId; aVen += e.venueSessionId; aIns += e.instrumentId; aEx += e.executionId; aNo += input.attempt; aDisp += d.disposition.name
                             if (d.disposition == Disposition.SETTLED) { uRun += e.runId; uVen += e.venueSessionId; uIns += e.instrumentId; uEx += e.executionId } }
                         is FinanceInput.Fund -> Unit
+                        is FinanceInput.CaptureSettle -> throw IllegalStateException("capture-settle is not part of this test")
                     }
                 }
                 c.prepareStatement("INSERT INTO boundary.calcify_finance_decision SELECT ?, t.s, t.n, t.d, t.a, t.p, t.g, t.r, t.k FROM unnest(?::bigint[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[]) AS t(s,n,d,a,p,g,r,k)").use {

@@ -22,7 +22,7 @@ internal class CapacityControlWriter(clientProperties: Properties, private val c
     /** Writes [input] to [lane]'s control partition and returns its offset once the broker has acknowledged it. */
     fun submit(lane: Int, input: FinanceInput): Long {
         require(lane in 0 until plan.lanes) { "lane $lane is outside the plan" }
-        require(input !is FinanceInput.Capture) { "CONTROL carries Fund and Settle only" }
+        require(input !is FinanceInput.Capture && input !is FinanceInput.CaptureSettle) { "CONTROL carries Fund and Settle only" }
         return producer.send(ProducerRecord(controlTopic, lane, ByteArray(0), FinanceWire.toProto(input).toByteArray())).get(30, TimeUnit.SECONDS).offset()
     }
 

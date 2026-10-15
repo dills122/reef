@@ -76,6 +76,17 @@ message FinanceSettleV1 {
   FinanceAuthorityV1 authority = 3;
 }
 
+// Capacity profile only (docs/work/CALCIFY_CAPACITY_PROFILE.md, decision mode capture-settle-v1): a captured execution and its first settlement attempt
+// (authority OPERATOR, attempt 1, both implied) decided as ONE ledger input. Same fields as FinanceCaptureV1. Never valid on the CONTROL role and refused by the
+// finite profile. Additive: consumers (projector, replay and evidence tools) must be upgraded before any producer emits it.
+message FinanceCaptureSettleV1 {
+  FinanceExecutionKeyV1 execution = 1;
+  string buyer_account_id = 2;
+  string seller_account_id = 3;
+  int64 quantity = 4;
+  int64 price_nanos = 5;
+}
+
 // Input record on the CONTROL/finance ingress role.
 message FinanceInputV1 {
   FinanceActionKeyV1 action = 1;
@@ -83,6 +94,7 @@ message FinanceInputV1 {
     FinanceCaptureV1 capture = 2;
     FinanceFundV1 fund = 3;
     FinanceSettleV1 settle = 4;
+    FinanceCaptureSettleV1 capture_settle = 5;
   }
 }
 

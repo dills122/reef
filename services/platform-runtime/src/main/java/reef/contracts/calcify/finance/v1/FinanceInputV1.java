@@ -57,6 +57,7 @@ private static final long serialVersionUID = 0L;
     CAPTURE(2),
     FUND(3),
     SETTLE(4),
+    CAPTURE_SETTLE(5),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -77,6 +78,7 @@ private static final long serialVersionUID = 0L;
         case 2: return CAPTURE;
         case 3: return FUND;
         case 4: return SETTLE;
+        case 5: return CAPTURE_SETTLE;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -211,6 +213,37 @@ private static final long serialVersionUID = 0L;
     return reef.contracts.calcify.finance.v1.FinanceSettleV1.getDefaultInstance();
   }
 
+  public static final int CAPTURE_SETTLE_FIELD_NUMBER = 5;
+  /**
+   * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+   * @return Whether the captureSettle field is set.
+   */
+  @java.lang.Override
+  public boolean hasCaptureSettle() {
+    return bodyCase_ == 5;
+  }
+  /**
+   * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+   * @return The captureSettle.
+   */
+  @java.lang.Override
+  public reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 getCaptureSettle() {
+    if (bodyCase_ == 5) {
+       return (reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1) body_;
+    }
+    return reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.getDefaultInstance();
+  }
+  /**
+   * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+   */
+  @java.lang.Override
+  public reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1OrBuilder getCaptureSettleOrBuilder() {
+    if (bodyCase_ == 5) {
+       return (reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1) body_;
+    }
+    return reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.getDefaultInstance();
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -237,6 +270,9 @@ private static final long serialVersionUID = 0L;
     if (bodyCase_ == 4) {
       output.writeMessage(4, (reef.contracts.calcify.finance.v1.FinanceSettleV1) body_);
     }
+    if (bodyCase_ == 5) {
+      output.writeMessage(5, (reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1) body_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -261,6 +297,10 @@ private static final long serialVersionUID = 0L;
     if (bodyCase_ == 4) {
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(4, (reef.contracts.calcify.finance.v1.FinanceSettleV1) body_);
+    }
+    if (bodyCase_ == 5) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(5, (reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1) body_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -296,6 +336,10 @@ private static final long serialVersionUID = 0L;
         if (!getSettle()
             .equals(other.getSettle())) return false;
         break;
+      case 5:
+        if (!getCaptureSettle()
+            .equals(other.getCaptureSettle())) return false;
+        break;
       case 0:
       default:
     }
@@ -326,6 +370,10 @@ private static final long serialVersionUID = 0L;
       case 4:
         hash = (37 * hash) + SETTLE_FIELD_NUMBER;
         hash = (53 * hash) + getSettle().hashCode();
+        break;
+      case 5:
+        hash = (37 * hash) + CAPTURE_SETTLE_FIELD_NUMBER;
+        hash = (53 * hash) + getCaptureSettle().hashCode();
         break;
       case 0:
       default:
@@ -485,6 +533,9 @@ private static final long serialVersionUID = 0L;
       if (settleBuilder_ != null) {
         settleBuilder_.clear();
       }
+      if (captureSettleBuilder_ != null) {
+        captureSettleBuilder_.clear();
+      }
       bodyCase_ = 0;
       body_ = null;
       return this;
@@ -546,6 +597,10 @@ private static final long serialVersionUID = 0L;
           settleBuilder_ != null) {
         result.body_ = settleBuilder_.build();
       }
+      if (bodyCase_ == 5 &&
+          captureSettleBuilder_ != null) {
+        result.body_ = captureSettleBuilder_.build();
+      }
     }
 
     @java.lang.Override
@@ -574,6 +629,10 @@ private static final long serialVersionUID = 0L;
         }
         case SETTLE: {
           mergeSettle(other.getSettle());
+          break;
+        }
+        case CAPTURE_SETTLE: {
+          mergeCaptureSettle(other.getCaptureSettle());
           break;
         }
         case BODY_NOT_SET: {
@@ -634,6 +693,13 @@ private static final long serialVersionUID = 0L;
               bodyCase_ = 4;
               break;
             } // case 34
+            case 42: {
+              input.readMessage(
+                  internalGetCaptureSettleFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              bodyCase_ = 5;
+              break;
+            } // case 42
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1211,6 +1277,148 @@ private static final long serialVersionUID = 0L;
       bodyCase_ = 4;
       onChanged();
       return settleBuilder_;
+    }
+
+    private com.google.protobuf.SingleFieldBuilder<
+        reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1, reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.Builder, reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1OrBuilder> captureSettleBuilder_;
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     * @return Whether the captureSettle field is set.
+     */
+    @java.lang.Override
+    public boolean hasCaptureSettle() {
+      return bodyCase_ == 5;
+    }
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     * @return The captureSettle.
+     */
+    @java.lang.Override
+    public reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 getCaptureSettle() {
+      if (captureSettleBuilder_ == null) {
+        if (bodyCase_ == 5) {
+          return (reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1) body_;
+        }
+        return reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.getDefaultInstance();
+      } else {
+        if (bodyCase_ == 5) {
+          return captureSettleBuilder_.getMessage();
+        }
+        return reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.getDefaultInstance();
+      }
+    }
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     */
+    public Builder setCaptureSettle(reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 value) {
+      if (captureSettleBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        body_ = value;
+        onChanged();
+      } else {
+        captureSettleBuilder_.setMessage(value);
+      }
+      bodyCase_ = 5;
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     */
+    public Builder setCaptureSettle(
+        reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.Builder builderForValue) {
+      if (captureSettleBuilder_ == null) {
+        body_ = builderForValue.build();
+        onChanged();
+      } else {
+        captureSettleBuilder_.setMessage(builderForValue.build());
+      }
+      bodyCase_ = 5;
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     */
+    public Builder mergeCaptureSettle(reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 value) {
+      if (captureSettleBuilder_ == null) {
+        if (bodyCase_ == 5 &&
+            body_ != reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.getDefaultInstance()) {
+          body_ = reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.newBuilder((reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1) body_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          body_ = value;
+        }
+        onChanged();
+      } else {
+        if (bodyCase_ == 5) {
+          captureSettleBuilder_.mergeFrom(value);
+        } else {
+          captureSettleBuilder_.setMessage(value);
+        }
+      }
+      bodyCase_ = 5;
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     */
+    public Builder clearCaptureSettle() {
+      if (captureSettleBuilder_ == null) {
+        if (bodyCase_ == 5) {
+          bodyCase_ = 0;
+          body_ = null;
+          onChanged();
+        }
+      } else {
+        if (bodyCase_ == 5) {
+          bodyCase_ = 0;
+          body_ = null;
+        }
+        captureSettleBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     */
+    public reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.Builder getCaptureSettleBuilder() {
+      return internalGetCaptureSettleFieldBuilder().getBuilder();
+    }
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     */
+    @java.lang.Override
+    public reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1OrBuilder getCaptureSettleOrBuilder() {
+      if ((bodyCase_ == 5) && (captureSettleBuilder_ != null)) {
+        return captureSettleBuilder_.getMessageOrBuilder();
+      } else {
+        if (bodyCase_ == 5) {
+          return (reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1) body_;
+        }
+        return reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.getDefaultInstance();
+      }
+    }
+    /**
+     * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1, reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.Builder, reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1OrBuilder>
+        internalGetCaptureSettleFieldBuilder() {
+      if (captureSettleBuilder_ == null) {
+        if (!(bodyCase_ == 5)) {
+          body_ = reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.getDefaultInstance();
+        }
+        captureSettleBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1, reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1.Builder, reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1OrBuilder>(
+                (reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1) body_,
+                getParentForChildren(),
+                isClean());
+        body_ = null;
+      }
+      bodyCase_ = 5;
+      onChanged();
+      return captureSettleBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:reef.contracts.calcify.finance.v1.FinanceInputV1)
