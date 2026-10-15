@@ -138,3 +138,7 @@ CAP_TRADES=150000 ./gradlew test -PresearchTests --tests '*CapacityLaneCostTest*
 ```
 
 Engine names: E0 linked trie with the pre-change leaf code, E1 flat trie with it, E2 linked trie with the new leaf code, E3 shipped, L8/L32/L32b/L256b/L256s/L4096s/L65536s lagged variants, S256/S512 hash control and SHA-512/256 (object trie, so compare S512 with S256, not with E3), H1/H2/H2m/H4c/H4m hybrids, D0 to D2 diagnostics. Add `-Dorg.gradle.jvmargs=-Xmx4g` if the Kotlin compile runs out of memory on a busy machine.
+
+
+## Review note (independent review, instance 1)
+The flat trie allocates its first chunks eagerly: about 2 MB for keys at the first leaf and 1 MB of metadata plus 4 MB of digests at the first branch, so a lane costs roughly 7 MB before it holds any state (the 4 MB chunk is a humongous allocation under G1), and a replaced rotating ledger pays it again. At the lane counts in use this is negligible; at hundreds of lanes it is about 1.8 GB and the first chunk should be sized down. Each `ExecutionKey` also keeps one extra frame array (about 100 bytes) once it has been framed twice.

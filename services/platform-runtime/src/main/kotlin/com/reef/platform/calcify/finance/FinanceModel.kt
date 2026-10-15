@@ -49,6 +49,8 @@ internal data class ExecutionKey(val runId: String, val venueSessionId: String, 
 
     // A trade's key is framed up to six times (capture input, settle input, three entity keys, the attempt): the framed fields are remembered from the second use on.
     // Not part of equality (it is a pure function of the four fields); a key used once never pays for the copy.
+    // Single-thread by contract: the lane builds its keys on its own thread and the projector decodes fresh ones from bytes, so nothing shares a key across threads
+    // (these two fields are deliberately plain, not volatile; sharing a key would need @Volatile on both).
     private var seenOnce = false
     private var framed: ByteArray? = null
     internal fun cachedFrame(): ByteArray? {

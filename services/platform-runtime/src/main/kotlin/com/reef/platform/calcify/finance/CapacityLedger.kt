@@ -36,7 +36,7 @@ internal data class CapacityOutcome(val disposition: Disposition, val decision: 
 
 /**
  * The capacity profile's ledger (design stage S3): the O3a decision semantics for capture, fund and settle with O(touched) work per decision. State lives in
- * maps; every written entity updates the incremental [StateTrie], so the commitment `C(S')` each recorded decision carries costs the touched paths, not the state.
+ * maps; every written entity updates the incremental [FlatStateTrie], so the commitment `C(S')` each recorded decision carries costs the touched paths, not the state.
  * The decision order, dispositions, legs and budgets are those of [FinanceLedger] (the differential test runs both on random inputs). One writer; not thread-safe.
  *
  * Local invariants replace the whole-state check (design 5.5): the legs of a decision balance per asset, no position other than the opening account's goes

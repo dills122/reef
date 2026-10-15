@@ -166,12 +166,6 @@ internal object FinanceWire {
     /** `toProto(d).toByteArray()`: the decision without its input (the head record of the store). */
     fun encode(d: Decision): ByteArray = encoded({ writeDecision(it, d) }) { it.copy() }
     /**
-     * `toProto(d, input).toByteArray()` WITHOUT the digest check, for the processor that has just made [d] from [input] (the check would hash the input a second time to
-     * learn what the ledger computed a moment ago). Anything that receives a decision and an input from outside must use [toProto] or [recordFromProto].
-     */
-    fun encodeTrusted(d: Decision, input: FinanceInput): ByteArray = withInput(encode(d), input)
-
-    /**
      * The decision record from the decision's own bytes ([head], `encode(d)`): the input is field 9, the last field, so the published record is exactly the head record
      * followed by the input field. A lane that stores the head record and publishes the record encodes the decision once.
      */
