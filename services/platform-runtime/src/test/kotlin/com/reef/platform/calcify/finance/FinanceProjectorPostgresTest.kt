@@ -238,6 +238,7 @@ class FinanceProjectorPostgresTest {
         assertEquals("23514", insert(hex64(), hex64() + "0", hex64(), "a2"), "a long prior chain")
         assertEquals("23514", insert(hex64(), hex64(), "", "a3"), "an empty checksum")
         assertEquals(null, insert(hex64(), hex64(), hex64(), "a4"), "sixty-four characters pass")
+        assertEquals(null, insert("z".repeat(64), hex64(), hex64(), "a5"), "hex spelling is no longer a database concern (migration 0017): the projector's in-memory verification establishes it, the database keeps the length")
     }
 
     /** The projector is the only writer of the projection and must hold nothing else (docs/work/CALCIFY_FINITE_P3_DB_ROLES.md, O4 projection role). */
