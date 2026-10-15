@@ -36,9 +36,9 @@ internal object CapacityStreams {
  * state, [CapacityStore.restore]) and must be the head of the published log (above).
  */
 internal class CapacityLauncher(
-    private val plan: CapacityPlan, private val captureBindingDigest: String, private val topics: CapacityTopics, private val applicationId: String,
+    private val plan: CapacityPlan, private val decoder: CapacityInputDecoder, private val topics: CapacityTopics, private val applicationId: String,
     private val evidenceProperties: Properties, private val streamsClientProperties: Properties, private val stateDir: String, private val dataSource: DataSource,
-    private val threads: Int = plan.lanes, private val verifyContentDigest: Boolean = true, private val projectionIntervalMs: Long = 100,
+    private val threads: Int = plan.lanes, private val projectionIntervalMs: Long = 100,
     private val maxTransientProjectionFailures: Int = 10, private val persistent: Boolean = true,
     /** Decisions per projector transaction. Position rows are coalesced per transaction, so a larger chunk writes fewer rows per decision (and makes each commit, and the read lag behind it, longer). */
     private val maxApply: Int = 2_000,
@@ -84,8 +84,8 @@ internal class CapacityLauncher(
                 val log = reader.logReader(topics.decisions, lane).also { logs += it }
                 FinanceProjectionRunner.tailing({ val s = System.nanoTime(); FinanceProjectionRunner.decode(log.readNext()).also { readNanos.addAndGet(System.nanoTime() - s) } }, projector, digest, epoch, maxApply = maxApply, sequenceBound = plan.sequenceBound).also { it.open() }
             }
-            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] })
-            streams = KafkaStreams(CapacityTopology.build(config, CapacityInputDecoders(plan, captureBindingDigest, verifyContentDigest), persistent), properties)
+            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] }, failOnBadCapture = true)
+            streams = KafkaStreams(CapacityTopology.build(config, decoder, persistent), properties)
         } catch (e: Throwable) { logs.forEach { runCatching { it.close() } }; throw e }
         val streamsFailed = AtomicBoolean(false); val closing = AtomicBoolean(false); val failure = AtomicReference<Throwable?>(null)
         streams.setUncaughtExceptionHandler { streamsFailed.set(true); org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT }

@@ -227,6 +227,20 @@ class FinanceProjectorPostgresTest {
         assertFailsWith<IllegalArgumentException>("a bound above the ceiling") { projector.open(digest(), 1, sequenceBound = 2_000_000_000L) }
     }
 
+    @Test fun decisionDigestsKeepALengthGuardAfterTheHexChecksWereReplaced() {
+        val ds = dataSource(); val binding = digest(); FinanceProjector(ledger, ds).open(binding, 1)
+        fun insert(input: String, prior: String, checksum: String, action: String, sequence: Long = 1) = sqlState { ds.connection.use { c ->
+            c.prepareStatement("INSERT INTO boundary.calcify_finance_decision(binding_digest, sequence, action_namespace, action_domain, action_id, disposition, input_digest, prior_chain, checksum) VALUES (?, ?, 'n', 'd', ?, 'FUNDED', ?, ?, ?)").use { ps ->
+                ps.setString(1, binding); ps.setLong(2, sequence); ps.setString(3, action); ps.setString(4, input); ps.setString(5, prior); ps.setString(6, checksum); ps.executeUpdate()
+            }
+        } }
+        assertEquals("23514", insert(hex64().drop(1), hex64(), hex64(), "a1"), "a short input digest")
+        assertEquals("23514", insert(hex64(), hex64() + "0", hex64(), "a2"), "a long prior chain")
+        assertEquals("23514", insert(hex64(), hex64(), "", "a3"), "an empty checksum")
+        assertEquals(null, insert(hex64(), hex64(), hex64(), "a4"), "sixty-four characters pass")
+        assertEquals(null, insert("z".repeat(64), hex64(), hex64(), "a5", sequence = 2), "hex spelling is no longer a database concern (migration 0017): the projector's in-memory verification establishes it, the database keeps the length")
+    }
+
     /** The projector is the only writer of the projection and must hold nothing else (docs/work/CALCIFY_FINITE_P3_DB_ROLES.md, O4 projection role). */
     @Test fun theProjectorRoleCannotDeleteTruncateOrTouchTheIngressTablesAndFunctions() {
         dataSource().connection.use { c ->

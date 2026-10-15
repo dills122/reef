@@ -41,13 +41,23 @@ class CapacityLaneThroughputTest {
         val lanes = env("CAP_LANES", "1").toInt(); val trades = env("CAP_TRADES", "100000").toInt(); val accountCount = env("CAP_ACCOUNTS", "200").toInt()
         val instrumentCount = env("CAP_INSTRUMENTS", "16").toInt(); val verifyDigest = env("CAP_VERIFY_DIGEST", "true").toBoolean()
         val instruments = (0 until instrumentCount).map { "INS$it" }
-        val plan = CapacityPlan("rate-plan", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), (0 until lanes).map { l -> instruments.filterIndexed { i, _ -> i % lanes == l }.toSet() },
+        val resolved = env("CAP_SOURCE", "lifecycle") == "resolved"
+        val laneSets = if (resolved) CapacityRouting.engineLanes(instruments, lanes) else (0 until lanes).map { l -> instruments.filterIndexed { i, _ -> i % lanes == l }.toSet() }
+        val plan = CapacityPlan("rate-plan", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), laneSets,
             trades + 10, trades + 10, 2 * trades + 10, accountCount * (lanes + instrumentCount) + 10, sequenceBound = 1_000_000_000L)
         val accounts = (0 until accountCount).map { AccountId("u$it") }
         val topics = CapacityTopics("RATE_CAPTURE", "RATE_CONTROL", "RATE_DECISIONS")
         val captureBinding = FiniteLifecycleFixtures.binding().digest
 
-        // Pre-generate: one genuine envelope, edited per trade (execution id, instrument, accounts, content digest).
+        fun resolvedContext(i: Int, ins: String, b: AccountId, s: AccountId, units: Long, nanos: Long): ByteArray {
+            val c = reef.contracts.calcify.v1.MatchContextResolvedV1.newBuilder().setPolicyVersion(1).setRunId("p3-run")
+            c.tradeBuilder.setRunId("p3-run").factBuilder.setExecutionId("exec-$i").setInstrumentId(ins).setBuyOrderId("b-$i").setSellOrderId("s-$i").quantityBuilder.setUnits(units.toString())
+            c.tradeBuilder.factBuilder.priceBuilder.setNanos(nanos.toString()).setCurrency("USD")
+            c.buyAcceptedOrderBuilder.factBuilder.setOrderId("b-$i").setVenueSessionId("p3-session").setInstrumentId(ins).setAccountId(b.value).setParticipantId("pb")
+            c.sellAcceptedOrderBuilder.factBuilder.setOrderId("s-$i").setVenueSessionId("p3-session").setInstrumentId(ins).setAccountId(s.value).setParticipantId("ps")
+            return c.build().toByteArray()
+        }
+        // Pre-generate: one genuine envelope, edited per trade (execution id, instrument, accounts, content digest); or a resolved match context per trade.
         val base = FiniteLifecycleFixtures.sequence().completedRecordsList.single { it.source.sourceOffset == 2L }
         val ready = base.membersList.indexOfFirst { it.disposition.name == "LIFECYCLE_READY_EXECUTION" }
         val keep = base.membersList.withIndex().filter { (i, m) -> m.disposition.name != "LIFECYCLE_READY_EXECUTION" || i == ready }.map { it.value }
@@ -57,10 +67,12 @@ class CapacityLaneThroughputTest {
         val schedule = ArrayList<Pair<Int, ByteArray>>(trades)
         for (i in 0 until trades) {
             val ins = instruments[rnd.nextInt(instrumentCount)]; val b = accounts[rnd.nextInt(accountCount)]; var s = accounts[rnd.nextInt(accountCount)]; if (s == b) s = accounts[(accounts.indexOf(b) + 1) % accountCount]
+            val units = 1L + rnd.nextInt(4); val nanos = 1_000L + rnd.nextInt(50)
+            if (resolved) { schedule += plan.laneOf(ins)!! to resolvedContext(i, ins, b, s, units, nanos); continue }
             val edited = one.toBuilder().also { bld ->
                 val m = bld.getMembersBuilder(r)
-                m.tradeBuilder.factBuilder.setExecutionId("exec-$i").setInstrumentId(ins).quantityBuilder.setUnits((1 + rnd.nextInt(4)).toString())
-                m.tradeBuilder.factBuilder.priceBuilder.setNanos((1_000 + rnd.nextInt(50)).toString())
+                m.tradeBuilder.factBuilder.setExecutionId("exec-$i").setInstrumentId(ins).quantityBuilder.setUnits(units.toString())
+                m.tradeBuilder.factBuilder.priceBuilder.setNanos(nanos.toString())
                 m.getDependenciesBuilder(0).acceptanceBuilder.factBuilder.setAccountId(b.value); m.getDependenciesBuilder(1).acceptanceBuilder.factBuilder.setAccountId(s.value)
             }.build()
             schedule += plan.laneOf(ins)!! to edited.toBuilder().setContentDigest(FiniteLifecycleContract.digest(edited)).build().toByteArray()
@@ -71,7 +83,7 @@ class CapacityLaneThroughputTest {
         try {
             val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
             while (true) { try { sh("docker", "exec", pgName, "psql", "-U", "postgres", "-d", "reef", "-c", "select 1"); break } catch (e: Exception) { check(System.nanoTime() < deadline) { "postgres not ready" }; Thread.sleep(1000) } }
-            val migrations = listOf("0014_calcify_finance_projection.sql", "0016_calcify_finance_sequence_bound.sql").joinToString("\n") { Files.readString(Path.of("../../scripts/dev/db/migrations/boundary/$it")) }
+            val migrations = listOf("0014_calcify_finance_projection.sql", "0016_calcify_finance_sequence_bound.sql", "0017_calcify_finance_decision_digest_checks.sql").joinToString("\n") { Files.readString(Path.of("../../scripts/dev/db/migrations/boundary/$it")) }
             sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "CREATE SCHEMA boundary;\n$migrations")
             if (env("CAP_PG_NOFK", "false").toBoolean()) sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = """
                 DO ${'$'}${'$'} DECLARE r record; BEGIN
@@ -79,13 +91,24 @@ class CapacityLaneThroughputTest {
                     EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.t, r.conname);
                   END LOOP;
                 END ${'$'}${'$'};""")
+            val lean = env("CAP_PG_LEAN", "false")      // false | unique | regex | both: drop the decision table's UNIQUE(action key) and/or its three hex-format CHECKs (measurement only)
+            if (lean != "false") {
+                val predicate = when (lean) { "unique" -> "contype = 'u'"; "regex" -> "contype = 'c' AND pg_get_constraintdef(oid) LIKE '%~%'"; else -> "contype = 'u' OR (contype = 'c' AND pg_get_constraintdef(oid) LIKE '%~%')" }
+                sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = """
+                    DO ${'$'}${'$'} DECLARE r record; BEGIN
+                      FOR r IN SELECT conname FROM pg_constraint WHERE conrelid = 'boundary.calcify_finance_decision'::regclass AND ($predicate) LOOP
+                        EXECUTE format('ALTER TABLE boundary.calcify_finance_decision DROP CONSTRAINT %I', r.conname);
+                      END LOOP;
+                    END ${'$'}${'$'};""")
+            }
+            if (env("CAP_PG_NOTRIGGER", "false").toBoolean()) sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "DROP TRIGGER calcify_finance_decision_within_bound ON boundary.calcify_finance_decision;")
             if (env("CAP_PG_SYNC_OFF", "false").toBoolean()) sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "ALTER DATABASE reef SET synchronous_commit = off;")
             val ds = PGSimpleDataSource().apply { setUrl("jdbc:postgresql://127.0.0.1:$pgPort/reef"); user = "postgres"; password = "cap"; reWriteBatchedInserts = true }
             DisposableRedpanda(smp = env("S4_SMP", "1").toInt(), memory = env("S4_BROKER_MEM", "2G")).start().use { rp ->
                 rp.admin().use { admin -> admin.createTopics(listOf(topics.capture, topics.control, topics.decisions).map { NewTopic(it, lanes, 1.toShort()).configs(mapOf("retention.ms" to "-1", "retention.bytes" to "-1")) }).all().get(30, TimeUnit.SECONDS) }
                 val client = Properties().apply { put("bootstrap.servers", rp.bootstrap) }
                 val stateDir = Files.createTempDirectory("capacity-rate-state").toFile()
-                val launcher = CapacityLauncher(plan, captureBinding, topics, "capacity-rate", client, client, stateDir.path, ds, verifyContentDigest = verifyDigest, maxApply = env("CAP_MAX_APPLY", "2000").toInt()).start()
+                val launcher = CapacityLauncher(plan, if (resolved) CapacityResolvedContextDecoder(plan) else CapacityInputDecoders(plan, captureBinding, verifyDigest), topics, "capacity-rate", client, client, stateDir.path, ds, maxApply = env("CAP_MAX_APPLY", "2000").toInt()).start()
                 val producer = KafkaProducer<ByteArray, ByteArray>(Properties().apply {
                     put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rp.bootstrap); put(ProducerConfig.ACKS_CONFIG, "all"); put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
                     put(ProducerConfig.LINGER_MS_CONFIG, 5); put(ProducerConfig.BATCH_SIZE_CONFIG, 131_072)
@@ -123,7 +146,8 @@ class CapacityLaneThroughputTest {
                     admin.close()
                     val cpu1 = cpuByGroup()
                     println("CAPACITY-CPU cpu_seconds " + listOf("projection", "streams", "kafka-clients").joinToString(" ") { g -> "$g=${"%.1f".format(((cpu1[g] ?: 0) - (cpu0[g] ?: 0)) / 1e9)}" } + " read_s=${"%.1f".format(launcher.readNanos.get() / 1e9)} apply_s=${"%.1f".format(launcher.applyNanos() / 1e9)} wall=${"%.1f".format((tDone - t0) / 1e9)} cores=${Runtime.getRuntime().availableProcessors()}")
-                    println("CAPACITY-RATE lanes=$lanes trades=$trades decisions=$decisions processed_in=${"%.1f".format((tProcessed - t0) / 1e9)}s processed_decisions_per_s=${"%.0f".format(decisions / ((tProcessed - t0) / 1e9))} sent_in=${"%.1f".format((tSent - t0) / 1e9)}s projected_in=${"%.1f".format(seconds)}s projected_decisions_per_s=${"%.0f".format(decisions / seconds)} verify_digest=$verifyDigest")
+                    println("CAPACITY-LANES trades_per_lane=${(0 until lanes).map { l -> schedule.count { it.first == l } }} instruments_per_lane=${plan.laneInstruments.map { it.size }}")
+                    println("CAPACITY-RATE source=${if (resolved) "resolved" else "lifecycle"} lanes=$lanes trades=$trades decisions=$decisions processed_in=${"%.1f".format((tProcessed - t0) / 1e9)}s processed_decisions_per_s=${"%.0f".format(decisions / ((tProcessed - t0) / 1e9))} sent_in=${"%.1f".format((tSent - t0) / 1e9)}s projected_in=${"%.1f".format(seconds)}s projected_decisions_per_s=${"%.0f".format(decisions / seconds)} verify_digest=$verifyDigest")
                     assertEquals(expected, projected())
                 } finally { launcher.close(); producer.close() }
             }

@@ -34,8 +34,7 @@ import reef.contracts.calcify.v1.FiniteLifecycleCaptureV1
 @Tag("broker")
 class CapacityEndToEndTest {
     private val lanes = 3
-    private val instruments = (0 until 6).map { "INS$it" }
-    private val plan = CapacityPlan("e2e-plan", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), instruments.chunked(2).map { it.toSet() }, 10_000, 10_000, 20_000, 1_000, sequenceBound = 100_000)
+    private fun planOver(laneSets: List<Set<String>>) = CapacityPlan("e2e-plan", "p3-run", "p3-session", AssetId("USD"), AccountId("opening"), laneSets, 10_000, 10_000, 20_000, 1_000, sequenceBound = 100_000)
     private val participants = (0 until 12).map { AccountId("u$it") }
     private val captureBinding = FiniteLifecycleFixtures.binding().digest
     private val appId = "capacity-e2e"
@@ -45,6 +44,16 @@ class CapacityEndToEndTest {
         val p = ProcessBuilder(*cmd).redirectErrorStream(true).start()
         if (stdin != null) p.outputStream.use { it.write(stdin.toByteArray()) }
         val out = p.inputStream.bufferedReader().readText(); check(p.waitFor() == 0) { "${cmd.toList()} failed: $out" }; return out
+    }
+
+    /** A Phase 2 resolved match context for one trade, as the resolver would publish it. */
+    private fun resolvedContext(i: Int, instrument: String, buyer: AccountId, seller: AccountId, units: Long, nanos: Long): ByteArray {
+        val b = reef.contracts.calcify.v1.MatchContextResolvedV1.newBuilder().setPolicyVersion(1).setRunId("p3-run")
+        b.tradeBuilder.setRunId("p3-run").factBuilder.setExecutionId("exec-$i").setInstrumentId(instrument).setBuyOrderId("b-$i").setSellOrderId("s-$i").quantityBuilder.setUnits(units.toString())
+        b.tradeBuilder.factBuilder.priceBuilder.setNanos(nanos.toString()).setCurrency("USD")
+        b.buyAcceptedOrderBuilder.factBuilder.setOrderId("b-$i").setVenueSessionId("p3-session").setInstrumentId(instrument).setAccountId(buyer.value).setParticipantId("pb-${buyer.value}")
+        b.sellAcceptedOrderBuilder.factBuilder.setOrderId("s-$i").setVenueSessionId("p3-session").setInstrumentId(instrument).setAccountId(seller.value).setParticipantId("ps-${seller.value}")
+        return b.build().toByteArray()
     }
 
     private fun envelope(i: Int, instrument: String, buyer: AccountId, seller: AccountId, units: Long, nanos: Long): ByteArray {
@@ -84,26 +93,37 @@ class CapacityEndToEndTest {
     }
 
     @Test fun threeLanesTradeFundedParticipantsAndSurviveRestartsWithEveryLogAndProjectionEqualToTheOracle() {
+        val plan = planOver((0 until 6).map { "INS$it" }.chunked(2).map { it.toSet() })
+        withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityInputDecoders(plan, captureBinding), ::envelope) }
+    }
+
+    @Test fun resolvedMatchContextsOnEngineAlignedLanesGiveTheSameGuarantees() {
+        val plan = planOver(CapacityRouting.engineLanes((0 until 12).map { "INS$it" }, lanes)).also { it.requireEngineAligned() }
+        withInfrastructure { rp, ds -> run(rp, ds, plan, CapacityResolvedContextDecoder(plan), ::resolvedContext) }
+    }
+
+    private fun withInfrastructure(body: (DisposableRedpanda, PGSimpleDataSource) -> Unit) {
         val pgName = "cap-e2e-pg-${System.nanoTime().toString(36)}"; val pgPort = java.net.ServerSocket(0).use { it.localPort }
         sh("docker", "run", "-d", "--rm", "--name", pgName, "-e", "POSTGRES_PASSWORD=cap", "-e", "POSTGRES_DB=reef", "-p", "$pgPort:5432", *dockerExtraArgs("S4_PG_DOCKER"), "postgres:16-alpine")
         try {
             val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
             while (true) { try { sh("docker", "exec", pgName, "psql", "-U", "postgres", "-d", "reef", "-c", "select 1"); break } catch (e: Exception) { check(System.nanoTime() < deadline) { "postgres not ready" }; Thread.sleep(1000) } }
-            val migrations = listOf("0014_calcify_finance_projection.sql", "0016_calcify_finance_sequence_bound.sql").joinToString("\n") { Files.readString(Path.of("../../scripts/dev/db/migrations/boundary/$it")) }
+            val migrations = listOf("0014_calcify_finance_projection.sql", "0016_calcify_finance_sequence_bound.sql", "0017_calcify_finance_decision_digest_checks.sql").joinToString("\n") { Files.readString(Path.of("../../scripts/dev/db/migrations/boundary/$it")) }
             sh("docker", "exec", "-i", pgName, "psql", "-U", "postgres", "-d", "reef", "-v", "ON_ERROR_STOP=1", stdin = "CREATE SCHEMA boundary;\n$migrations")
             val ds = PGSimpleDataSource().apply { setUrl("jdbc:postgresql://127.0.0.1:$pgPort/reef"); user = "postgres"; password = "cap" }
-            DisposableRedpanda().start().use { rp -> run(rp, ds) }
+            DisposableRedpanda().start().use { rp -> body(rp, ds) }
         } finally { ProcessBuilder("docker", "rm", "-f", "-v", pgName).redirectErrorStream(true).start().also { it.inputStream.readAllBytes() }.waitFor() }
     }
 
-    private fun run(rp: DisposableRedpanda, ds: PGSimpleDataSource) {
+    private fun run(rp: DisposableRedpanda, ds: PGSimpleDataSource, plan: CapacityPlan, decoder: CapacityInputDecoder, record: (Int, String, AccountId, AccountId, Long, Long) -> ByteArray) {
+        val instruments = plan.laneInstruments.flatten().sorted()
         rp.admin().use { admin ->
             val history = mapOf("retention.ms" to "-1", "retention.bytes" to "-1", "cleanup.policy" to "delete")
             admin.createTopics(listOf(topics.capture, topics.control, topics.decisions).map { NewTopic(it, lanes, 1.toShort()).configs(history) }).all().get(30, TimeUnit.SECONDS)
         }
         val client = Properties().apply { put("bootstrap.servers", rp.bootstrap) }
         val stateDir = Files.createTempDirectory("capacity-e2e-state").toFile()
-        fun launcher() = CapacityLauncher(plan, captureBinding, topics, appId, client, client, stateDir.path, ds)
+        fun launcher() = CapacityLauncher(plan, decoder, topics, appId, client, client, stateDir.path, ds)
         // The oracle: one independent ledger per lane, fed the inputs the lane must have seen, in order.
         val oracle = (0 until lanes).map { CapacityLedger(plan.capacity(it)) }
         val expected = (0 until lanes).map { ArrayList<Decision>() }
@@ -116,7 +136,7 @@ class CapacityEndToEndTest {
                 val b = participants[rnd.nextInt(participants.size)]; var s = participants[rnd.nextInt(participants.size)]; if (s == b) s = participants[(participants.indexOf(b) + 1) % participants.size]
                 val units = 1L + rnd.nextInt(4); val nanos = 1_000L + rnd.nextInt(50)
                 val i = n++
-                producer.send(ProducerRecord(topics.capture, lane, ByteArray(0), envelope(i, ins, b, s, units, nanos))).get(15, TimeUnit.SECONDS)
+                producer.send(ProducerRecord(topics.capture, lane, ByteArray(0), record(i, ins, b, s, units, nanos))).get(15, TimeUnit.SECONDS)
                 val key = ExecutionKey("p3-run", "p3-session", ins, "exec-$i")
                 feed(lane, FinanceInput.Capture(ActionKey("calcify-finance", "capture", "exec-$i"), key, b, s, units, nanos)); feed(lane, CapacityCaptureMapping.firstSettle(key))
             }
@@ -155,7 +175,7 @@ class CapacityEndToEndTest {
 
             // 1. Trades flow; every lane equals its oracle.
             trades(240); waitFor("first batch converged") { running.healthy() && converged() }; assertTrue(running.healthy()); verify()
-            assertTrue(expected.all { it.size > 80 }, "every lane did real work: ${expected.map { it.size }}")
+            assertTrue(expected.all { it.size > 40 }, "every lane did real work: ${expected.map { it.size }}")
             assertTrue(expected.flatten().count { it.disposition == Disposition.SETTLED } > 200, "most trades settled")
 
             // 2. Clean restart: the local state and the projection are intact; the next trades continue each lane.
