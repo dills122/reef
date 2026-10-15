@@ -49,6 +49,7 @@ remote() {
   ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$ROOT_DIR/.tmp-do-known-hosts" -o ServerAliveInterval=30 "$USER_NAME@$HOST" "$@"
 }
 
+# Untracked files are deliberately allowed (the owner's local notes and .env live there): `git archive HEAD` below ships tracked files only, so the shipped tree is exactly HEAD.
 if [ "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" != 0 ]; then
   echo "tracked changes present; run from a clean checkout so the shipped tree is exactly HEAD" >&2; exit 1
 fi
@@ -78,6 +79,7 @@ log "host bootstrap ready"
 
 if [ "$VOLUME_GB" -gt 0 ]; then
   VOLNAME="$(outputs volume_name)"
+  [ -n "$VOLNAME" ] || { log "the volume output is empty: refusing to mount"; exit 1; }
   log "mounting volume $VOLNAME ($VOLUME_GB GB) at /mnt/pgvol"
   # The attachment can lag the Tofu apply: wait for the device node before mounting.
   remote "for _ in \$(seq 1 60); do test -e /dev/disk/by-id/scsi-0DO_Volume_$VOLNAME && break; sleep 2; done; test -e /dev/disk/by-id/scsi-0DO_Volume_$VOLNAME" || { log "volume device did not appear"; exit 1; }
