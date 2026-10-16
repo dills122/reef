@@ -95,7 +95,7 @@ log "shipping tracked files only (git archive HEAD)"
 git -C "$ROOT_DIR" archive --format=tar HEAD | remote "mkdir -p $REMOTE_DIR && tar -x -C $REMOTE_DIR"
 
 log "installing a JDK and recording the host"
-remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-21-jdk-headless >/dev/null && java -version 2>&1 | head -1 && nproc && lscpu | grep -E 'Model name|^CPU\\(s\\)' && free -g | head -2 && docker --version && uptime" | tee "$OUT_DIR/host.txt"
+remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-21-jdk-headless >/dev/null && mkdir -p ~/.gradle && printf 'org.gradle.jvmargs=-Xmx4g\nkotlin.daemon.jvmargs=-Xmx4g\n' > ~/.gradle/gradle.properties && java -version 2>&1 | head -1 && nproc && lscpu | grep -E 'Model name|^CPU\\(s\\)' && free -g | head -2 && docker --version && uptime" | tee "$OUT_DIR/host.txt"
 
 log "root disk synchronous-write check (200 x 4 KiB, dsync)"
 { remote "df -h / | tail -1; for i in 1 2; do dd if=/dev/zero of=/tmp/fs.test bs=4k count=200 oflag=dsync 2>&1 | tail -1; done; rm -f /tmp/fs.test"; } 2>&1 | tee "$OUT_DIR/rootdisk.txt" || true
