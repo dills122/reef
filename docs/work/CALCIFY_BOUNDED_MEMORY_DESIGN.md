@@ -1,6 +1,6 @@
 # Calcify finance lane: bounded memory, and what restart costs (design note)
 
-Status: design discussion with measurements, 2026-10-15. Nothing here is implemented or approved. Owner direction: the target is 15 to 20k booked trades/s sustained for 15 to 30 minutes (27M to 36M trades), so the lane's memory must stop growing with history.
+Status: stage 1 (eviction of settled objects) is implemented and ON by default in the launcher (2026-10-15); stage 2 (commitment v2) is design only and not approved. Owner direction: bounded memory is a requirement; the delivery goal is 10,000 booked trades/s sustained for 15 to 30 minutes (9M to 18M trades), and 15 to 20k/s (27M to 36M trades) is later work, so stage 1 is sized to leave memory growing only by the commitment trie (about 350 bytes per combined trade) and the filter.
 
 ## What was measured (this branch, `CapacityLaneCostTest` with `CAP_RESTORE=true`, `RocksDbLookupCostTest`)
 
@@ -77,7 +77,7 @@ The ledger that built the state is dropped first, so these are a fresh JVM's num
 
 The open question is whether a crash may cost the full scan. At 30 minutes and 20k trades/s that is about 6 minutes of restore with stage 1's eviction applied afterwards; a touch journal makes it seconds.
 
-## Stage 1 status: eviction implemented behind `CapacityProcessorConfig.evictSettled` (off by default, not enabled by the launcher)
+## Stage 1 status: eviction implemented, on by default (`CapacityProcessorConfig.evictSettled` is the switch; the launcher turns it on; `CALCIFY_CAPACITY_EVICT_SETTLED=false` turns it off)
 
 What it does: a lane keeps in memory only positions, pending trades (with their attempts) and the commitment trie. Settled executions, obligations, attempts and all actions leave the maps once `CapacityProcessor` has applied the record's writes to the store (`CapacityLedger.persisted()`). Lookups of an old action or execution go through `EntityFilter` (a growing blocked Bloom filter of X and K keys, 1.47% false positives, 2.94 bytes per key measured at 3M keys) and then one store read; a filter miss, the common case for a new trade, reads nothing. Restore streams the entities class by class (O, X, A, K, P) and keeps only open work.
 
@@ -107,7 +107,7 @@ The evicting slope is about 350 B per trade, which is the trie (3.1 entities x 1
 
 The laptop evicting run had one 1.4 s booking-lag spike near 8.8M trades with no GC to explain it (unexplained, not seen on the droplet). Owner set the booking-lag cap for these runs to 1.6 s (2026-10-15); all three runs are inside it. The droplet run (`g5-8vcpu-64gb-50gb`, atl1, 20.8 minutes of rental, about $0.43; a first attempt failed in the test compile with a Kotlin daemon OutOfMemoryError, fixed by giving the host's daemons 4 GB) shows the lane using about 73% of one core on average at 10k/s, so one lane's headroom on this hardware is roughly 1.3x; 15-20k/s needs more than one lane or a cheaper lane.
 
-Independent review (instance 1 of 3, verdict Ready with non-blocking follow-ups, no P0/P1): fixed in this branch: the evicting restore now refuses unknown or stray `e/` keys and unpaired resident pending obligations, and rejects a source that returns the wrong class for a scan; attempt keys are no longer added to the filter (never probed); the `readFrom` documentation no longer suggests that comparing the root proves the snapshot intact (P2, latent until the snapshot is wired; a checksum trailer bound to sequence and digest, or a full re-hash, plus tree-shape validation and tamper tests are required before wiring); a budget-refusal check and a multi-input processor test were added. Deferred: the filter allocates a new layer in one piece (a one-off pause, about 300 MB at 70M keys); the 4096-byte text limit of `DecodedFields` now also applies to live read-backs of evicted entities (the writer has no such limit, so account and action ids must stay short).
+Independent review, two instances (neither found a P0 or P1; both verdicts Ready with non-blocking follow-ups). Fixed: the evicting restore refuses unknown or stray `e/` keys (including keys that sort past the old scan bound on a byte-ordered store, now covered by `[prefix, successor)` scans) and unpaired resident pending obligations, and rejects a source that returns the wrong class; attempt keys are no longer added to the filter; `FlatStateTrie` snapshots end in a SHA-256 of their content that `readFrom` verifies; the launcher default and its environment switch are tested; a budget-refusal check and a multi-input processor test were added. Still open: the checksum is integrity, not authenticity, so a snapshot must be bound to the sequence and commitment it was taken at and its tree shape validated (it is checked by range only) before it is wired into a restore; the filter allocates a new layer in one piece (a one-off pause, about 300 MB at 70M keys); no test kills the process mid-transaction with eviction on (the safety argument is the standard Streams dirty-close behaviour: state wiped, restored from the changelog, `init` run again, which rebuilds ledger, filter and counters from the store); the 1.4 s booking-lag spike in the laptop soak is unexplained. Ids are bounded at 128 UTF-8 bytes by `boundedText`, so the 4096-byte limit of `DecodedFields` cannot be reached on a read-back, and store keys are hex, so characters in ids cannot collide with the key layout.
 
 ## Open decisions for the owner
 
@@ -118,5 +118,6 @@ Independent review (instance 1 of 3, verdict Ready with non-blocking follow-ups,
 ## Next measurements, in order
 
 1. ~~Restore cost with a real RocksDB store and a streamed scan, and the cost of the trie snapshot~~ done above at 2.0M and 6.0M entities (9M not run).
-2. Stage 1 prototype on the no-broker harness against the real RocksDB store (not the in-memory map): trades/s, live heap per trade, restore time, with differential tests that decisions, snapshot and commitment equal today's.
-3. A 15 minute paced soak on the EPYC droplet with the prototype (needs the owner's go and cost).
+2. ~~Stage 1 prototype against the real RocksDB store~~ done: running heap, restore and throughput at 300k, 1M and 2M trades, differential tests for decisions, writes and commitments.
+3. ~~A 15 minute paced soak~~ done on the laptop (plain and evicting) and on the EPYC droplet (evicting), see Soaks.
+4. Open: wire the trie snapshot for clean restarts (bind it to sequence and commitment, validate tree shape); a kill-mid-transaction broker test with eviction on; stage 2 only if a longer session than 30 minutes, or the 15 to 20k/s goal, makes the trie itself the limit.

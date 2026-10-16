@@ -51,7 +51,8 @@ internal class CapacityProcessorConfig(
     val failOnBadCapture: Boolean = false,
     /**
      * When true, each lane keeps in memory only what its next decision can still change (positions, pending trades) and reads every settled trade and old action back
-     * from its store through an in-heap filter, so memory no longer grows with the number of trades. Decisions, chains, commitments and stored entities are byte-identical
+     * from its store through an in-heap filter, so memory grows only by the commitment trie (about 350 bytes per combined trade) and the filter (about 3 bytes per key), not by the
+     * trades themselves. Decisions, chains, commitments and stored entities are byte-identical
      * either way; only restore, which then streams the entities instead of building every object, and the lane's memory differ.
      */
     val evictSettled: Boolean = false,

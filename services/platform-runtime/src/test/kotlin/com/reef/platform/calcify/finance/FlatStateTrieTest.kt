@@ -127,7 +127,7 @@ class FlatStateTrieTest {
         assertEquals(expected, hex.formatHex(readSnapshot(snapshotOf(t)).root()))
     }
 
-    @Test fun aSnapshotWithAnyChangedByteOrAnyAddedByteIsRefused() {
+    @Test fun aSnapshotWithAnyChangedByteIsRefusedAndReadingStopsAtTheTrailer() {
         val t = FlatStateTrie(); val rnd = Random(9); repeat(3_000) { t.put(ByteArray(32).also { rnd.nextBytes(it) }, leafFor(rnd)) }
         val bytes = snapshotOf(t); val expected = hex.formatHex(t.root())
         assertEquals(expected, hex.formatHex(readSnapshot(bytes).root()))

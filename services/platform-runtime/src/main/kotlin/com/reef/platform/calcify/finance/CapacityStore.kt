@@ -74,7 +74,7 @@ internal object CapacityStore {
         val classes = listOf("A", "K", "O", "P", "X")
         var from = "e/"
         for (c in classes) { require(kv.firstKeyBetween(from, "e/$c/") == null) { "malformed entity key" }; from = "e/${c}0" }   // '0' is the character after '/': the first key past every key of class c
-        require(kv.firstKeyBetween(from, "e/\uffff") == null) { "malformed entity key" }
+        require(kv.firstKeyBetween(from, "e0") == null) { "malformed entity key" }      // "e0" is the first key past everything under "e/"
     }
 
     /** The value fields of a stored entity: the bytes behind the version frame. */
