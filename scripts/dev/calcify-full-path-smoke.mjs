@@ -34,7 +34,7 @@ if (!Number.isSafeInteger(durationSeconds) || !Number.isSafeInteger(ratePairsPer
   throw new Error("load pairs, duration, rate, and batch size must be valid integers");
 }
 
-setValue("REEF_COMPOSE_FILES", "compose.base.yml,compose.local.yml,compose.calcify.yml");
+setValue("REEF_COMPOSE_FILES", ["compose.base.yml", "compose.local.yml", "compose.calcify.yml", ...env("DEV_CALCIFY_FULL_PATH_EXTRA_COMPOSE_FILES", "").split(",").filter(Boolean)].join(","));
 setValue("DEV_COMPOSE_PROFILES", "redpanda");
 setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
 setValue("STREAM_ACK_PARTITION_COUNT", "4");

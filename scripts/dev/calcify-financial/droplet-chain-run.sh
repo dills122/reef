@@ -6,6 +6,7 @@
 #   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | compare | tmpfs | baseline | smoke | s1smoke | soak | soaksmoke)
 #   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then one finance lane with its projector on tmpfs stores; `capmode` runs the finance cases in both decision modes; `capmini` is only the finance cases (one hot lane twice, four lanes); `lanesmoke` is the same at a few seconds each and `enginesmoke` is only its engine case.
 #   `soak` (docs/work/CALCIFY_SOAK_HARNESS.md) holds 10,000 trades/s for 15 and 30 minutes in capture-settle-v1 mode, with broker and Postgres on tmpfs and with Postgres on the root disk (synchronous_commit=off), and fetches the CSV time series; `soaksmoke` is 60 s of each. Knobs: REEF_SOAK_RATE, REEF_SOAK_SHORT_SECONDS (900), REEF_SOAK_LONG_SECONDS (1800), REEF_SOAK_CASES, REEF_SOAK_RP_TMPFS_GB, REEF_SOAK_PG_TMPFS_GB, REEF_SOAK_HEAP_GB (limits; defaults differ for the 15 and 30 minute cases), REEF_SOAK_PG_STORE (root | volume), REEF_SOAK_FORCE.
+#   `fullchain` (docs/work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md section 0) runs the whole stack on the host (HTTP intake, engine, Phase 1 and 2 sidecars, capacity lanes, projection) with the data volumes on tmpfs and drives it at a ladder of paced rates (REEF_FC_RATES, default "2500 5000 7500 10000" booked trades/s, REEF_FC_SECONDS each, default 60), then optionally one long hold (REEF_FC_LONG_RATE, REEF_FC_LONG_SECONDS, default 900); `fullchainsmoke` is 20 s at 500/s on 8 instruments. Needs a host with enough RAM for the tmpfs limits (REEF_FC_TMPFS_BOUNDARY_GB 40, REEF_FC_TMPFS_BROKER_GB 24). Knobs: REEF_FC_MODE (capture-settle-v1), REEF_FC_INSTRUMENTS (64), REEF_FC_EVICT (true), REEF_FC_QUANTITY (1).
 #   `compare` runs the single-thread microbenchmarks first, then lanes 1 to 4 with the projector and lanes 1 and 3 without it, all with -XX:+UseParallelGC, then the S1 shard cases.
 #
 # Needs DIGITALOCEAN_TOKEN in .env or the environment, an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
@@ -138,6 +139,19 @@ run_cap() {
 }
 
 HOST_MEM_GB=""
+run_fullchain() {
+  # run_fullchain LABEL RATE SECONDS [ENV...]  -- scripts/dev/calcify-fullchain-soak.mjs on the host; a fresh stack per case (reference data and funding are per run id)
+  local label="$1" rate="$2" seconds="$3"; shift 3
+  if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
+  local id="fc${label//[^A-Za-z0-9]/}"
+  local timeout_s=$(( seconds + ${REEF_FC_DRAIN_SECONDS:-600} + 1500 ))
+  log "case $label (${rate} trades/s for ${seconds}s, id $id: $*)"
+  remote "cd $REMOTE_DIR && (test -f .env || cp .env.example .env) && rm -rf /tmp/fcout/$label && mkdir -p /tmp/fcout/$label && env FC_ID=$id FC_RATE=$rate FC_SECONDS=$seconds FC_OUT_DIR=/tmp/fcout/$label FC_TMPFS=true FC_MODE=${REEF_FC_MODE:-capture-settle-v1} FC_INSTRUMENTS=${REEF_FC_INSTRUMENTS:-64} FC_EVICT=${REEF_FC_EVICT:-true} FC_QUANTITY=${REEF_FC_QUANTITY:-1} FC_TMPFS_BOUNDARY_GB=${REEF_FC_TMPFS_BOUNDARY_GB:-40} FC_TMPFS_BROKER_GB=${REEF_FC_TMPFS_BROKER_GB:-24} $* timeout $timeout_s node scripts/dev/calcify-fullchain-soak.mjs 2>&1 | tee /tmp/fcout/$label/run.log | grep -E 'FULLCHAIN-RESULT|FAILED|fullchain .* t=' | tail -n 200; echo \"leftover containers: \$(docker ps -aq | wc -l)\"" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+  mkdir -p "$OUT_DIR/fullchain"
+  remote "tar -C /tmp/fcout -czf - $label" | tar -C "$OUT_DIR/fullchain" -xzf - || log "could not fetch the full-chain output of $label"
+  log "fetched $OUT_DIR/fullchain/$label: $(ls "$OUT_DIR/fullchain/$label" 2>/dev/null | tr '\n' ' ')"
+}
+
 run_soak() {
   # run_soak LABEL STORE SECONDS RP_GB PG_GB HEAP_GB RATE [ENV...]  -- CapacitySoakTest (docs/work/CALCIFY_SOAK_HARNESS.md): a paced soak in capture-settle-v1 mode with the resolved-context source.
   #   STORE tmpfs: broker and Postgres data on tmpfs (RP_GB / PG_GB are the tmpfs size limits, not allocations; a full tmpfs fails the run loudly).
@@ -265,6 +279,15 @@ case "$MATRIX" in
     SMOKE="${REEF_SOAK_SMOKE_SECONDS:-60}"; SMOKE_RATE="${REEF_SOAK_SMOKE_RATE:-3000}"
     run_soak "soaksmoke-tmpfs" tmpfs "$SMOKE" "${REEF_SOAK_SMOKE_RP_GB:-3}" "${REEF_SOAK_SMOKE_PG_GB:-3}" "${REEF_SOAK_SMOKE_HEAP_GB:-4}" "$SMOKE_RATE"
     run_soak "soaksmoke-pgdisk" disk "$SMOKE" "${REEF_SOAK_SMOKE_RP_GB:-3}" 0 "${REEF_SOAK_SMOKE_HEAP_GB:-4}" "$SMOKE_RATE"
+    ;;
+  fullchain)
+    remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null && node --version" | tee -a "$OUT_DIR/matrix.txt"
+    for rate in ${REEF_FC_RATES:-2500 5000 7500 10000}; do run_fullchain "r$rate" "$rate" "${REEF_FC_SECONDS:-60}"; done
+    if [ -n "${REEF_FC_LONG_RATE:-}" ]; then run_fullchain "hold${REEF_FC_LONG_RATE}" "$REEF_FC_LONG_RATE" "${REEF_FC_LONG_SECONDS:-900}"; fi
+    ;;
+  fullchainsmoke)
+    remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null && node --version" | tee -a "$OUT_DIR/matrix.txt"
+    REEF_FC_INSTRUMENTS=8 REEF_FC_TMPFS_BOUNDARY_GB=4 REEF_FC_TMPFS_BROKER_GB=3 run_fullchain "smoke500" 500 20
     ;;
   enginesmoke)
     run_engine_drain "engine-smoke" 5000 500,2000

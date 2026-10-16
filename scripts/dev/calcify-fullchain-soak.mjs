@@ -9,10 +9,11 @@
 //
 // Environment: FC_ID (run id), FC_RATE (booked trades per second offered, default 1000), FC_SECONDS (default 60), FC_INSTRUMENTS (default 64, at most 64),
 // FC_MODE (two-step | capture-settle-v1, default capture-settle-v1), FC_EVICT (true|false, default true), FC_QUANTITY (order quantity, default 1: int64 cash lasts),
-// FC_WORKERS (load workers, default 512), FC_SAMPLE_SECONDS (default 10), FC_DRAIN_SECONDS (default 600), FC_OUT_DIR, FC_TEARDOWN (true: remove the capacity container and
+// FC_TMPFS (true: the stack's data volumes on tmpfs, see compose.fullchain-tmpfs.yml; not durable), FC_WORKERS (load workers, default 512), FC_SAMPLE_SECONDS (default 10), FC_DRAIN_SECONDS (default 600), FC_OUT_DIR, FC_TEARDOWN (true: remove the capacity container and
 // `compose down -v` at the end; default true), FC_SKIP_STACK (true: the stack and reference data are already up from a run with the same FC_ID).
 // The stack uses 4 engine partitions and so 4 capacity lanes (fixed by the full-path smoke).
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync, appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { composeArgs } from "./lib/compose-utils.mjs";
@@ -33,6 +34,9 @@ const sampleSeconds = Number(env("FC_SAMPLE_SECONDS", "10"));
 const drainSeconds = Number(env("FC_DRAIN_SECONDS", "600"));
 const teardown = env("FC_TEARDOWN", "true") === "true";
 const skipStack = env("FC_SKIP_STACK", "false") === "true";
+const tmpfs = env("FC_TMPFS", "false") === "true";
+const composeFiles = ["compose.base.yml", "compose.local.yml", "compose.calcify.yml", ...(tmpfs ? ["compose.fullchain-tmpfs.yml"] : [])].join(",");
+process.env.REEF_COMPOSE_FILES = composeFiles;
 const outDir = resolve(env("FC_OUT_DIR", `reports/calcify-fullchain/${id}`));
 const lanes = 4;
 if (!Number.isSafeInteger(rate) || rate < 1 || !Number.isSafeInteger(seconds) || seconds < 1 || !(instrumentCount >= 1 && instrumentCount <= 64) ||
@@ -49,8 +53,27 @@ const controlTopic = `FC_${token}_CONTROL`;
 const decisionsTopic = `FC_${token}_DECISIONS`;
 const applicationId = `capacity-fc-${id}`.toLowerCase();
 const baseInstrument = `AAPL-${id}`;
-const extras = Array.from({ length: instrumentCount - 1 }, (_, i) => `FC${String(i).padStart(2, "0")}-${id}`);
-const instruments = [baseInstrument, ...extras];
+// The platform routes an instrument to partition (first 8 bytes of SHA-256("run|session|instrument") as a big-endian non-negative long) mod lanes
+// (StreamCommandEnvelopeBuilder.partition). Every lane needs an instrument, so the extra instruments are picked to cover all lanes; the plan tool re-derives the lanes in Kotlin and
+// the two are compared below, so a change to the platform's hash fails the run instead of mis-sizing it.
+const laneOf = (instrument) => Number((createHash("sha256").update(`${id}|session-${id}|${instrument}`).digest().readBigUInt64BE(0) & 0x7fffffffffffffffn) % BigInt(lanes));
+const instruments = pickInstruments();
+const extras = instruments.slice(1);
+function pickInstruments() {
+  const chosen = [baseInstrument];
+  const perLane = new Array(lanes).fill(0); perLane[laneOf(baseInstrument)]++;
+  for (let i = 0; chosen.length < instrumentCount; i++) { const candidate = `FC${String(i).padStart(3, "0")}-${id}`; chosen.push(candidate); perLane[laneOf(candidate)]++; }
+  // replace extras from over-full lanes with later candidates that land on an empty lane
+  for (let i = instrumentCount; perLane.some((n) => n === 0) && i < instrumentCount + 5000; i++) {
+    const candidate = `FC${String(i).padStart(3, "0")}-${id}`; const lane = laneOf(candidate);
+    if (perLane[lane] !== 0) continue;
+    const victim = chosen.findLastIndex((name, at) => at > 0 && perLane[laneOf(name)] > 1);
+    if (victim < 1) break;
+    perLane[laneOf(chosen[victim])]--; chosen[victim] = candidate; perLane[lane]++;
+  }
+  if (perLane.some((n) => n === 0)) throw new Error(`cannot cover ${lanes} lanes with ${instrumentCount} instruments`);
+  return chosen;
+}
 const { runtimeUrl, engineUrl } = deriveDevUrls();
 const image = env("REEF_PLATFORM_RUNTIME_IMAGE", "reef-platform-runtime");
 const capacityName = `reef-fc-capacity-${id}`.toLowerCase();
@@ -65,12 +88,12 @@ try {
 }
 
 async function main() {
-  log(`run ${id}: ${rate} trades/s for ${seconds} s (${expectedTrades} trades), ${instrumentCount} instruments, ${lanes} lanes, mode ${mode}, evict ${evict}, quantity ${quantity}`);
+  log(`run ${id}: ${rate} trades/s for ${seconds} s (${expectedTrades} trades), ${instrumentCount} instruments, ${lanes} lanes, mode ${mode}, evict ${evict}, quantity ${quantity}, tmpfs ${tmpfs}`);
   if (!skipStack) {
     log("bringing up the stack through the full-path smoke (reference data, Phase 1 and 2 sidecars, one preflight trade)");
     const code = await runLogged("node", ["scripts/dev/calcify-full-path-smoke.mjs"], join(outDir, "stack-smoke.log"), {
       DEV_CALCIFY_PHASE2: "1", DEV_CALCIFY_FULL_PATH_ID: id, DEV_CALCIFY_FULL_PATH_INSTRUMENT_IDS: extras.join(","), DEV_CALCIFY_FULL_PATH_LOAD_PAIRS: "0",
-      DEV_CALCIFY_FULL_PATH_TIMEOUT_MS: "180000",
+      DEV_CALCIFY_FULL_PATH_TIMEOUT_MS: "180000", DEV_CALCIFY_FULL_PATH_EXTRA_COMPOSE_FILES: tmpfs ? "compose.fullchain-tmpfs.yml" : "",
     });
     if (code !== 0) throw new Error(`the full-path smoke failed (${code}); see ${join(outDir, "stack-smoke.log")}`);
   }
@@ -83,6 +106,9 @@ async function main() {
     "--expected-trades", String(expectedTrades + 10), "--mode", mode, "--capture-topic", resolvedTopic, "--control-topic", controlTopic,
     "--decisions-topic", decisionsTopic, "--application-id", applicationId])).trim();
   writeFileSync(join(outDir, "plan.json"), plan + "\n");
+  JSON.parse(plan).laneInstruments.forEach((set, lane) => set.forEach((instrument) => {
+    if (laneOf(instrument) !== lane) throw new Error(`routing drift: ${instrument} is lane ${lane} in the Kotlin plan and ${laneOf(instrument)} in this script`);
+  }));
 
   log("provisioning the control and decisions topics");
   for (const topic of [controlTopic, decisionsTopic]) {
