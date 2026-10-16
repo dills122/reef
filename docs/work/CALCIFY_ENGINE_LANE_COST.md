@@ -31,3 +31,20 @@ A larger batch is a larger Kafka record: about 2.2 KB per command in the event b
 On a quiet machine and a pre-filled backlog the lane drains 19.5k pairs/s at batch 500, against the 8k to 9k sustained edge measured through the whole stack (CAL-FIN-P21, shared laptop, front door and every downstream stage competing for the same ten cores). The gap is contention and the arrival pattern, not the lane's own cost. Whether a larger batch moves the end-to-end edge, and what it does to latency, the extractor and the resolver, is not measured here and needs the full stack on a quiet host. Batch size is a single environment variable (`MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE`; the repository profiles use 500, the finite profile requires 1), so the test is cheap to run once a quiet host is available.
 
 Pipelining the transaction with the next batch's build would overlap the 54 percent publish share at batch 500 with the build, in principle up to 1.8 times, but it changes the rollback story (the next batch would be built on state that is not yet durable). That is a design change to take to the owner, not a tuning step.
+
+## On a dedicated host (CAL-FIN-P23, 2026-10-15)
+
+DigitalOcean `c-32` (32 dedicated vCPU, 62 GB, **Intel Xeon Platinum 8168 at 2.7 GHz**), Redpanda in a container with a tmpfs data directory (4 cores, 8 GB), the same tests, run by `droplet-chain-run.sh lane`. Raw output: `docs/work/evidence/CAL-FIN-P23-c32-lane-matrix.txt`.
+
+CPU only, no broker: **17.9k pairs/s** (laptop: 36.8k). Drain through the real transactional lane, three interleaved sweeps (200,000 pairs each, lz4), pairs/s:
+
+| Batch (commands) | Sweep 1 | Sweep 2 | Sweep 3 | Laptop (this note, above) |
+| --- | --- | --- | --- | --- |
+| 500 | 13.4k | 13.7k | 13.6k | 19.5k |
+| 1,000 | 14.3k | 14.5k | 14.3k | 22.4k |
+| 2,000 | 14.5k | 14.5k | 14.7k | 26.3k |
+| 4,000 | 13.5k | 13.4k | 13.4k | 28.8k |
+
+Compression off: 12.5k at batch 500 and 13.3k at 2,000 (one run each; the laptop gained 9 percent from it, this host lost 6).
+
+**This corrects the laptop reading above.** On this host the time per command is dominated by build (decode, match, checksum, batch JSON): 10.0 s of a 14.9 s drain at batch 500 (68 percent; about 25 us per command, 2.3 times the laptop's 10.8), against publish 4.3 s (29 percent) and fetch 0.5 s. Batch size therefore buys at most 8 percent here (2,000 against 500), not the 35 to 48 percent the laptop suggested, and 4,000 is slower than 2,000. The laptop's fast single thread had made build cheap and publish look large. Changing the default batch size is not justified by this evidence; the engine lane's capacity on this host, 13.4k to 14.7k pairs/s, is above 10k pairs/s at the default batch of 500.

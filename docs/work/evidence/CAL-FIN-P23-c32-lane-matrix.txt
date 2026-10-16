@@ -1,0 +1,89 @@
+# CAL-FIN-P23: DigitalOcean c-32 matrix 'lane', 2026-10-15 16:43-17:16 UTC (raw output of scripts/dev/calcify-financial/droplet-chain-run.sh lane)
+# Host:
+# openjdk version "21.0.12.1" 2026-08-18
+# 32
+# CPU(s):                                  32
+# Model name:                              Intel(R) Xeon(R) Platinum 8168 CPU @ 2.70GHz
+#                total        used        free      shared  buff/cache   available
+# Mem:              62           1          58           0           3          61
+# Docker version 29.9.1, build dfc520d
+#  16:46:12 up 2 min,  1 user,  load average: 0.86, 0.37, 0.14
+# Root disk check:
+# /dev/vda1       387G  4.0G  383G   2% /
+# 819200 bytes (819 kB, 800 KiB) copied, 0.397368 s, 2.1 MB/s
+# 819200 bytes (819 kB, 800 KiB) copied, 0.382923 s, 2.1 MB/s
+# Microbenchmarks:
+# sha256 64B     : 462 ns/op
+# sha256 512B    : 1635 ns/op
+# crc32c 512B    : 27 ns/op
+# lcg mul/add    : 0.04 ns/iter
+# ptr chase 64MB : 103.8 ns/hop
+# memcpy 256MB   : 5.5 GB/s
+# threads= 1  per-thread 3.12 M ops/s   total 3.1 M ops/s
+# threads= 2  per-thread 3.84 M ops/s   total 7.7 M ops/s
+# threads= 4  per-thread 3.59 M ops/s   total 14.3 M ops/s
+# threads= 6  per-thread 3.41 M ops/s   total 20.5 M ops/s
+# threads= 8  per-thread 3.20 M ops/s   total 25.6 M ops/s
+# threads=10  per-thread 3.10 M ops/s   total 31.0 M ops/s
+# threads=12  per-thread 3.00 M ops/s   total 36.0 M ops/s
+# threads=16  per-thread 2.80 M ops/s   total 44.8 M ops/s
+
+engine-cpu: go: downloading github.com/jcmturner/gokrb5/v8 v8.4.4
+engine-cpu: BenchmarkLaneProcessOnce-32    	      15	 560008731 ns/op	     17857 pairs/s
+engine-cpu: ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	10.558s
+engine-drain-1: redpanda smp=4 memory=8G
+engine-drain-1: LANE-DRAIN split: fetch=0.49s publish=4.35s build+other=10.08s
+engine-drain-1: LANE-DRAIN batch=500 commands=400000 batches=800 elapsed=14.93s commands/s=26797 pairs/s=13399 ms/batch=18.7 
+engine-drain-1: LANE-DRAIN split: fetch=0.48s publish=3.67s build+other=9.84s
+engine-drain-1: LANE-DRAIN batch=1000 commands=400000 batches=400 elapsed=13.99s commands/s=28584 pairs/s=14292 ms/batch=35.0 
+engine-drain-1: LANE-DRAIN split: fetch=0.58s publish=3.36s build+other=9.84s
+engine-drain-1: LANE-DRAIN batch=2000 commands=400000 batches=200 elapsed=13.78s commands/s=29026 pairs/s=14513 ms/batch=68.9 
+engine-drain-1: LANE-DRAIN split: fetch=1.69s publish=3.31s build+other=9.86s
+engine-drain-1: LANE-DRAIN batch=4000 commands=400000 batches=100 elapsed=14.86s commands/s=26911 pairs/s=13455 ms/batch=148.6 
+engine-drain-1: ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	74.735s
+engine-drain-2: redpanda smp=4 memory=8G
+engine-drain-2: LANE-DRAIN split: fetch=0.51s publish=4.12s build+other=9.93s
+engine-drain-2: LANE-DRAIN batch=500 commands=400000 batches=800 elapsed=14.56s commands/s=27478 pairs/s=13739 ms/batch=18.2 
+engine-drain-2: LANE-DRAIN split: fetch=0.49s publish=3.50s build+other=9.85s
+engine-drain-2: LANE-DRAIN batch=1000 commands=400000 batches=400 elapsed=13.83s commands/s=28917 pairs/s=14459 ms/batch=34.6 
+engine-drain-2: LANE-DRAIN split: fetch=0.53s publish=3.31s build+other=9.97s
+engine-drain-2: LANE-DRAIN batch=2000 commands=400000 batches=200 elapsed=13.81s commands/s=28960 pairs/s=14480 ms/batch=69.1 
+engine-drain-2: LANE-DRAIN split: fetch=1.67s publish=3.24s build+other=9.98s
+engine-drain-2: LANE-DRAIN batch=4000 commands=400000 batches=100 elapsed=14.89s commands/s=26858 pairs/s=13429 ms/batch=148.9 
+engine-drain-2: ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	74.339s
+engine-drain-3: redpanda smp=4 memory=8G
+engine-drain-3: LANE-DRAIN split: fetch=0.50s publish=4.27s build+other=9.96s
+engine-drain-3: LANE-DRAIN batch=500 commands=400000 batches=800 elapsed=14.72s commands/s=27167 pairs/s=13583 ms/batch=18.4 
+engine-drain-3: LANE-DRAIN split: fetch=0.49s publish=3.57s build+other=9.89s
+engine-drain-3: LANE-DRAIN batch=1000 commands=400000 batches=400 elapsed=13.94s commands/s=28686 pairs/s=14343 ms/batch=34.9 
+engine-drain-3: LANE-DRAIN split: fetch=0.54s publish=3.23s build+other=9.85s
+engine-drain-3: LANE-DRAIN batch=2000 commands=400000 batches=200 elapsed=13.63s commands/s=29353 pairs/s=14677 ms/batch=68.1 
+engine-drain-3: LANE-DRAIN split: fetch=1.65s publish=3.34s build+other=9.89s
+engine-drain-3: LANE-DRAIN batch=4000 commands=400000 batches=100 elapsed=14.88s commands/s=26874 pairs/s=13437 ms/batch=148.8 
+engine-drain-3: ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	74.455s
+engine-drain-nocompress: redpanda smp=4 memory=8G
+engine-drain-nocompress: LANE-DRAIN split: fetch=0.49s publish=5.44s build+other=10.08s
+engine-drain-nocompress: LANE-DRAIN batch=500 commands=400000 batches=800 elapsed=16.01s commands/s=24986 pairs/s=12493 ms/batch=20.0 
+engine-drain-nocompress: LANE-DRAIN split: fetch=0.60s publish=4.41s build+other=9.99s
+engine-drain-nocompress: LANE-DRAIN batch=2000 commands=400000 batches=200 elapsed=15.01s commands/s=26655 pairs/s=13328 ms/batch=75.0 
+engine-drain-nocompress: ok  	github.com/dills122/reef/services/matching-engine/internal/streamdirect	39.630s
+cap-hot-lane-1:     CAPACITY-CPU cpu_seconds projection=33.0 streams=168.3 kafka-clients=0.5 read_s=76.1 apply_s=164.7 verify_s=6.4 sql_s=141.1 wall=168.7 cores=32
+cap-hot-lane-1:     CAPACITY-LANES trades_per_lane=[600000] instruments_per_lane=[64]
+cap-hot-lane-1:     CAPACITY-RATE source=resolved lanes=1 trades=600000 decisions=1200000 processed_in=168.3s processed_decisions_per_s=7131 sent_in=0.6s projected_in=168.7s projected_decisions_per_s=7111 verify_digest=true
+cap-hot-lane-1: BUILD SUCCESSFUL in 6m 37s
+cap-hot-lane-apply8000-1:     CAPACITY-CPU cpu_seconds projection=33.3 streams=171.3 kafka-clients=0.4 read_s=76.6 apply_s=167.5 verify_s=6.4 sql_s=143.6 wall=171.8 cores=32
+cap-hot-lane-apply8000-1:     CAPACITY-LANES trades_per_lane=[600000] instruments_per_lane=[64]
+cap-hot-lane-apply8000-1:     CAPACITY-RATE source=resolved lanes=1 trades=600000 decisions=1200000 processed_in=171.2s processed_decisions_per_s=7008 sent_in=0.6s projected_in=171.8s projected_decisions_per_s=6985 verify_digest=true
+cap-hot-lane-apply8000-1: BUILD SUCCESSFUL in 4m 25s
+cap-hot-lane-2:     CAPACITY-CPU cpu_seconds projection=32.2 streams=168.7 kafka-clients=0.4 read_s=75.7 apply_s=165.8 verify_s=6.3 sql_s=143.3 wall=169.1 cores=32
+cap-hot-lane-2:     CAPACITY-LANES trades_per_lane=[600000] instruments_per_lane=[64]
+cap-hot-lane-2:     CAPACITY-RATE source=resolved lanes=1 trades=600000 decisions=1200000 processed_in=168.7s processed_decisions_per_s=7115 sent_in=0.4s projected_in=169.1s projected_decisions_per_s=7095 verify_digest=true
+cap-hot-lane-2: BUILD SUCCESSFUL in 4m 23s
+cap-hot-lane-apply8000-2:     CAPACITY-CPU cpu_seconds projection=33.9 streams=174.1 kafka-clients=0.4 read_s=75.7 apply_s=170.8 verify_s=7.1 sql_s=145.7 wall=174.2 cores=32
+cap-hot-lane-apply8000-2:     CAPACITY-LANES trades_per_lane=[600000] instruments_per_lane=[64]
+cap-hot-lane-apply8000-2:     CAPACITY-RATE source=resolved lanes=1 trades=600000 decisions=1200000 processed_in=173.8s processed_decisions_per_s=6904 sent_in=0.6s projected_in=174.2s projected_decisions_per_s=6890 verify_digest=true
+cap-hot-lane-apply8000-2: BUILD SUCCESSFUL in 4m 27s
+cap-4lanes:     CAPACITY-CPU cpu_seconds projection=73.7 streams=340.1 kafka-clients=0.9 read_s=292.1 apply_s=377.0 verify_s=15.2 sql_s=318.1 wall=109.0 cores=32
+cap-4lanes:     CAPACITY-LANES trades_per_lane=[299836, 300201, 356086, 243877] instruments_per_lane=[16, 16, 19, 13]
+cap-4lanes:     CAPACITY-RATE source=resolved lanes=4 trades=1200000 decisions=2400000 processed_in=104.9s processed_decisions_per_s=22885 sent_in=1.2s projected_in=109.0s projected_decisions_per_s=22010 verify_digest=true
+cap-4lanes: BUILD SUCCESSFUL in 3m 29s
