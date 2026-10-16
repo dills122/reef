@@ -134,7 +134,7 @@ async function main() {
   log("starting the load and the sampler");
   const startedAt = Date.now();
   const csv = join(outDir, "samples.csv");
-  writeFileSync(csv, "t_s,engine_acked,source_trades_hw,resolved_hw,decisions_hw,projected,capacity_rows_per_s_hint,cpu_engine,cpu_capacity,cpu_redpanda,cpu_resolver,cpu_postgres,cpu_runtime,load1\n");
+  writeFileSync(csv, "t_s,engine_acked,source_trades_hw,resolved_hw,decisions_hw,projected,capacity_rows_per_s_hint,cpu_engine,cpu_capacity,cpu_redpanda,cpu_resolver,cpu_pg_boundary,cpu_pg_runtime,cpu_pg_projection,cpu_api_and_workers,cpu_phase1,load1\n");
   const loadReport = join(outDir, "load-report.json");
   const loadArgs = ["-smoke-id", id, "-duration", `${seconds}s`, "-pairs-per-second", String(rate), "-workers", String(workers), "-instrument-ids", instruments.join(","),
     "-quantity", quantity, "-base-url", runtimeUrl, "-report-out", loadReport, "-receipt-generation", String(generation)];
@@ -261,8 +261,14 @@ async function cpu() {
   const out = await runCapture("docker", ["stats", "--no-stream", "--format", "{{.Name}} {{.CPUPerc}}"], true);
   const map = {};
   for (const line of out.trim().split("\n")) { const [name, pct] = line.split(" "); if (name) map[name] = parseFloat(pct) || 0; }
-  const pick = (needle) => Object.entries(map).filter(([name]) => name.includes(needle)).reduce((s, [, v]) => s + v, 0).toFixed(0);
-  return { engine: pick("matching-engine"), capacity: pick("fc-capacity"), redpanda: pick("redpanda"), resolver: pick("resolver"), postgres: pick("postgres"), runtime: pick("platform-runtime") };
+  const sum = (match) => Object.entries(map).filter(([name]) => match(name)).reduce((s, [, v]) => s + v, 0).toFixed(0);
+  // the three Postgres containers are told apart: the boundary one holds the front-door intake AND the finance projection, the runtime one the Phase 1 receipts
+  return {
+    engine: sum((n) => n.includes("matching-engine")), capacity: sum((n) => n.includes("fc-capacity")), redpanda: sum((n) => n.includes("redpanda")), resolver: sum((n) => n.includes("resolver")),
+    pgBoundary: sum((n) => n.includes("boundary-postgres")), pgRuntime: sum((n) => n.endsWith("reef-postgres")), pgProjection: sum((n) => n.includes("projection-postgres")),
+    api: sum((n) => n.includes("platform-api") || n.includes("platform-worker") || n.includes("platform-projector")),
+    phase1: sum((n) => n.includes("extractor") || n.includes("verifier") || n.includes("receipt")),
+  };
 }
 
 async function sample(csv, startedAt, previous) {
@@ -270,8 +276,8 @@ async function sample(csv, startedAt, previous) {
   const [acked, source, resolved, decisions, proj, c] = await Promise.all([engineAcked(), topicOffsets(sourceTopic), topicOffsets(resolvedTopic), topicOffsets(decisionsTopic), projected(), cpu()]);
   const load1 = (await runCapture("sh", ["-c", "uptime | sed 's/.*load average[s]*: //' | cut -d, -f1"], true)).trim();
   const row = { t, acked, source: source.hw, resolved: resolved.hw, decisions: decisions.hw, proj };
-  appendFileSync(csv, `${t},${acked ?? ""},${source.hw},${resolved.hw},${decisions.hw},${proj},,${c.engine},${c.capacity},${c.redpanda},${c.resolver},${c.postgres},${c.runtime},${load1}\n`);
-  log(`t=${t}s acked=${acked} source=${source.hw} resolved=${resolved.hw} decisions=${decisions.hw} projected=${proj} cpu%(engine/capacity/redpanda/resolver/pg)=${c.engine}/${c.capacity}/${c.redpanda}/${c.resolver}/${c.postgres}`);
+  appendFileSync(csv, `${t},${acked ?? ""},${source.hw},${resolved.hw},${decisions.hw},${proj},,${c.engine},${c.capacity},${c.redpanda},${c.resolver},${c.pgBoundary},${c.pgRuntime},${c.pgProjection},${c.api},${c.phase1},${load1}\n`);
+  log(`t=${t}s acked=${acked} source=${source.hw} resolved=${resolved.hw} decisions=${decisions.hw} projected=${proj} cpu%(engine/capacity/redpanda/resolver/pg-boundary/pg-runtime/api)=${c.engine}/${c.capacity}/${c.redpanda}/${c.resolver}/${c.pgBoundary}/${c.pgRuntime}/${c.api}`);
   return row;
 }
 
