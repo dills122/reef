@@ -134,6 +134,12 @@ run_cap() {
 }
 
 HOST_MEM_GB=""
+prepare_fullchain_host() {
+  # Node for the harness, and a container file-descriptor limit that matches Docker Desktop's: Docker 29 on the droplet starts containers at nofile 1024, which makes Redpanda
+  # refuse partitions ("Can not increase partition count due to FD limit") and would starve the load tool's connections and the API's sockets.
+  remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null && node --version && sudo mkdir -p /etc/docker && echo '{\"default-ulimits\":{\"nofile\":{\"Name\":\"nofile\",\"Hard\":1048576,\"Soft\":1048576}}}' | sudo tee /etc/docker/daemon.json >/dev/null && sudo systemctl restart docker && sleep 5 && docker run --rm alpine sh -c 'echo container nofile limit: \$(ulimit -n)'" | tee -a "$OUT_DIR/matrix.txt"
+}
+
 run_fullchain() {
   # run_fullchain LABEL RATE SECONDS [ENV...]  -- scripts/dev/calcify-fullchain-soak.mjs on the host; a fresh stack per case (reference data and funding are per run id)
   local label="$1" rate="$2" seconds="$3"; shift 3
@@ -214,7 +220,7 @@ case "$MATRIX" in
     run_soak "soaksmoke-pgdisk" disk "$SMOKE" "${REEF_SOAK_SMOKE_RP_GB:-3}" 0 "${REEF_SOAK_SMOKE_HEAP_GB:-4}" "$SMOKE_RATE"
     ;;
   fullchain)
-    remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null && node --version" | tee -a "$OUT_DIR/matrix.txt"
+    prepare_fullchain_host
     # a 20 s case first: a setup fault (image build, tmpfs, nodejs, the load tool) shows here once instead of four times
     REEF_FC_TMPFS_BOUNDARY_GB=4 REEF_FC_TMPFS_BROKER_GB=3 run_fullchain "smoke500" 500 20
     if ! grep -q '"integrity": "ok"' "$OUT_DIR/fullchain/smoke500/result.json" 2>/dev/null; then log "the smoke case did not pass; not starting the ladder"; exit 1; fi
@@ -222,7 +228,7 @@ case "$MATRIX" in
     if [ -n "${REEF_FC_LONG_RATE:-}" ]; then run_fullchain "hold${REEF_FC_LONG_RATE}" "$REEF_FC_LONG_RATE" "${REEF_FC_LONG_SECONDS:-900}"; fi
     ;;
   fullchainsmoke)
-    remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null && node --version" | tee -a "$OUT_DIR/matrix.txt"
+    prepare_fullchain_host
     REEF_FC_TMPFS_BOUNDARY_GB=4 REEF_FC_TMPFS_BROKER_GB=3 run_fullchain "smoke500" 500 20
     ;;
   enginesmoke)
