@@ -38,7 +38,7 @@ internal class FlatStateTrie {
          * read, so what is returned is exactly what was written. That is integrity against corruption and truncation, not authenticity: whoever can rewrite the file can
          * rewrite the trailer. The digest [root] returns is the one stored in the snapshot (nothing is re-hashed), so a caller that restores from a snapshot must still bind
          * it to the state it was taken at (compare the commitment with the head decision's, see [CapacityStore]) and must never take a snapshot from outside the lane's own
-         * private state directory. The tree shape is checked by range only.
+         * private state directory. The tree shape is checked in full ([checkShape]); the digests are not.
          */
         fun readFrom(source: java.io.DataInputStream): FlatStateTrie {
             val sum = MessageDigest.getInstance("SHA-256")
@@ -70,6 +70,7 @@ internal class FlatStateTrie {
             }
             val computed = sum.digest(); val stored = ByteArray(32); source.readFully(stored)
             require(MessageDigest.isEqual(computed, stored)) { "trie snapshot checksum mismatch" }
+            t.checkShape()
             return t
         }
     }
@@ -228,6 +229,32 @@ internal class FlatStateTrie {
         }
         out.flush()
         target.write(sum.digest())
+    }
+
+    /**
+     * Requires the arrays to be one Patricia trie, as [put] builds them: every branch and leaf reached exactly once from the root, bit indices strictly increasing on every
+     * path, and at each branch the leaves on its left and right first differ at its bit, left 0 and right 1 (checked on one leaf per side, which with the same check below
+     * makes every leaf's key agree with its path). O(n) and no hashing. The bits of a key past its last branch are constrained by nothing but the checksum, and whether the
+     * digests are the committed ones is the caller's check of [root] against the head decision.
+     */
+    private fun checkShape() {
+        if (rootRef < 0) return                              // empty, or one leaf
+        val seenBranches = java.util.BitSet(branchCount); val seenLeaves = java.util.BitSet(leafCount)
+        /** The leftmost leaf under [ref]. */
+        fun walk(ref: Int, above: Int): Int {
+            if (ref < 0) { require(!seenLeaves[ref.inv()]) { "corrupt trie snapshot: a leaf is reached twice" }; seenLeaves.set(ref.inv()); return ref }
+            require(!seenBranches[ref]) { "corrupt trie snapshot: a branch is reached twice" }; seenBranches.set(ref)
+            val m = meta(ref); val o = metaOff(ref); val index = m[o + 2]
+            require(index > above) { "corrupt trie snapshot: bit indices do not increase" }
+            val left = walk(m[o], index); val right = walk(m[o + 1], index)
+            val a = keyChunk(left); val ao = keyOff(left); val b = keyChunk(right); val bo = keyOff(right)
+            var d = -1
+            for (i in 0 until 32) { val x = (a[ao + i].toInt() xor b[bo + i].toInt()) and 0xff; if (x != 0) { d = i * 8 + Integer.numberOfLeadingZeros(x) - 24; break } }
+            require(d == index && (a[ao + (index ushr 3)].toInt() ushr (7 - (index and 7))) and 1 == 0) { "corrupt trie snapshot: a branch does not split its leaves at its bit" }
+            return left
+        }
+        walk(rootRef, -1)
+        require(seenBranches.cardinality() == branchCount && seenLeaves.cardinality() == leafCount) { "corrupt trie snapshot: unreachable nodes" }
     }
 
     /** The depth (number of branches) on the path to [key]'s leaf or its closest leaf; a test aid. */

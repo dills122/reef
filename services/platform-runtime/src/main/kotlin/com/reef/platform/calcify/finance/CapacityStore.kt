@@ -14,6 +14,8 @@ import java.util.HexFormat
  * [restore] rebuilds the ledger from an entity scan and accepts it only if it is the state the head decision committed to: the rebuilt trie's `C(S)` equals the
  * head's `stateDigest`, the head's checksum recomputes and equals the stored chain head, and the sequence, controls and counts agree. That is the synchronous
  * profile's restore; the lagged profile's ring and replay (design 5.6) are a separate stage.
+ *
+ * An evicting lane may also restart from a lane snapshot ([writeSnapshot], written on a clean close) instead of the scan; see [restore] for when it is trusted.
  */
 internal object CapacityStore {
     const val ENTITY_VERSION = "calcify-capacity-entity-v1"
@@ -84,7 +86,7 @@ internal object CapacityStore {
         return stored.copyOfRange(version.size, stored.size)
     }
 
-    private fun decodeEntity(key: String, value: ByteArray): StateCommitment.Entity {
+    fun decodeEntity(key: String, value: ByteArray): StateCommitment.Entity {
         val parts = key.split("/"); require(parts.size == 3 && parts[0] == "e" && parts[1].length == 1) { "malformed entity key" }
         val keyBytes = try { hex.parseHex(parts[2]) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("malformed entity key", e) }
         val version = ENTITY_PREFIX
@@ -94,17 +96,91 @@ internal object CapacityStore {
         return entity
     }
 
-    /** The restored ledger, or null for an empty store (genesis). Refuses anything that is not exactly the state the head decision committed to. */
-    fun restore(config: CapacityConfig, kv: LifecycleKv, bindingDigest: String, evictSettled: Boolean = false): CapacityLedger? {
-        val metaBytes = kv.get(META) ?: run { require(kv.scan("").isEmpty()) { "capacity store has entries but no meta" }; return null }
+    const val SNAPSHOT_VERSION = "calcify-capacity-lane-snapshot-v1"
+    private const val SNAPSHOT_MAGIC = 0x434c5331         // "CLS1"
+
+    /**
+     * Writes [ledger] (evicting, everything persisted) as a lane snapshot at [file]: magic, version, binding digest, configuration digest, then
+     * [CapacityLedger.writeSnapshot] (sequence, controls, chain, counts, open work, filter, trie), then the SHA-256 of all of it. Written to a temporary file, forced to disk
+     * and renamed over [file] atomically, so a reader sees a whole snapshot or none; a failure leaves no temporary file behind. The checksum is integrity, not authenticity:
+     * the file belongs in the lane's private state directory.
+     */
+    fun writeSnapshot(ledger: CapacityLedger, bindingDigest: String, file: java.nio.file.Path) {
+        val tmp = file.resolveSibling("${file.fileName}.tmp")
+        try {
+            java.io.FileOutputStream(tmp.toFile()).use { fos ->
+                val buffered = java.io.BufferedOutputStream(fos, 1 shl 20); val sum = java.security.MessageDigest.getInstance("SHA-256")
+                val out = java.io.DataOutputStream(java.security.DigestOutputStream(buffered, sum))
+                out.writeInt(SNAPSHOT_MAGIC)
+                for (text in listOf(SNAPSHOT_VERSION, bindingDigest, ledger.config.digest())) { val b = text.toByteArray(StandardCharsets.UTF_8); out.writeInt(b.size); out.write(b) }
+                ledger.writeSnapshot(out)
+                out.flush(); buffered.write(sum.digest()); buffered.flush()
+                fos.channel.force(true)
+            }
+            java.nio.file.Files.move(tmp, file, java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        } catch (e: Throwable) { runCatching { java.nio.file.Files.deleteIfExists(tmp) }; throw e }
+    }
+
+    /**
+     * The ledger a lane snapshot holds, refused unless the checksum recomputes, nothing trails it, the version, binding and configuration are this lane's, and
+     * [CapacityLedger.readSnapshot]'s own checks pass. It is NOT yet bound to a store: [restore] does that.
+     */
+    fun readSnapshot(config: CapacityConfig, backing: EntityBacking, bindingDigest: String, file: java.nio.file.Path): CapacityLedger =
+        java.io.BufferedInputStream(java.nio.file.Files.newInputStream(file), 1 shl 20).use { buffered ->
+            val sum = java.security.MessageDigest.getInstance("SHA-256")
+            val input = java.io.DataInputStream(java.security.DigestInputStream(buffered, sum))
+            require(input.readInt() == SNAPSHOT_MAGIC) { "not a lane snapshot" }
+            fun text(): String { val n = input.readInt(); require(n in 0..256) { "corrupt lane snapshot" }; return String(ByteArray(n).also { input.readFully(it) }, StandardCharsets.UTF_8) }
+            require(text() == SNAPSHOT_VERSION) { "unknown lane snapshot version" }
+            require(text() == bindingDigest) { "the lane snapshot belongs to a different binding" }
+            require(text() == config.digest()) { "the lane snapshot was written under a different configuration" }
+            val ledger = CapacityLedger.readSnapshot(config, backing, input)
+            val computed = sum.digest(); val stored = ByteArray(32); java.io.DataInputStream(buffered).readFully(stored)
+            require(java.security.MessageDigest.isEqual(computed, stored)) { "lane snapshot checksum mismatch" }
+            require(buffered.read() < 0) { "trailing lane snapshot bytes" }
+            ledger
+        }
+
+    /**
+     * The restored ledger, or null for an empty store (genesis). Refuses anything that is not exactly the state the head decision committed to.
+     *
+     * With [evictSettled] and a [snapshot] path, a lane snapshot there is tried first and used only if [readSnapshot] accepts it AND its sequence, chain and controls are
+     * the store's `meta` AND the head decision (its checksum recomputes and is that chain) AND its trie gives the head decision's `stateDigest`: the same checks the scan
+     * restore must pass, so a snapshot taken at any other point (a dirty close after an aborted transaction, a store wiped and restored from the changelog to another head,
+     * a newer store after a rebalance) is never used. Any refusal or error falls back to the scan, which stays the verified path, and the file is deleted either way, so a
+     * snapshot is used at most once and cannot outlive a later crash. [onSnapshot] hears null when the snapshot was used, or why it was not (absent included).
+     */
+    fun restore(config: CapacityConfig, kv: LifecycleKv, bindingDigest: String, evictSettled: Boolean = false, snapshot: java.nio.file.Path? = null, onSnapshot: (String?) -> Unit = {}): CapacityLedger? {
+        val metaBytes = kv.get(META) ?: run {
+            snapshot?.let { if (java.nio.file.Files.deleteIfExists(it)) onSnapshot("the store is empty") }
+            require(kv.scan("").isEmpty()) { "capacity store has entries but no meta" }; return null
+        }
         val meta = Meta.parse(metaBytes)
         require(meta.bindingDigest == bindingDigest) { "capacity store belongs to a different binding" }
         val head = kv.get(HEAD)?.let { FinanceWire.fromProto(reef.contracts.calcify.finance.v1.FinanceDecisionV1.parseFrom(it)) }
         require((head == null) == (meta.sequence == 0L)) { "head decision presence differs from sequence" }
         require(meta.configDigest == config.digest()) { "capacity store was written under a different configuration" }
         if (evictSettled) requireNoUnknownEntityKeys(kv)
+        if (evictSettled && snapshot != null) {
+            val fast = try {
+                if (!java.nio.file.Files.exists(snapshot)) { onSnapshot("absent"); null }
+                else readSnapshot(config, EntityBacking { kv.get(it) }, bindingDigest, snapshot).also { s ->
+                    require(s.sequence == meta.sequence && s.chain == meta.chain && s.controls == meta.controls) { "the lane snapshot (sequence ${s.sequence}) is not at the store's head (sequence ${meta.sequence})" }
+                    requireHead(meta, head, s)
+                    onSnapshot(null)
+                }
+            } catch (e: Exception) { onSnapshot(e.message ?: e.javaClass.name); null }
+            finally { java.nio.file.Files.deleteIfExists(snapshot) }
+            if (fast != null) return fast
+        }
         val ledger = if (!evictSettled) kv.scanStreaming("e/") { entries -> CapacityLedger.restore(config, entries.map { (k, v) -> decodeEntity(k, v) }.asIterable(), meta.sequence, meta.controls, meta.chain) }
         else CapacityLedger.restoreEvicting(config, EntityBacking { kv.get(it) }, CapacityLedger.Companion.EntitySource { tag, each -> kv.scanStreaming("e/$tag/") { entries -> for ((k, v) in entries) each(decodeEntity(k, v)) } }, meta.sequence, meta.controls, meta.chain)
+        requireHead(meta, head, ledger)
+        return ledger
+    }
+
+    /** [ledger] is exactly the state the stored head decision committed to (or a genesis state when there is none). */
+    private fun requireHead(meta: Meta, head: Decision?, ledger: CapacityLedger) {
         if (head == null) {
             require(meta.chain == ledger.genesisChain && ledger.entityCount == 0) { "genesis store is not empty or on another genesis" }
         } else {
@@ -112,6 +188,5 @@ internal object CapacityStore {
             require(head.checksum == CapacityLedger.checksumOf(head.sequence, head.action, head.inputDigest, head.disposition, head.legs, head.priorChain, head.stateDigest)) { "head decision checksum does not recompute" }
             require(head.stateDigest == ledger.commitment()) { "the stored entities are not the state the head decision committed to" }
         }
-        return ledger
     }
 }
