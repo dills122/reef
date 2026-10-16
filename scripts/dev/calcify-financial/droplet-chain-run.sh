@@ -215,6 +215,9 @@ case "$MATRIX" in
     ;;
   fullchain)
     remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null && node --version" | tee -a "$OUT_DIR/matrix.txt"
+    # a 20 s case first: a setup fault (image build, tmpfs, nodejs, the load tool) shows here once instead of four times
+    REEF_FC_TMPFS_BOUNDARY_GB=4 REEF_FC_TMPFS_BROKER_GB=3 run_fullchain "smoke500" 500 20
+    if ! grep -q '"integrity": "ok"' "$OUT_DIR/fullchain/smoke500/result.json" 2>/dev/null; then log "the smoke case did not pass; not starting the ladder"; exit 1; fi
     for rate in ${REEF_FC_RATES:-2500 5000 7500 10000}; do run_fullchain "r$rate" "$rate" "${REEF_FC_SECONDS:-60}"; done
     if [ -n "${REEF_FC_LONG_RATE:-}" ]; then run_fullchain "hold${REEF_FC_LONG_RATE}" "$REEF_FC_LONG_RATE" "${REEF_FC_LONG_SECONDS:-900}"; fi
     ;;
