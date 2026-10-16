@@ -40,4 +40,36 @@ class EntityFilterTest {
         val f = EntityFilter()
         for (i in 0 until 10_000) assertFalse(f.mightContain('X', key("e", i)))
     }
+
+    private fun roundTrip(f: EntityFilter): EntityFilter {
+        val bytes = java.io.ByteArrayOutputStream().also { f.writeTo(java.io.DataOutputStream(it)) }.toByteArray()
+        return EntityFilter.readFrom(java.io.DataInputStream(java.io.ByteArrayInputStream(bytes)))
+    }
+
+    @Test fun aWrittenFilterReadsBackWithTheSameAnswersAndKeepsGrowing() {
+        val f = EntityFilter(initialKeys = 1_000)
+        for (i in 0 until 9_000) f.add('X', key("e", i))          // four layers, the last one partly filled
+        val g = roundTrip(f)
+        assertEquals(f.count, g.count); assertEquals(f.layers, g.layers); assertEquals(f.bytes, g.bytes)
+        for (i in 0 until 9_000) assertTrue(g.mightContain('X', key("e", i)), "lost key $i")
+        for (i in 0 until 20_000) assertEquals(f.mightContain('K', key("absent", i)), g.mightContain('K', key("absent", i)), "probe $i")
+        for (i in 9_000 until 30_000) { f.add('X', key("e", i)); g.add('X', key("e", i)) }
+        assertEquals(f.layers, g.layers)
+        for (i in 0 until 40_000) assertEquals(f.mightContain('X', key("e", i)), g.mightContain('X', key("e", i)), "after growth $i")
+        assertEquals(0L, roundTrip(EntityFilter()).count)
+    }
+
+    @Test fun aMalformedFilterIsRefused() {
+        val f = EntityFilter(initialKeys = 1_000); for (i in 0 until 2_500) f.add('X', key("e", i))
+        val bytes = java.io.ByteArrayOutputStream().also { f.writeTo(java.io.DataOutputStream(it)) }.toByteArray()
+        fun read(b: ByteArray) = EntityFilter.readFrom(java.io.DataInputStream(java.io.ByteArrayInputStream(b)))
+        // header: layer count, then per layer capacity (long), bits per key (int), count (long), word count (int), words
+        for (cut in listOf(0, 3, 10, 30, bytes.size - 1)) kotlin.test.assertFails("truncated at $cut") { read(bytes.copyOf(cut)) }
+        fun patched(at: Int, value: Int) = bytes.copyOf().also { java.nio.ByteBuffer.wrap(it).putInt(at, value) }
+        kotlin.test.assertFails("no layers") { read(patched(0, 0)) }
+        kotlin.test.assertFails("first layer capacity") { read(bytes.copyOf().also { java.nio.ByteBuffer.wrap(it).putLong(4, 999L) }) }
+        kotlin.test.assertFails("bits per key") { read(patched(12, 40)) }
+        kotlin.test.assertFails("count above capacity") { read(bytes.copyOf().also { java.nio.ByteBuffer.wrap(it).putLong(16, 1_001L) }) }
+        kotlin.test.assertFails("word count") { read(patched(24, 7)) }
+    }
 }

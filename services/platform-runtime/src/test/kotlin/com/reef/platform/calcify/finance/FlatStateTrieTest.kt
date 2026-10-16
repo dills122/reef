@@ -149,4 +149,31 @@ class FlatStateTrieTest {
         assertFailsWith<Exception> { readSnapshot(bytes.copyOf(bytes.size - 5)) }
         assertFailsWith<Exception> { readSnapshot(bytes.copyOf().also { it[0] = (it[0] + 1).toByte() }) }
     }
+
+    /** Rewrites the trailer after a change, as someone who can write the file could: the checksum then passes and only the shape check stands between the change and a restore. */
+    private fun resealed(bytes: ByteArray, change: (java.nio.ByteBuffer) -> Unit): ByteArray {
+        val b = bytes.copyOf(); change(java.nio.ByteBuffer.wrap(b))
+        val sum = java.security.MessageDigest.getInstance("SHA-256").also { it.update(b, 0, b.size - 32) }.digest()
+        System.arraycopy(sum, 0, b, b.size - 32, 32); return b
+    }
+
+    @Test fun aResealedSnapshotWithAWrongShapeIsRefused() {
+        val t = FlatStateTrie(); val rnd = Random(21); val leaves = 300; repeat(leaves) { t.put(ByteArray(32).also { rnd.nextBytes(it) }, leafFor(rnd)) }
+        val bytes = snapshotOf(t); val branches = leaves - 1
+        val metaAt = 16 + 32 + leaves * 32                       // the first branch record: left, right, bit index, stale; each record is 16 bytes of ints, then 64 bytes of digests
+        fun record(i: Int) = metaAt + i * 80
+        assertEquals(hex.formatHex(t.root()), hex.formatHex(readSnapshot(resealed(bytes) { }).root()), "an unchanged resealed snapshot reads")
+        val root = java.nio.ByteBuffer.wrap(bytes).getInt(12)
+        val child = java.nio.ByteBuffer.wrap(bytes).getInt(record(root))
+        val cases = mapOf<String, (java.nio.ByteBuffer) -> Unit>(
+            "bit index moved" to { b -> b.putInt(record(root) + 8, b.getInt(record(root) + 8) + 1) },
+            "bit index not increasing" to { b -> if (child >= 0) b.putInt(record(child) + 8, 0) else b.putInt(record(root) + 8, 255) },
+            "children swapped" to { b -> val l = b.getInt(record(root)); b.putInt(record(root), b.getInt(record(root) + 4)); b.putInt(record(root) + 4, l) },
+            "a subtree reached twice" to { b -> b.putInt(record(root) + 4, b.getInt(record(root))) },
+            "a leaf key off its path" to { b -> b.put(16 + 32, (b.get(16 + 32).toInt() xor 0x80).toByte()) },      // bit 0 of the first leaf: every path starts at a low bit
+            "a cycle" to { b -> val r = if (child >= 0) child else root; b.putInt(record(r), root) },
+        )
+        for ((what, change) in cases) assertFailsWith<IllegalArgumentException>(what) { readSnapshot(resealed(bytes, change)) }
+        assertTrue(branches > 0)
+    }
 }
