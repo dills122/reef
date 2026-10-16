@@ -10,8 +10,10 @@ import java.nio.ByteOrder
  * finds nothing; a false negative is impossible, because every key written is added before the entity can be evicted.
  *
  * Shape. Layers are blocked Bloom filters (one 64-byte block per key, so a lookup is one cache line per layer). Keys go into the newest layer; when it holds its
- * capacity a layer twice as large is added, with one more bit per key, so the layers' false positive rates fall geometrically and the total stays near 1%
- * however far the filter grows. Memory is about 2 to 3 bytes per key. No key list is kept, so a filter cannot be shrunk or rebuilt without the entities.
+ * capacity a layer twice as large is added, with one more bit per key, so the layers' false positive rates fall geometrically and the total stays between 1% and 2%
+ * however far the filter grows. Measured (3M keys, sequential Canon-framed execution keys): 1.47% false positives, 2.94 bytes per key. No key list is kept, so a filter cannot be shrunk
+ * or rebuilt without the entities. A new layer is allocated in one piece when the newest fills (as large as all earlier ones together): a one-off pause, which at 70M keys is a
+ * 300 MB zeroed array.
  *
  * Not thread-safe: one writer, like the ledger that owns it.
  */
@@ -22,7 +24,7 @@ internal class EntityFilter(private val initialKeys: Int = 1 shl 20) {
         val words: LongArray
         var count = 0L
         init {
-            require(blocks <= (1L shl 28)) { "entity filter layer too large" }
+            require(blocks < (1L shl 28)) { "entity filter layer too large" }
             words = LongArray((blocks * 8).toInt())
         }
     }

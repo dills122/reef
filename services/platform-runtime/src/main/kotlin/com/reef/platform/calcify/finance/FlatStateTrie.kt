@@ -33,7 +33,12 @@ internal class FlatStateTrie {
 
         private fun validRef(ref: Int, branches: Int, leaves: Int) = if (ref >= 0) ref < branches else ref.inv() < leaves
 
-        /** The trie [writeTo] wrote. Structural checks only: a caller must still compare [root] with the digest the state is committed to before trusting it. */
+        /**
+         * The trie [writeTo] wrote. Range checks on counts and references only. It does **not** prove the snapshot is intact: [root] returns the digest stored in the
+         * snapshot without re-hashing, so comparing it with the committed digest only compares the snapshot's own header. A caller that wires a snapshot into a restore
+         * must first protect it (a checksum trailer written with the snapshot, and the snapshot bound to the sequence and digest it was taken at), or re-hash every branch.
+         * The tree shape (each node referenced once, bit indices increasing along a path) is not validated either.
+         */
         fun readFrom(input: java.io.DataInputStream): FlatStateTrie {
             require(input.readInt() == SNAPSHOT_MAGIC) { "not a trie snapshot" }
             val leaves = input.readInt(); val branches = input.readInt(); val root = input.readInt()

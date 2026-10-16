@@ -40,7 +40,7 @@ class CapacityEvictionTest {
         }
     }
 
-    private fun differential(mode: DecisionMode, seeds: LongRange, steps: Int, accounts: Int, budgets: Int, executionsPool: Int, actions: Int) {
+    private fun differential(mode: DecisionMode, seeds: LongRange, steps: Int, accounts: Int, budgets: Int, executionsPool: Int, actions: Int, expectBudgetRefusals: Boolean = false) {
         var settledReadBack = 0; val seen = HashSet<Disposition>()
         for (seed in seeds) {
             val rnd = Random(seed)
@@ -69,7 +69,7 @@ class CapacityEvictionTest {
             assertTrue(evicting.residentObjects <= plain.residentObjects, "an evicting ledger holds no more objects than a plain one")
         }
         assertTrue(settledReadBack > 50, "the schedule read back $settledReadBack evicted entities")
-        for (d in listOf(Disposition.CAPTURED, Disposition.SETTLED, Disposition.INSUFFICIENT_CASH, Disposition.PRIOR_RESULT, Disposition.ACTION_CONFLICT, Disposition.EXECUTION_ALREADY_CAPTURED, Disposition.EXECUTION_CONFLICT, Disposition.ALREADY_SETTLED, Disposition.PRIOR_ATTEMPT, Disposition.UNKNOWN_EXECUTION))
+        for (d in listOf(Disposition.CAPTURED, Disposition.SETTLED, Disposition.INSUFFICIENT_CASH, Disposition.PRIOR_RESULT, Disposition.ACTION_CONFLICT, Disposition.EXECUTION_ALREADY_CAPTURED, Disposition.EXECUTION_CONFLICT, Disposition.ALREADY_SETTLED, Disposition.PRIOR_ATTEMPT, Disposition.UNKNOWN_EXECUTION) + (if (expectBudgetRefusals) listOf(Disposition.BUDGET_EXCEEDED) else emptyList()))
             assertTrue(d in seen, "the differential never produced $d")
     }
 
@@ -77,7 +77,7 @@ class CapacityEvictionTest {
 
     @Test fun evictingMatchesKeepingEverythingCaptureSettle() = differential(DecisionMode.CAPTURE_SETTLE, 1L..120L, 400, accounts = 5, budgets = 10_000, executionsPool = 25, actions = 300)
 
-    @Test fun evictingMatchesKeepingEverythingAtBudgets() = differential(DecisionMode.CAPTURE_SETTLE, 1L..60L, 300, accounts = 4, budgets = 12, executionsPool = 30, actions = 200)
+    @Test fun evictingMatchesKeepingEverythingAtBudgets() = differential(DecisionMode.CAPTURE_SETTLE, 1L..60L, 300, accounts = 4, budgets = 12, executionsPool = 30, actions = 200, expectBudgetRefusals = true)
 
     @Test fun settledTradesLeaveTheHeapAndStayInTheStore() {
         val cfg = config(DecisionMode.CAPTURE_SETTLE, 4, 1_000_000)
@@ -126,36 +126,37 @@ class CapacityEvictionTest {
             assertEquals(plainRestored.sequence, evictRestored.sequence); assertEquals(plainRestored.chain, evictRestored.chain); assertEquals(plainRestored.controls, evictRestored.controls); assertEquals(plainRestored.entityCount, evictRestored.entityCount)
             assertTrue(evictRestored.residentObjects < plainRestored.residentObjects, "an evicting restore holds less: ${evictRestored.residentObjects} vs ${plainRestored.residentObjects}")
 
-            // both go on deciding the same way, the evicting one reading its store
-            val evictStore = MapStore().also { it.entries.putAll(kv.entries) }
-            val restoredEvicting = CapacityStore.restore(cfg, kv, binding, evictSettled = true)!!.let { CapacityLedger.restoreEvicting(cfg, EntityBacking { evictStore.get(it) }, CapacityLedger.Companion.EntitySource { tag, each -> kv.scan("e/$tag/").forEach { (k, v) -> each(decodeForTest(k, v)) } }, it.sequence, it.controls, it.chain) }
+            // both go on deciding the same way, the evicting one (as CapacityStore restored it) reading and extending the same store
             repeat(300) { n ->
                 val input = randomInput(rnd, mode, 5, executions, 400)
-                val a = plainRestored.decide(input); val b = restoredEvicting.decide(input)
+                val a = plainRestored.decide(input); val b = evictRestored.decide(input)
                 assertEquals(a.disposition, b.disposition, "mode ${mode.wire} seed $seed step $n after restore"); assertEquals(a.decision, b.decision, "decision after restore, seed $seed step $n")
-                evictStore.collect(restoredEvicting); evictStore.flush(); restoredEvicting.persisted()
+                b.decision?.let { d -> kv.apply(CapacityStore.writes(evictRestored, d, binding)) }; evictRestored.persisted()
             }
+            assertEquals(plainRestored.commitment(), evictRestored.commitment())
         }
-    }
-
-    private fun decodeForTest(key: String, value: ByteArray): StateCommitment.Entity {
-        val parts = key.split("/"); val kb = java.util.HexFormat.of().parseHex(parts[2])
-        return StateCommitment.Entity(parts[1], kb, CapacityStore.valueFields(value))
     }
 
     /** The Streams processor with and without eviction: the same published decisions and the same stored bytes, including across a restart of the evicting one. */
     @Test fun theProcessorPublishesAndStoresTheSameBytesWithEviction() {
         for (mode in DecisionMode.entries) {
             val cfg = config(mode, 6, 100_000)
-            val decoder = CapacityInputDecoder { _, _, _, raw -> listOf(CapacityItem.Run(FinanceWire.fromProto(reef.contracts.calcify.finance.v1.FinanceInputV1.parseFrom(raw)))) }
+            // a record carries one to three inputs (length-delimited), so several decisions are made before the record's writes reach the store
+            val decoder = CapacityInputDecoder { _, _, _, raw ->
+                val stream = java.io.ByteArrayInputStream(raw); val items = ArrayList<CapacityItem>()
+                while (stream.available() > 0) items += CapacityItem.Run(FinanceWire.fromProto(reef.contracts.calcify.finance.v1.FinanceInputV1.parseDelimitedFrom(stream)))
+                items
+            }
             class Lane(evict: Boolean) {
                 val pc = CapacityProcessorConfig(binding, cfg, "CAPTURE", "CONTROL", "DECISIONS", "evict-test", evictSettled = evict)
                 val context = org.apache.kafka.streams.processor.api.MockProcessorContext<String, ByteArray>()
                 val store = CapacityTopology.storeBuilder(pc, persistent = false).withLoggingDisabled().build().also { it.init(context.getStateStoreContext(), it); context.addStateStore(it) }
                 var processor = CapacityProcessor(pc, decoder).also { it.init(context) }
                 var offset = 0L; val published = ArrayList<Pair<String, List<Byte>>>()
-                fun send(topic: String, input: FinanceInput) {
-                    context.setRecordMetadata(topic, 0, offset++); processor.process(org.apache.kafka.streams.processor.api.Record(ByteArray(0), FinanceWire.toProto(input).toByteArray(), 0L))
+                fun send(topic: String, input: FinanceInput) = sendAll(topic, listOf(input))
+                fun sendAll(topic: String, inputs: List<FinanceInput>) {
+                    val raw = java.io.ByteArrayOutputStream().also { out -> inputs.forEach { FinanceWire.toProto(it).writeDelimitedTo(out) } }.toByteArray()
+                    context.setRecordMetadata(topic, 0, offset++); processor.process(org.apache.kafka.streams.processor.api.Record(ByteArray(0), raw, 0L))
                     context.forwarded().forEach { published += it.record().key() to it.record().value().toList() }; context.resetForwards()
                 }
                 fun restart() { processor = CapacityProcessor(pc, decoder).also { it.init(context) } }
@@ -165,10 +166,10 @@ class CapacityEvictionTest {
             val rnd = Random(77 + mode.ordinal); val executions = (0 until 600).map { ExecutionKey("r", "s", if (it % 2 == 0) "AAPL" else "MSFT", "e$it") }
             var f = 0
             for (i in 0 until 6) for ((asset, amount) in listOf(usd to 20L, aapl to 6L, msft to 6L)) { val input = FinanceInput.Fund(ActionKey("n", "fund", "f${f++}"), Authority.OPERATOR, AccountId("acct-$i"), asset, amount); plain.send("CONTROL", input); evicting.send("CONTROL", input) }
-            repeat(1_500) { n ->
-                val input = randomInput(rnd, mode, 6, executions, 500)
-                plain.send("CAPTURE", input); evicting.send("CAPTURE", input)
-                if (n == 700) { evicting.restart(); plain.restart() }
+            repeat(900) { n ->
+                val inputs = (0 until 1 + rnd.nextInt(3)).map { randomInput(rnd, mode, 6, executions, 500) }
+                plain.sendAll("CAPTURE", inputs); evicting.sendAll("CAPTURE", inputs)
+                if (n == 420) { evicting.restart(); plain.restart() }
             }
             assertEquals(plain.published, evicting.published, "published decisions, mode ${mode.wire}")
             assertEquals(plain.entries(), evicting.entries(), "stored entities, mode ${mode.wire}")

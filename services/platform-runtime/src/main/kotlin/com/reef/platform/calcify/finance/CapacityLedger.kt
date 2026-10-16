@@ -80,8 +80,8 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
     // Counts stand in for the maps' sizes, because the maps no longer hold everything. With a backing store, an execution, its obligation, its attempts and every action leave
     // the maps once the store holds them, and a settled trade is never held again: the maps keep only what the next decision can still change (pending trades and their attempts).
     private var executionCount = 0; private var obligationCount = 0; private var attemptCount = 0; private var actionCount = 0L; private var fundedCount = 0
-    /** Which keys of classes X, K and A were ever written: a key it has never seen is answered without a store read. Null when nothing is evicted. */
-    private val known: EntityFilter? = if (backing != null) EntityFilter() else null
+    /** Which keys of classes X (executions, hence obligations) and K (actions) were ever written: a key it has never seen is answered without a store read. Null when nothing is evicted. */
+    private val writtenKeys: EntityFilter? = if (backing != null) EntityFilter() else null
     private val retiredActions = ArrayList<ActionKey>(); private val retiredExecutions = ArrayList<ExecutionKey>()
     private val attemptNumbers = HashMap<ExecutionKey, ArrayList<Int>>()
 
@@ -123,7 +123,7 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
 
     private fun commit(e: StateCommitment.Entity) {
         writes += e; val k = StateCommitment.keyOf(e); trie.put(k, StateCommitment.leafOf(e, k))
-        if (known != null && (e.tag == "X" || e.tag == "K" || e.tag == "A")) known.add(e.tag[0], e.keyBytes)
+        if (writtenKeys != null && (e.tag == "X" || e.tag == "K")) writtenKeys.add(e.tag[0], e.keyBytes)
     }
     private fun commitPosition(k: Pair<AccountId, AssetId>, v: Long) = commit(StateCommitment.Entity("P", Canon.bytes { str(k.first.value); str(k.second.value) }, Canon.bytes { long(v) }))
     private fun commitExecution(k: ExecutionKey, c: Captured) = commit(StateCommitment.Entity("X", executionKeyBytes(k), Canon.bytes { str(c.buyer.value); str(c.seller.value); long(c.quantity); long(c.priceNanos) }))
@@ -138,7 +138,7 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
 
     /** The stored value fields of entity class [tag] under [keyBytes], or null when the filter says it was never written or the store has nothing (a false positive). */
     private fun stored(tag: Char, keyBytes: ByteArray): DecodedFields? {
-        if (backing == null || !known!!.mightContain(tag, keyBytes)) return null
+        if (backing == null || !writtenKeys!!.mightContain(tag, keyBytes)) return null
         val raw = backing.get(CapacityStore.entityKey(tag.toString(), keyBytes)) ?: return null
         return DecodedFields(CapacityStore.valueFields(raw))
     }
@@ -363,8 +363,9 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
         fun restoreEvicting(config: CapacityConfig, backing: EntityBacking, source: EntitySource, sequence: Long, controls: Int, chain: String): CapacityLedger {
             require(sequence >= 0 && controls >= 0) { "negative scalar" }
             val ledger = CapacityLedger(config, backing)
-            for (tag in listOf("O", "X", "A", "K", "P")) source.scan(tag) { ledger.load(it) }
+            for (tag in listOf("O", "X", "A", "K", "P")) source.scan(tag) { require(it.tag == tag) { "an entity of class ${it.tag} in the $tag scan" }; ledger.load(it) }
             require(ledger.executionCount == ledger.obligationCount) { "an execution without an obligation or the reverse" }
+            require(ledger.executions.keys == ledger.obligations.keys) { "a pending obligation without its execution or the reverse" }
             return ledger.finishRestore(sequence, controls, chain)
         }
     }
@@ -396,7 +397,7 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
             "P" -> { val k = AccountId(key.text()) to AssetId(key.text()); key.end(); positions[k] = value.long().also { value.end() } }
             "X" -> {
                 val k = execution(); key.end(); val captured = Captured(AccountId(value.text()), AccountId(value.text()), value.long(), value.long()).also { value.end() }
-                executionCount++; known?.add('X', e.keyBytes)
+                executionCount++; writtenKeys?.add('X', e.keyBytes)
                 if (backing == null || k in obligations) executions[k] = captured
             }
             "O" -> {
@@ -406,14 +407,14 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
             }
             "A" -> {
                 val exec = execution(); val n = key.int(); key.end(); val d = Disposition.valueOf(value.text()).also { value.end() }
-                attemptCount++; known?.add('A', e.keyBytes)
+                attemptCount++
                 if (backing == null || exec in obligations) { attempts[exec to n] = d; if (backing != null) attemptNumbers.getOrPut(exec) { ArrayList(2) } += n }
             }
             "K" -> {
                 val k = ActionKey(key.text(), key.text(), key.text()); key.end()
                 val digest = value.text(); require(hex64.matches(digest)) { "action digest is not 64 lowercase hex" }
                 val record = ActionRecord(digest, Disposition.valueOf(value.text())).also { value.end() }
-                actionCount++; if (record.disposition == Disposition.FUNDED) fundedCount++; known?.add('K', e.keyBytes)
+                actionCount++; if (record.disposition == Disposition.FUNDED) fundedCount++; writtenKeys?.add('K', e.keyBytes)
                 if (backing == null) actions[k] = record
             }
             else -> throw IllegalArgumentException("unknown entity class ${e.tag}")

@@ -13,12 +13,15 @@ internal interface LifecycleKv {
     fun scan(prefix: String): List<Pair<String, ByteArray>>
     /** Like [scan] but the entries are handed to [use] one at a time and valid only inside it, so a large range is never materialized (restore of a large store). */
     fun <R> scanStreaming(prefix: String, use: (Sequence<Pair<String, ByteArray>>) -> R): R = use(scan(prefix).asSequence())
+    /** The first key in `[from, toExclusive)`, or null when there is none (restore uses it to prove a key range is empty without reading the range). */
+    fun firstKeyBetween(from: String, toExclusive: String): String? = scan("").firstOrNull { it.first >= from && it.first < toExclusive }?.first
 }
 
 internal class MemoryLifecycleKv : LifecycleKv {
     val entries = sortedMapOf<String, ByteArray>()
     override fun get(key: String): ByteArray? = entries[key]
     override fun scan(prefix: String): List<Pair<String, ByteArray>> = entries.tailMap(prefix).entries.takeWhile { it.key.startsWith(prefix) }.map { it.key to it.value }
+    override fun firstKeyBetween(from: String, toExclusive: String): String? = entries.tailMap(from).keys.firstOrNull()?.takeIf { it < toExclusive }
     fun apply(writes: Map<String, ByteArray>) { entries.putAll(writes) }
 }
 
@@ -42,6 +45,7 @@ internal class StreamsLifecycleKv(private val store: org.apache.kafka.streams.st
         store.range(prefix, prefix + "\uffff").use { it.asSequence().map { kv -> kv.key to kv.value }.toList() }
     override fun <R> scanStreaming(prefix: String, use: (Sequence<Pair<String, ByteArray>>) -> R): R =
         store.range(prefix, prefix + "\uffff").use { use(it.asSequence().map { kv -> kv.key to kv.value }) }
+    override fun firstKeyBetween(from: String, toExclusive: String): String? = store.range(from, toExclusive).use { it.asSequence().map { kv -> kv.key }.firstOrNull { k -> k < toExclusive } }
     /** Applies one reduction's write batch; the surrounding Streams transaction makes it atomic with the output record. */
     fun apply(writes: Map<String, ByteArray>) = writes.forEach { (k, v) -> store.put(k, v) }
 }

@@ -77,6 +77,24 @@ The ledger that built the state is dropped first, so these are a fresh JVM's num
 
 The open question is whether a crash may cost the full scan. At 30 minutes and 20k trades/s that is about 6 minutes of restore with stage 1's eviction applied afterwards; a touch journal makes it seconds.
 
+## Stage 1 status: eviction implemented behind `CapacityProcessorConfig.evictSettled` (off by default, not enabled by the launcher)
+
+What it does: a lane keeps in memory only positions, pending trades (with their attempts) and the commitment trie. Settled executions, obligations, attempts and all actions leave the maps once `CapacityProcessor` has applied the record's writes to the store (`CapacityLedger.persisted()`). Lookups of an old action or execution go through `EntityFilter` (a growing blocked Bloom filter of X and K keys, 1.47% false positives, 2.94 bytes per key measured at 3M keys) and then one store read; a filter miss, the common case for a new trade, reads nothing. Restore streams the entities class by class (O, X, A, K, P) and keeps only open work.
+
+Equivalence is tested, not argued: `CapacityEvictionTest` runs a plain ledger and an evicting one on the same random schedules (both decision modes, budgets, replays, conflicts, failed and retried settlements, store writes applied after random groups of one to three decisions) and requires equal dispositions, decisions, writes and commitments; the same through the Streams processor with multi-input records and a restart (published bytes and stored entries equal); and an evicting restore that goes on deciding like a plain one. The store tamper suite runs for both restore modes. Finance suite: 286 tests, 0 failures.
+
+Measured on the laptop with the real RocksDB store (combined mode, `CapacityRestoreCostTest`, same final commitment in both modes at every size):
+
+| Trades | Running lane heap, plain | Running lane heap, evicting | Restore, plain streamed | Restore, evicting |
+|---|---|---|---|---|
+| 300k | 1,558 B/trade (0.47 GB) | 648 B/trade (0.19 GB) | 2.9 s, peak 0.83-0.89 GB | 2.8-2.9 s, peak 0.52 GB |
+| 1M | 1,299 B/trade (1.30 GB) | 371 B/trade (0.37 GB) | 11.5-12.0 s, peak 2.5-3.8 GB | 10.3-11.2 s, peak 0.74-0.77 GB |
+| 2M | 1,282 B/trade (2.56 GB) | 359 B/trade (0.72 GB) | 24.4-26.2 s, peak 4.8-6.4 GB | 21.8-22.0 s, peak 1.2-2.4 GB |
+
+The evicting slope is about 350 B per trade, which is the trie (3.1 entities x 112 B); everything else is fixed. Throughput is unchanged: through the real store 2M trades took 106.3 s plain and 106.9 s evicting, and the no-broker lane harness (in-memory store, 600k trades, run twice each, alternating) gave 25.4k and 26.0k trades/s plain against 24.9k and 26.5k evicting, which is inside the run-to-run noise. Extrapolated, not measured: 36M combined trades is about 12.6 GB of heap against about 46 GB plain. Restore without a snapshot still rebuilds the trie by hashing every entity, so it is still linear in history (about 11 s per million trades); the snapshot that removes this is built but not wired (owner chose snapshot-on-clean-shutdown, full scan after a crash).
+
+Independent review (instance 1 of 3, verdict Ready with non-blocking follow-ups, no P0/P1): fixed in this branch: the evicting restore now refuses unknown or stray `e/` keys and unpaired resident pending obligations, and rejects a source that returns the wrong class for a scan; attempt keys are no longer added to the filter (never probed); the `readFrom` documentation no longer suggests that comparing the root proves the snapshot intact (P2, latent until the snapshot is wired; a checksum trailer bound to sequence and digest, or a full re-hash, plus tree-shape validation and tamper tests are required before wiring); a budget-refusal check and a multi-input processor test were added. Deferred: the filter allocates a new layer in one piece (a one-off pause, about 300 MB at 70M keys); the 4096-byte text limit of `DecodedFields` now also applies to live read-backs of evicted entities (the writer has no such limit, so account and action ids must stay short).
+
 ## Open decisions for the owner
 
 1. Is bounded memory a requirement? (Owner: yes, 2026-10-15, because of 15 to 20k trades/s sustained.)

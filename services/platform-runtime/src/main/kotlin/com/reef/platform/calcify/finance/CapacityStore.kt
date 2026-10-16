@@ -69,6 +69,14 @@ internal object CapacityStore {
         return out
     }
 
+    /** The plain restore decodes every key under `e/` and refuses an unknown class; the evicting restore reads class by class, so it proves the gaps between the five known classes are empty. */
+    private fun requireNoUnknownEntityKeys(kv: LifecycleKv) {
+        val classes = listOf("A", "K", "O", "P", "X")
+        var from = "e/"
+        for (c in classes) { require(kv.firstKeyBetween(from, "e/$c/") == null) { "malformed entity key" }; from = "e/${c}0" }   // '0' is the character after '/': the first key past every key of class c
+        require(kv.firstKeyBetween(from, "e/\uffff") == null) { "malformed entity key" }
+    }
+
     /** The value fields of a stored entity: the bytes behind the version frame. */
     fun valueFields(stored: ByteArray): ByteArray {
         val version = ENTITY_PREFIX
@@ -94,6 +102,7 @@ internal object CapacityStore {
         val head = kv.get(HEAD)?.let { FinanceWire.fromProto(reef.contracts.calcify.finance.v1.FinanceDecisionV1.parseFrom(it)) }
         require((head == null) == (meta.sequence == 0L)) { "head decision presence differs from sequence" }
         require(meta.configDigest == config.digest()) { "capacity store was written under a different configuration" }
+        if (evictSettled) requireNoUnknownEntityKeys(kv)
         val ledger = if (!evictSettled) kv.scanStreaming("e/") { entries -> CapacityLedger.restore(config, entries.map { (k, v) -> decodeEntity(k, v) }.asIterable(), meta.sequence, meta.controls, meta.chain) }
         else CapacityLedger.restoreEvicting(config, EntityBacking { kv.get(it) }, CapacityLedger.Companion.EntitySource { tag, each -> kv.scanStreaming("e/$tag/") { entries -> for ((k, v) in entries) each(decodeEntity(k, v)) } }, meta.sequence, meta.controls, meta.chain)
         if (head == null) {
