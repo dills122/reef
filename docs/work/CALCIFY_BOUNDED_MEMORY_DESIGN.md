@@ -60,8 +60,8 @@ Cache eviction is not forgetting: a miss on an old action or execution consults 
 ## Open decisions for the owner
 
 1. Is bounded memory a requirement? (Owner: yes, 2026-10-15, because of 15 to 20k trades/s sustained.)
-2. Are inclusion proofs by sequence acceptable instead of by key (needed for stage 2)?
-3. Stage 1 first, with commitment v2 designed alongside, or stage 1 only for now?
+2. Are inclusion proofs by sequence acceptable instead of by key (needed for stage 2)? **Owner: yes, absence proofs are not required (2026-10-15).** Policy for stage 2: a proof of presence is by sequence (the leaf carries the execution key, so a key-to-sequence index outside the commitment is untrusted but checkable); a claim that an execution was never booked is answered relative to a signed head by replaying the decision chain, not by an O(log n) proof; duplicates remain rejected deterministically by the ledger.
+3. Stage 1 first, with commitment v2 designed alongside, or stage 1 only for now? **Owner: stage 1 first; stage 2 stays a design only, decided after stage 1 numbers (2026-10-15).**
 
 ## Next measurements, in order
 
