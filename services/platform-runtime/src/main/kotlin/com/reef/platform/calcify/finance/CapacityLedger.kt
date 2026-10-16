@@ -303,6 +303,9 @@ internal class CapacityLedger(val config: CapacityConfig) {
         }
     }
 
+    /** The commitment trie as a snapshot (see [FlatStateTrie.writeTo]); it makes every digest current first. */
+    fun writeTrieSnapshot(out: java.io.DataOutputStream) = trie.writeTo(out)
+
     /** `C(S)` of the current state (the value the head decision's `stateDigest` must equal in the synchronous profile). */
     fun commitment(): String = StateCommitment.commitment(sequence, controls, trie.root())
 

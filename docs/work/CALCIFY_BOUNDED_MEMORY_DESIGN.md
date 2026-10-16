@@ -57,6 +57,26 @@ The first stage is needed by the second, so it is the first increment either way
 
 Cache eviction is not forgetting: a miss on an old action or execution consults the durable index before the input is treated as new; duplicate and conflict, retry, settlement and budget semantics are unchanged; state changes, output progress and consumed-input progress share one recovery boundary; caches are disposable without losing correctness; byte-identical output and the golden vectors for stage 1.
 
+## Restore and trie snapshot against a real RocksDB store (`CapacityRestoreCostTest`, combined mode, laptop)
+
+The ledger that built the state is dropped first, so these are a fresh JVM's numbers. Each restore ran twice; the pairs agree within 3%.
+
+| Trades | Entities | Materialized scan | Streamed scan | Heap left after restore | Trie snapshot | Snapshot write / read |
+|---|---|---|---|---|---|---|
+| 650k | 2.0M | 6.6 s, peak 2.5-2.7 GB | 6.7 s, peak 1.5-1.7 GB | 0.95 GB | 0.22 GB | 0.04 s / 0.04-0.07 s |
+| 2M | 6.0M | 22.0-22.5 s, peak 6.6-7.1 GB | 22.5-22.8 s, peak 5.0-5.1 GB | 2.91 GB | 0.68 GB | 0.12-0.14 s / 0.12-0.16 s |
+
+- Restore costs about 3.7 us per entity (about 11 s per million trades). Streaming the scan does **not** make it faster; it only lowers the peak by about 25-30%.
+- The snapshot is 112 bytes per entity (32 B key, 16 B node, 64 B child digests) and reads about 150x faster than rebuilding the trie from entities. Every snapshot read was checked: its root gives the same commitment as the restored ledger.
+- Heap left after restore is about 480 bytes per entity, of which the trie is 112. The other 370 are the object maps that stage 1 evicts.
+- Extrapolated, not measured: 36M combined trades is about 110M entities, so a 12 GB snapshot (a few seconds if the page cache holds it, disk speed if not) against about 6 minutes of scan restore.
+
+**The snapshot alone is not enough after a crash.** The snapshot is taken at sequence S; a crashed lane's store is at head H > S, and the store keeps only the latest value of each entity, so it cannot say which entities changed after S. Options, in order of preference:
+1. Clean shutdown or checkpoint only: take the snapshot when the store is checkpointed at S, and fall back to the full streamed scan if the store head is not S. Simple; a crash costs the full scan.
+2. A touch journal: each decision also writes `w/<sequence>` listing its entity keys, deleted after the next snapshot. Restore reads the snapshot, then re-applies the entities for sequences S+1..H from the store. Bounded by H-S, costs one small extra write per decision (not yet measured).
+
+The open question is whether a crash may cost the full scan. At 30 minutes and 20k trades/s that is about 6 minutes of restore with stage 1's eviction applied afterwards; a touch journal makes it seconds.
+
 ## Open decisions for the owner
 
 1. Is bounded memory a requirement? (Owner: yes, 2026-10-15, because of 15 to 20k trades/s sustained.)
@@ -65,6 +85,6 @@ Cache eviction is not forgetting: a miss on an old action or execution consults 
 
 ## Next measurements, in order
 
-1. Restore cost with a real RocksDB store and a streamed scan, and the cost of the trie snapshot (write and read of its arrays) at 2M, 9M entities.
+1. ~~Restore cost with a real RocksDB store and a streamed scan, and the cost of the trie snapshot~~ done above at 2.0M and 6.0M entities (9M not run).
 2. Stage 1 prototype on the no-broker harness against the real RocksDB store (not the in-memory map): trades/s, live heap per trade, restore time, with differential tests that decisions, snapshot and commitment equal today's.
 3. A 15 minute paced soak on the EPYC droplet with the prototype (needs the owner's go and cost).

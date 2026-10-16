@@ -24,11 +24,44 @@ import java.security.MessageDigest
  * Not thread-safe: one writer.
  */
 internal class FlatStateTrie {
-    private companion object {
-        const val CHUNK_BITS = 16
-        const val CHUNK = 1 shl CHUNK_BITS
-        const val MASK = CHUNK - 1
-        const val NO_ROOT = Int.MIN_VALUE
+    companion object {
+        private const val CHUNK_BITS = 16
+        private const val CHUNK = 1 shl CHUNK_BITS
+        private const val MASK = CHUNK - 1
+        private const val NO_ROOT = Int.MIN_VALUE
+        private const val SNAPSHOT_MAGIC = 0x46535431   // "FST1"
+
+        private fun validRef(ref: Int, branches: Int, leaves: Int) = if (ref >= 0) ref < branches else ref.inv() < leaves
+
+        /** The trie [writeTo] wrote. Structural checks only: a caller must still compare [root] with the digest the state is committed to before trusting it. */
+        fun readFrom(input: java.io.DataInputStream): FlatStateTrie {
+            require(input.readInt() == SNAPSHOT_MAGIC) { "not a trie snapshot" }
+            val leaves = input.readInt(); val branches = input.readInt(); val root = input.readInt()
+            require(leaves >= 0 && branches >= 0 && (if (leaves == 0) branches == 0 else branches == leaves - 1)) { "corrupt trie snapshot counts" }
+            require(if (leaves == 0) root == NO_ROOT else if (leaves == 1) root == -1 else root in 0 until branches) { "corrupt trie snapshot root" }
+            val t = FlatStateTrie()
+            input.readFully(t.rootDigest)
+            t.leafCount = leaves; t.branchCount = branches; t.rootRef = root
+            t.keyChunks = arrayOfNulls(maxOf(16, Integer.highestOneBit(maxOf(1, (leaves + MASK) ushr CHUNK_BITS)) * 2))
+            t.metaChunks = arrayOfNulls(t.keyChunks.size); t.digChunks = arrayOfNulls(t.keyChunks.size)
+            var left = leaves; var c = 0
+            while (left > 0) { val n = minOf(left, CHUNK); t.keyChunks[c] = ByteArray(CHUNK * 32).also { input.readFully(it, 0, n * 32) }; left -= n; c++ }
+            left = branches; c = 0
+            val staging = ByteArray(CHUNK * 16)
+            while (left > 0) {
+                val n = minOf(left, CHUNK)
+                input.readFully(staging, 0, n * 16)
+                val meta = IntArray(CHUNK * 4); java.nio.ByteBuffer.wrap(staging, 0, n * 16).asIntBuffer().get(meta, 0, n * 4)
+                for (i in 0 until n) {
+                    val o = i shl 2
+                    require(meta[o + 3] == 0 && meta[o + 2] in 0 until 256 && validRef(meta[o], branches, leaves) && validRef(meta[o + 1], branches, leaves)) { "corrupt trie snapshot node" }
+                }
+                t.metaChunks[c] = meta
+                t.digChunks[c] = ByteArray(CHUNK * 64).also { input.readFully(it, 0, n * 64) }
+                left -= n; c++
+            }
+            return t
+        }
     }
 
     private var keyChunks = arrayOfNulls<ByteArray>(16)     // 32 bytes per leaf: its key
@@ -162,6 +195,25 @@ internal class FlatStateTrie {
         md.digest(dest, at, 32)
         branchHashes++
         m[o + 3] = 0
+    }
+
+    /**
+     * Writes the trie as raw arrays (about 112 bytes per entity): the counts, the root, and the used part of each chunk. First makes every digest current, so no stale
+     * flag is stored and the snapshot is exactly what [root] would return.
+     */
+    fun writeTo(out: java.io.DataOutputStream) {
+        root()
+        out.writeInt(SNAPSHOT_MAGIC); out.writeInt(leafCount); out.writeInt(branchCount); out.writeInt(rootRef); out.write(rootDigest)
+        var left = leafCount; var c = 0
+        while (left > 0) { val n = minOf(left, CHUNK); out.write(keyChunks[c]!!, 0, n * 32); left -= n; c++ }
+        left = branchCount; c = 0
+        val staging = java.nio.ByteBuffer.allocate(CHUNK * 16)
+        while (left > 0) {
+            val n = minOf(left, CHUNK)
+            staging.clear(); staging.asIntBuffer().put(metaChunks[c]!!, 0, n * 4)
+            out.write(staging.array(), 0, n * 16); out.write(digChunks[c]!!, 0, n * 64)
+            left -= n; c++
+        }
     }
 
     /** The depth (number of branches) on the path to [key]'s leaf or its closest leaf; a test aid. */

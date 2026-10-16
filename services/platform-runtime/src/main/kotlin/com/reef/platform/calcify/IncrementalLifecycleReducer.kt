@@ -11,6 +11,8 @@ internal interface LifecycleKv {
     fun get(key: String): ByteArray?
     /** All entries whose key starts with [prefix], ascending by key. Used only by the once-per-restore verification, never per record. */
     fun scan(prefix: String): List<Pair<String, ByteArray>>
+    /** Like [scan] but the entries are handed to [use] one at a time and valid only inside it, so a large range is never materialized (restore of a large store). */
+    fun <R> scanStreaming(prefix: String, use: (Sequence<Pair<String, ByteArray>>) -> R): R = use(scan(prefix).asSequence())
 }
 
 internal class MemoryLifecycleKv : LifecycleKv {
@@ -38,6 +40,8 @@ internal class StreamsLifecycleKv(private val store: org.apache.kafka.streams.st
     override fun get(key: String): ByteArray? = store.get(key)
     override fun scan(prefix: String): List<Pair<String, ByteArray>> =
         store.range(prefix, prefix + "\uffff").use { it.asSequence().map { kv -> kv.key to kv.value }.toList() }
+    override fun <R> scanStreaming(prefix: String, use: (Sequence<Pair<String, ByteArray>>) -> R): R =
+        store.range(prefix, prefix + "\uffff").use { use(it.asSequence().map { kv -> kv.key to kv.value }) }
     /** Applies one reduction's write batch; the surrounding Streams transaction makes it atomic with the output record. */
     fun apply(writes: Map<String, ByteArray>) = writes.forEach { (k, v) -> store.put(k, v) }
 }

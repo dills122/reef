@@ -86,7 +86,7 @@ internal object CapacityStore {
         val head = kv.get(HEAD)?.let { FinanceWire.fromProto(reef.contracts.calcify.finance.v1.FinanceDecisionV1.parseFrom(it)) }
         require((head == null) == (meta.sequence == 0L)) { "head decision presence differs from sequence" }
         require(meta.configDigest == config.digest()) { "capacity store was written under a different configuration" }
-        val ledger = CapacityLedger.restore(config, kv.scan("e/").map { (k, v) -> decodeEntity(k, v) }, meta.sequence, meta.controls, meta.chain)
+        val ledger = kv.scanStreaming("e/") { entries -> CapacityLedger.restore(config, entries.map { (k, v) -> decodeEntity(k, v) }.asIterable(), meta.sequence, meta.controls, meta.chain) }
         if (head == null) {
             require(meta.chain == ledger.genesisChain && ledger.entityCount == 0) { "genesis store is not empty or on another genesis" }
         } else {
