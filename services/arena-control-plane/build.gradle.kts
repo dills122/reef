@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm") version "2.4.20"
+    kotlin("jvm") version "2.4.21"
     jacoco
 }
 
@@ -13,7 +13,7 @@ dependencies {
     implementation(files("../platform-runtime/build/libs/platform-runtime.jar"))
     implementation(kotlin("stdlib"))
     implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
-    implementation("org.postgresql:postgresql:42.7.13")
+    implementation("org.postgresql:postgresql:42.7.14")
     implementation("com.zaxxer:HikariCP:7.1.0")
     testImplementation(kotlin("test"))
 }
