@@ -83,5 +83,20 @@ class CapacityLaneCostTest {
         println("LANE-COST trie branch hashes per decision: ${"%.1f".format((branchHashes() - hashesBefore) / (perTrade * trades))}, per trade: ${"%.1f".format((branchHashes() - hashesBefore).toDouble() / trades)}")
         val top = samples.entries.sortedByDescending { it.value }.filter { it.key.contains("Capacity") || it.key.contains("State") || it.key.contains("Canon") || it.key.contains("Finance") || it.key.contains("Message") || it.key.contains("Digest") || it.key.contains("Proto") || it.key.contains("HashMap") || it.key.contains("Lifecycle") || it.key.contains("update") || it.key.contains("digest") }.take(40)
         for ((name, n) in top) println("LANE-COST %5.1f%%  %s".format(100.0 * n / total, name))
+
+        // CAP_RESTORE=true: what a restart costs at this state size. The processor's ledger stays live, so this is the peak with both copies resident, which is the case that matters when a lane restarts in a JVM that already holds other state.
+        if (System.getenv("CAP_RESTORE") == "true") {
+            val memory = java.lang.management.ManagementFactory.getMemoryMXBean()
+            fun usedGb(): Double { repeat(3) { System.gc() }; return memory.heapMemoryUsage.used / 1e9 }
+            val liveBefore = usedGb()
+            val entries = store.approximateNumEntries()
+            java.lang.management.ManagementFactory.getMemoryPoolMXBeans().forEach { it.resetPeakUsage() }
+            val r0 = System.nanoTime()
+            val restored = CapacityStore.restore(capacity, com.reef.platform.calcify.StreamsLifecycleKv(store), "b".repeat(64))
+            val seconds2 = (System.nanoTime() - r0) / 1e9
+            val peak = java.lang.management.ManagementFactory.getMemoryPoolMXBeans().filter { it.type == java.lang.management.MemoryType.HEAP }.sumOf { it.peakUsage.used } / 1e9
+            check(restored != null) { "restore returned nothing" }
+            println("RESTORE-COST mode=${mode.wire} trades=$trades store entries=$entries restore ${"%.2f".format(seconds2)} s, live heap before ${"%.2f".format(liveBefore)} GB, peak heap during restore ${"%.2f".format(peak)} GB, restored entities=${restored.entityCount}")
+        }
     }
 }
