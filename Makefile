@@ -651,3 +651,7 @@ hetzner-core-tofu:
 .PHONY: dev-smoke-calcify-phase2
 dev-smoke-calcify-phase2:
 	DEV_CALCIFY_PHASE2=1 $(JS_RUNTIME) scripts/dev/calcify-full-path-smoke.mjs
+
+# Full-chain paced run (intake, engine, Phase 1 and 2, capacity lanes, projection); FC_RATE and FC_SECONDS set the load, see the header of the script. Builds the images and tears the stack down.
+calcify-fullchain-soak:
+	$(JS_RUNTIME) scripts/dev/calcify-fullchain-soak.mjs
