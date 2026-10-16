@@ -1,6 +1,6 @@
 # Reef System Overview
 
-Last aligned: 2026-07-19.
+Last aligned: 2026-07-19; the Calcify section was added 2026-10-16.
 
 ## The Short Version
 
@@ -14,6 +14,10 @@ Reef has three layers that are easy to mix up:
 
 The simulator is not a fourth platform. It is a driver that sends commands into
 the venue runtime stack through the same API path as users and bots.
+
+## Calcify (opt-in post-match path)
+
+Calcify is an additive, opt-in path after the matching engine has durably recorded its outcomes: it resolves each execution into a capture fact, books it in a per-lane finance ledger with a hash-committed state, and projects the decisions into Postgres read models. The legacy post-match path stays in place. It is built in two profiles: the finite profile (bounded oracle, correctness first) and the capacity profile (instrument-sharded Kafka Streams lanes with RocksDB state, aimed at 10,000 booked trades/s for 15 to 30 minute arena sessions). No Calcify document adopts financial authority; relational authority (D009) stays accepted. Status and evidence: [program status](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md), [Calcify map](README.md#calcify-map), decisions D-058 and D-059 in [DECISIONS](DECISIONS.md).
 
 ## Mental Model
 

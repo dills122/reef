@@ -1,0 +1,46 @@
+# CAL-FIN-P26: DigitalOcean epyc, matrix 'capmode', 2026-10-15 (raw output of droplet-chain-run.sh)
+# Host:
+# openjdk version "21.0.12.1" 2026-08-18
+# 8
+# CPU(s):                                  8
+# Model name:                              AMD EPYC 9555P 64-Core Processor
+#                total        used        free      shared  buff/cache   available
+# Mem:              31           1          27           0           2          30
+# Docker version 29.9.1, build dfc520d
+#  21:19:28 up 2 min,  1 user,  load average: 1.03, 0.52, 0.20
+# Microbenchmarks:
+# sha256 64B     : 81 ns/op
+# sha256 512B    : 288 ns/op
+# crc32c 512B    : 9 ns/op
+# lcg mul/add    : 0.01 ns/iter
+# ptr chase 64MB : 92.0 ns/hop
+# memcpy 256MB   : 22.9 GB/s
+# threads= 1  per-thread 8.85 M ops/s   total 8.8 M ops/s
+# threads= 2  per-thread 7.20 M ops/s   total 14.4 M ops/s
+# threads= 4  per-thread 5.34 M ops/s   total 21.4 M ops/s
+# threads= 6  per-thread 4.46 M ops/s   total 26.8 M ops/s
+# threads= 8  per-thread 3.61 M ops/s   total 28.9 M ops/s
+# threads=10  per-thread 3.09 M ops/s   total 30.9 M ops/s
+# threads=12  per-thread 2.62 M ops/s   total 31.5 M ops/s
+# threads=16  per-thread 1.74 M ops/s   total 27.9 M ops/s
+# Root disk:
+# /dev/vda1        48G  4.0G   44G   9% /
+# 819200 bytes (819 kB, 800 KiB) copied, 0.745038 s, 1.1 MB/s
+# 819200 bytes (819 kB, 800 KiB) copied, 0.766493 s, 1.1 MB/s
+
+cap-hot-two-step-1:     CAPACITY-CPU cpu_seconds projection=7.6 streams=45.9 kafka-clients=0.2 read_s=64.3 apply_s=63.2 verify_s=2.6 sql_s=54.6 wall=60.6 cores=8
+cap-hot-two-step-1:     CAPACITY-LANES trades_per_lane=[600000] instruments_per_lane=[64]
+cap-hot-two-step-1:     CAPACITY-RATE mode=two-step source=resolved lanes=1 trades=600000 decisions=1200000 processed_in=44.9s processed_decisions_per_s=26709 processed_trades_per_s=13355 sent_in=0.5s projected_in=60.6s projected_decisions_per_s=19812 projected_trades_per_s=9906 verify_digest=true
+cap-hot-two-step-1: BUILD SUCCESSFUL in 4m 5s
+cap-hot-two-step-2:     CAPACITY-CPU cpu_seconds projection=7.5 streams=45.8 kafka-clients=0.1 read_s=64.1 apply_s=62.5 verify_s=2.7 sql_s=54.3 wall=59.8 cores=8
+cap-hot-two-step-2:     CAPACITY-LANES trades_per_lane=[600000] instruments_per_lane=[64]
+cap-hot-two-step-2:     CAPACITY-RATE mode=two-step source=resolved lanes=1 trades=600000 decisions=1200000 processed_in=44.5s processed_decisions_per_s=26970 processed_trades_per_s=13485 sent_in=0.5s projected_in=59.8s projected_decisions_per_s=20076 projected_trades_per_s=10038 verify_digest=true
+cap-hot-two-step-2: BUILD SUCCESSFUL in 2m 18s
+cap-hot-capture-settle-v1-1:     CAPACITY-CPU cpu_seconds projection=4.6 streams=31.9 kafka-clients=0.1 read_s=63.0 apply_s=40.3 verify_s=1.6 sql_s=34.5 wall=36.4 cores=8
+cap-hot-capture-settle-v1-1:     CAPACITY-LANES trades_per_lane=[600000] instruments_per_lane=[64]
+cap-hot-capture-settle-v1-1:     CAPACITY-RATE mode=capture-settle-v1 source=resolved lanes=1 trades=600000 decisions=600000 processed_in=31.1s processed_decisions_per_s=19263 processed_trades_per_s=19263 sent_in=0.3s projected_in=36.4s projected_decisions_per_s=16490 projected_trades_per_s=16490 verify_digest=true
+cap-hot-capture-settle-v1-1: BUILD SUCCESSFUL in 1m 55s
+cap-hot-capture-settle-v1-2:     CAPACITY-CPU cpu_seconds projection=4.5 streams=32.2 kafka-clients=0.1 read_s=63.0 apply_s=40.3 verify_s=1.6 sql_s=34.5 wall=36.4 cores=8
+cap-hot-capture-settle-v1-2:     CAPACITY-LANES trades_per_lane=[600000] instruments_per_lane=[64]
+cap-hot-capture-settle-v1-2:     CAPACITY-RATE mode=capture-settle-v1 source=resolved lanes=1 trades=600000 decisions=600000 processed_in=31.5s processed_decisions_per_s=19073 processed_trades_per_s=19073 sent_in=0.4s projected_in=36.4s projected_decisions_per_s=16503 projected_trades_per_s=16503 verify_digest=true
+cap-hot-capture-settle-v1-2: BUILD SUCCESSFUL in 1m 55s

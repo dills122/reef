@@ -476,3 +476,161 @@ Use `make dev-verify-calcify-high-rate` for exact final stage counts; record
 offered/accepted rate, dropped pairs, conservative in-load receipt gap, drain,
 failures, and phase-specific effects. Raise sustained target toward 7.5k/s
 only after it passes with the new phase. Retain raw reports for failed runs.
+
+---
+
+# Moved from the work board on October 16, 2026
+
+The four October 11 to 13 sections below (single-server pressure test, finite P3 O3, finite P3 financial path, finite P3 O2) were moved verbatim from [`WORK_PLAN.md`](../WORK_PLAN.md) when its Calcify section was re-aligned; relative links were rewritten for this location. Wording, numbers and anchors are unchanged. They are history for their stated dates, not current status.
+
+## Calcify single-server pressure test — October 11, 2026
+
+Research baseline `b9a8756e8d0efc5e8b665a5c62da1ab064d01539` includes merged
+O1/PR485; earlier delivery statements below describe their dated checkpoint.
+O2 was excluded from measured baseline; PR488 subsequently merged at `85115ac80`
+on October11 19:45UTC and was integrated for research publication. Earlier proof
+results do not qualify or review that newer finite path.
+Owner initially confirmed one server, larger size allowed with evidence, and
+hard10k/s capture/context gate with settlement allowed to lag. Later clarification
+extends headline boundary through user-facing trading API; see goalpost update below.
+
+[Architecture pressure test](../research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md)
+retains deterministic owner/log candidate and recommends incremental keyed state,
+separate correctness/capacity proofs, explicit identity/retention/backlog budgets
+and co-resident qualification. Five offline kernel runs and isolated encoder
+comparison pass scoped correctness/parity checks; arithmetic model checks5239
+cases. [Verification](../evidence/calcify-architecture-pressure-test/verification.json)
+records all attempts and limits. No new broker/SQL/capture qualification, production
+change, authority adoption or O1 review-counter reset.
+
+Follow-up [aged contention proof](../research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md)
+completed300s on local10CPU/~15.6GiB Docker VM. Capture verified10,172.16/s lower
+bound; full contexts8,106.99–8,145.11/s: **10k gate fails**. Final3,063,383 exact
+contexts and independent366,625-trade synthetic financial/SQL replay audit pass.
+Financial total includes post-load work; capture-to-financial integration remains
+open. Cold resolver recovery, retained identities and co-resident resource cost
+now constrain candidate. [Compact receipt](../evidence/calcify-aged-contention/verification.json)
+and [retention](../records/2026-10-11-calcify-aged-contention-retention.json) preserve
+failed first attempt, correction and completed target miss; owned services stopped,
+volumes retained. No production behavior or authority change.
+
+Matched [no-cold-restart control](../research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
+now passes300s capture gate:10,321.21–10,349.52 full contexts/s; aged60–300s lower
+10,295.95/s. Final3,131,951 exact contexts and361,075 independent synthetic
+financial/SQL trades pass audits; latter includes post-load work. Same runtime
+images/resources and normalized workload settings; financial crash/replay remains.
+First-minute ranges overlap, but control already leads before180s; no exact causal
+attribution. Post180 resolved bounds10,411.41–10,571.55/s versus treatment
+5,538.68–5,705.76/s support prioritizing recovery. Resolver container never restarts.
+Control did more timed financial work; matched policy is not identical achieved
+activity. [Comparison](../evidence/calcify-matched-control/comparison.json) owns bounds.
+
+Next proof: finite O2 remains separate; test restart with compatible retained
+resolver state directory at same age and financial/SQL workload. Freeze recovery
+interruption/freshness/drain allowance; instrument restoration, GC/compilation,
+disk latency and all process resources. If warm restart fails, isolate one reserve,
+parallelism or standby change before hardware decision. Current host demonstrates
+steady aged capture, not cold recovery or production financial integration.
+Matching sampled4.71GiB; identity lifetime budget remains open. Further full runs
+need disk headroom above8GB reserve; no retained proof state deleted. Larger single
+server allowed with measured justification. Historical originals unchanged.
+
+Goalpost research follow-up: owner defines10k as real user/bot orders matched,
+processed through Calcify and visible as completed trades awaiting settlement.
+[Proposed arena contract](CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) defines booked
+trading state, settlement clocks, API visibility, session cuts and stage diagnosis.
+Recommended initial p99 visibility1s, eligible settlement5s, close30s; numeric
+targets await adoption. Owner selected immediate reuse of booked unsettled proceeds
+under explicit risk/credit limits for first arena profile. [Credit proposal](CALCIFY_ARENA_CREDIT_POLICY.md) now defines account25%/pool10%
+limits, eligibility and failure rules; calibration and runtime implementation remain open. Booking and
+credit accounting belong inside10k gate; existing no-credit fixture is insufficient.
+Arithmetic shows9k/s
+settlement behind10k/s arrivals needs400s cleanup after60m if service stays9k/s.
+Long sessions therefore require near-arrival-rate settlement plus catch-up reserve.
+Primary sources and current API/code checked; no new throughput run or runtime
+change. Capture-only pass remains scoped; integrated product gate unqualified.
+Next integrated work: calibrate proposed caps and freeze bundle/policy, instrument real order-to-API slice,
+then paired-order rate/duration ladder and recovery. Retained-state capture
+control remains useful component proof; it cannot qualify enlarged API boundary.
+Retention no-op: active proposal adds goalposts; prior scoped reports remain evidence.
+
+Credit follow-up:34/34 reference tests pass, including676 ordered competing-order
+schedules and20 actual SIGKILL cutpoints. Drawn plus undrawn exposure reserves a
+prefunded pool; failure freezes new admission while preserving matched commitments.
+Review tightened original-age retention and committed-head binding; hash chain
+alone cannot detect a removed tail. Single-owner model only, no production credit,
+distributed race, host-loss or10k API qualification. [Verification](../evidence/calcify-arena-credit/verification.json)
+and [policy](CALCIFY_ARENA_CREDIT_POLICY.md) retain current decisions; full proof
+joins RecordsPR12. Session delivery bundles initial review, kernel/queue probes,
+aged treatment/control, arena goalpost and credit proof on existing feature branch.
+
+## Calcify finite P3 O3 — October 11, 2026
+
+O2 is merged (PR488). O3 (financial admission) has a [packet](CALCIFY_FINITE_P3_O3_PACKET.md) with owner decisions D1-D7 recorded
+(D4: operator control actions; D7: option B, order established in the financial processor's own history, which needs a new
+binding schema version before O3b) and a merged first module, **O3a** (PR491): a pure, typed, unreserved gross DvP ledger under
+`com.reef.platform.calcify.finance` with 14 tests. O3a was merged before review. Review 1 returned **Ready with non-blocking follow-ups**; review 2 returned **Not ready** because `restore`
+could adopt a forged but consistent state. Both are closed in PR493/494: per-class budgets (refusals neither recorded nor counted), every
+decision commits to the state it produced (`restore(checkpoint, trustedHead)` refuses anything else), settle requires operator
+authority, an independent-encoder golden set, a protobuf wire contract (`calcify_finance.proto`), a 5,000-schedule differential oracle and a
+72-mutant check with every mutant killed. Review 3 of 3 returned follow-ups that PR499 closed, and the binding v2 spec was implemented in PR502-506 (see the next section).
+O3a on its own implies no financial authority and no capacity. The O2 follow-up role definition is a
+[draft](CALCIFY_FINITE_P3_DB_ROLES.md); the consolidated sign-off packet is [below](#calcify-finite-p3-financial-path--october-13-2026).
+
+## Calcify finite P3 financial path — October 13, 2026
+
+Refreshed against `master` at `fd8f3ef6a` (PR519). The finite P3 financial path is **built, tested on real infrastructure, independently reviewed, and recorded once on local Docker (S3-A2 live part, attempt `live-s3a2-1`, 2026-10-13, pass; [evidence](../evidence/calcify-finite-p3/2026-10-13-s3a2-live/README.md))**; it implies
+no capacity claim (the 50,000 decisions/s gate is waived for the bounded finite profile, owner decision 2026-10-12).
+
+- **Delivered (PR numbers):** O4 projection schema and projector (501); binding v2 openings, registration and startup witnesses (502, 504, 505); finance processor, per-entity store, restore cut
+  and real-broker tests (506); S2 close-out: aborted-tail offset rule, ACL isolation test, evidence reader, broker CI step (507, 508, 511); operator control writer and CLI (509); finance read routes
+  (510); O5 end-to-end fixture and projection runner (512); launcher hardening from integration review 2 (513); launcher leaves the consumer group on a clean stop (516); projector-role refusal test
+  (518); the opt-in **finance process role** that gives the launcher a production caller, with the consumer session timeout pinned at 6,000 ms (519). PR520 (launcher and projector under SIGKILL with
+  data flowing, closing F8) is open.
+- **Reviews:** three independent integration reviews; the third (on the PR516/518/519 set) returned **Ready with non-blocking follow-ups**, no P0 or P1, and its fixes are in PR519.
+- **Owner decisions in force:** no processor "auto attempt 1" (every settle attempt is an operator Settle input); operator CLI holds the control credential; one binding digest per v2 run; session timeout 6,000 ms.
+- **Operator documents:** [role sign-off packet](CALCIFY_FINITE_P3_ROLE_SIGNOFF.md) (owner signed October 13, 2026), [finance runtime runbook](CALCIFY_FINITE_P3_FINANCE_RUNTIME.md),
+  [binding v2 spec](CALCIFY_FINITE_P3_BINDING_V2_SPEC.md), [S2 close-out research](CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md).
+- **Open, recorded limits:** the owner epoch is claimed by the finance process at start (a newer instance fences the older one loudly; not derived from the ingress owner claim); the decision log and `stateDigest` are unkeyed integrity digests, not authenticity;
+  F6 (each projection pass opens fresh evidence consumers); TLS and credential delivery are deployment decisions; the operator read routes rely on the internal-HTTP exposure mode; the live recording was a single local-Docker attempt on a closed network.
+- **Owner-gated:** warm-restart proof approval, the O2 replay, and Decision 0 for any capacity profile.
+- **Throughput:** stage targets and last measurements are indexed in [Calcify throughput budget](CALCIFY_THROUGHPUT_BUDGET.md); every measurement belongs in the append-only
+  [throughput ledger](../THROUGHPUT_BASELINES.md) (entry CAL-FIN-S0). A scalable-commitment design exists but is **not accepted** and is gated on Decision 0:
+  [state commitment design](CALCIFY_FINANCE_STATE_COMMITMENT_DESIGN.md).
+
+## Calcify finite P3 O2 — October 11, 2026
+
+Publication update: [O2 PR488](https://github.com/dills122/reef/pull/488) merged
+October11 19:45UTC at `85115ac80`. Following verification and open follow-ups
+retain their pre-merge evidence scope; this research session did not rerun O2.
+
+O1 is merged (PR485, `b9a8756e8`). O2 (durable finite ingress, binding, stop/drain,
+same-binding restore) was implemented on `claude/calcify-o2-finish`; it is
+Codex's October 10 work, preserved unmodified at `wip/calcify-o2-codex-snapshot-2026-10-11`, plus
+corrections below. Defaults stay off and live activation requires the explicit O2 opening; no
+financial authority, production adoption or capacity claim follows.
+
+- Independent review 1 of 3: **Not ready**. F2 (finite matcher inherited ambient compression):
+  fixed with a finite-only `CompressionNone` pin and tests; ordinary mode unchanged. F1 (G9, full
+  managed-state transport): `FiniteG9BrokerTransportTest` writes the declared 6,307,840-byte
+  state through the production managed store and `liveProperties`, reads it back from the
+  changelog, and restores it after local-state loss on a disposable Redpanda. Transport only —
+  synthetic bytes, unauthenticated RF1 broker, one run.
+- Re-verified October 11: Go build/vet/test/race, Kotlin `Finite*` including the 10 Postgres-backed
+  binding-store and 11 ingress tests, proto regeneration, retention, and local replay of the CI
+  steps O2 touches (CI breakers fixed: migration-list test, harness-test wiring as a local make target, Go coverage gate exclusion for the fixture-only probe).
+  Results, commands and limits: [O2 verification record](../evidence/calcify-finite-p3/2026-10-11-o2-verification.md).
+- Independent reviews: instance 2 and 3 of 3 both **Ready with non-blocking follow-ups** (no P0-P2; review budget exhausted).
+  Instance 2's P2-1 (NUL in payload fenced the run uncharged) is fixed with unit and Postgres-backed tests.
+- Open: G1–G8 and G10 live
+  evidence is still Codex's recorded claims (ledger under the snapshot's
+  `.planning/calcify-p3-o2-2026-10-10/`); Postgres role grants used in tests were inferred and
+  need an operator-reviewed definition; hosted CI run. O3b/O4/O5 components and fixtures are built and tested ahead of O2 acceptance (see `docs/work/CALCIFY_FINITE_P3_S2A_RESULT.md`); their *acceptance* stays gated on accepted O2.
+- Retention: the earlier hour-by-hour O2 checkpoints formerly in this section are preserved in git
+  history (snapshot commit `4c5a1f6011dadf2e1bdcd29e67a626e742d781d6`). Records archive
+  publication of O2 evidence has **not** been done; retention is incomplete.
+- Test infrastructure: per [delivery policy](../ENGINEERING_DELIVERY_POLICY.md#test-infrastructure-must-serve-delivery),
+  leave the usable harness alone. G9 transport is proven without further harness work; the G9 matrix
+  sub-clauses on pinned images, fresh build hashes and resource observations within the lease remain
+  Codex-recorded, not re-evidenced here.
+

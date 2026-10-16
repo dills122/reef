@@ -6,6 +6,8 @@ orders enter through user/bot API, match, pass through Calcify, and become visib
 as completed executions awaiting settlement. One server; larger size allowed when
 measured. Sessions last 5, 15, 30 or 60 minutes.
 
+**Scope update, October 16, 2026 (owner):** the sessions that matter now are **15 to 30 minutes** (30 is the top end; 15 for runs whose records are kept; 5 is trivial); 60 minutes is parked, so the 60m rows and the 60m proof step below are kept as arithmetic and history, not as a current target. The delivery rate is **10,000 booked trades/s**; 15 to 20k/s is later work. Component-level soaks of the finance lane and projection at 10k trades/s for 15 minutes now exist (see the [program status update](CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md#0-update-october-16-2026-capacity-track-goal-10000-booked-tradess-for-15-to-30-minutes)); the integrated boundary below (API, engine, resolver, finance, projection) has not been run end to end and nothing here is adopted or qualified.
+
 Owner selected immediate reuse of booked unsettled proceeds under explicit
 risk/credit limits for first arena profile. [Credit policy proposal](CALCIFY_ARENA_CREDIT_POLICY.md)
 now defines limits and failure rules with small executable proofs. Numeric limits
@@ -319,7 +321,7 @@ proof. Inspect concurrent branches separately before implementation.
 2. Run paired-order integrated rate ladder 1k, 2.5k, 5k, 10k arrivals/s; then
    10.5k qualification fixture for 5m. Keep standing-maker arm as diagnostic control.
    Record service and age at every boundary to locate first growing queue.
-3. Prove 15m, 30m and 60m only after state/disk budgets support exact population.
+3. Prove 15m and 30m (60m parked by the owner on October 16) only after state/disk budgets support exact population.
    Repeat qualification on unchanged profile, retaining failures; at least three
    runs at 5m and maximum claimed duration before release claim. Prove consecutive
    sessions and explicit close/read load. Earlier 10k/600s and 7.5k/900s targets
