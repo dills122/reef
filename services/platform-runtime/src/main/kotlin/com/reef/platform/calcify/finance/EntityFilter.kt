@@ -63,15 +63,53 @@ internal class EntityFilter(private val initialKeys: Int = 1 shl 20) {
         return false
     }
 
+    /**
+     * Writes the layers (capacity, bits per key, count, then the words) for a lane snapshot; [readFrom] gives back a filter with the same answers that grows the same way.
+     * No checksum of its own: the snapshot that carries it is checksummed as a whole.
+     */
+    fun writeTo(out: java.io.DataOutputStream) {
+        out.writeInt(layerList.size)
+        val staging = java.nio.ByteBuffer.allocate(1 shl 16)
+        for (layer in layerList) {
+            out.writeLong(layer.capacity); out.writeInt(layer.bitsPerKey); out.writeLong(layer.count); out.writeInt(layer.words.size)
+            var at = 0
+            while (at < layer.words.size) { val n = minOf(layer.words.size - at, staging.capacity() / 8); staging.clear(); staging.asLongBuffer().put(layer.words, at, n); out.write(staging.array(), 0, n * 8); at += n }
+        }
+    }
+
     /** Multiply-shift range reduction on the high 32 bits, so a layer's size is exact rather than a power of two. */
     private fun blockOf(h1: Long, layer: Layer): Int = (((h1 ushr 32) * layer.blocks) ushr 32).toInt()
 
-    private companion object {
-        const val SEED_1 = -0x61c8864680b583ebL      // 0x9E3779B97F4A7C15
-        const val SEED_2 = 0x2545F4914F6CDD1DL
-        val LONGS: VarHandle = MethodHandles.byteArrayViewVarHandle(LongArray::class.java, ByteOrder.LITTLE_ENDIAN)
+    companion object {
+        /**
+         * The filter [writeTo] wrote. The layer shape must be one [add] can produce (each layer twice the one before with one more bit per key, every layer but the newest
+         * full), so a filter read back answers and grows exactly like the one written; anything else is refused.
+         */
+        fun readFrom(input: java.io.DataInputStream): EntityFilter {
+            val layers = input.readInt(); require(layers in 1..40) { "corrupt filter layer count" }
+            val filter = EntityFilter(); filter.layerList.clear()
+            val staging = ByteArray(1 shl 16)
+            for (i in 0 until layers) {
+                val capacity = input.readLong(); val bits = input.readInt(); val count = input.readLong(); val words = input.readInt()
+                val previous = filter.layerList.lastOrNull()
+                require(if (previous == null) capacity in 64L..(1L shl 22) && bits == 13 else capacity == previous.capacity * 2 && bits == minOf(previous.bitsPerKey + 1, 24)) { "corrupt filter layer shape" }
+                require(previous == null || previous.count == previous.capacity) { "corrupt filter: a layer before the newest is not full" }
+                require(count in 0..capacity && (count > 0 || i == 0)) { "corrupt filter layer count" }
+                val layer = Layer(capacity, bits)
+                require(words == layer.words.size) { "corrupt filter layer size" }
+                var at = 0
+                while (at < words) { val n = minOf(words - at, staging.size / 8); input.readFully(staging, 0, n * 8); java.nio.ByteBuffer.wrap(staging, 0, n * 8).asLongBuffer().get(layer.words, at, n); at += n }
+                layer.count = count; filter.layerList += layer; filter.count += count
+            }
+            return filter
+        }
 
-        fun mix(value: Long): Long {
+
+        private const val SEED_1 = -0x61c8864680b583ebL      // 0x9E3779B97F4A7C15
+        private const val SEED_2 = 0x2545F4914F6CDD1DL
+        private val LONGS: VarHandle = MethodHandles.byteArrayViewVarHandle(LongArray::class.java, ByteOrder.LITTLE_ENDIAN)
+
+        private fun mix(value: Long): Long {
             var x = value
             x = (x xor (x ushr 33)) * -0xae502812aa7333L
             x = (x xor (x ushr 33)) * -0x3b314601e57a13adL
@@ -79,7 +117,7 @@ internal class EntityFilter(private val initialKeys: Int = 1 shl 20) {
         }
 
         /** A 64-bit hash of the tag and the key bytes: 8 bytes per multiply-rotate round, then the murmur3 finalizer. Not cryptographic and not meant to be. */
-        fun hash(tag: Char, key: ByteArray): Long {
+        private fun hash(tag: Char, key: ByteArray): Long {
             var h = SEED_1 xor (tag.code.toLong() shl 56) xor key.size.toLong()
             var i = 0; val n = key.size
             while (i + 8 <= n) { h = java.lang.Long.rotateLeft((h xor (LONGS.get(key, i) as Long)) * SEED_1, 29) + SEED_2; i += 8 }

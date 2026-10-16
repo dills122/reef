@@ -74,14 +74,14 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
     private val actions = HashMap<ActionKey, ActionRecord>()
     /** Accounts admitted by funding (only used when the configuration has no fixed account set); derived from the positions at restore, so it is not separate state. */
     private val admitted = HashSet<AccountId>()
-    private val trie = FlatStateTrie()
+    private var trie = FlatStateTrie()                      // replaced only by [readSnapshot], before the ledger is used
 
     // ---- eviction (only when [backing] is given) ----
     // Counts stand in for the maps' sizes, because the maps no longer hold everything. With a backing store, an execution, its obligation, its attempts and every action leave
     // the maps once the store holds them, and a settled trade is never held again: the maps keep only what the next decision can still change (pending trades and their attempts).
     private var executionCount = 0; private var obligationCount = 0; private var attemptCount = 0; private var actionCount = 0L; private var fundedCount = 0
     /** Which keys of classes X (executions, hence obligations) and K (actions) were ever written: a key it has never seen is answered without a store read. Null when nothing is evicted. */
-    private val writtenKeys: EntityFilter? = if (backing != null) EntityFilter() else null
+    private var writtenKeys: EntityFilter? = if (backing != null) EntityFilter() else null
     private val retiredActions = ArrayList<ActionKey>(); private val retiredExecutions = ArrayList<ExecutionKey>()
     private val attemptNumbers = HashMap<ExecutionKey, ArrayList<Int>>()
 
@@ -123,12 +123,17 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
 
     private fun commit(e: StateCommitment.Entity) {
         writes += e; val k = StateCommitment.keyOf(e); trie.put(k, StateCommitment.leafOf(e, k))
-        if (writtenKeys != null && (e.tag == "X" || e.tag == "K")) writtenKeys.add(e.tag[0], e.keyBytes)
+        val filter = writtenKeys
+        if (filter != null && (e.tag == "X" || e.tag == "K")) filter.add(e.tag[0], e.keyBytes)
     }
-    private fun commitPosition(k: Pair<AccountId, AssetId>, v: Long) = commit(StateCommitment.Entity("P", Canon.bytes { str(k.first.value); str(k.second.value) }, Canon.bytes { long(v) }))
-    private fun commitExecution(k: ExecutionKey, c: Captured) = commit(StateCommitment.Entity("X", executionKeyBytes(k), Canon.bytes { str(c.buyer.value); str(c.seller.value); long(c.quantity); long(c.priceNanos) }))
-    private fun commitObligation(k: ExecutionKey, o: Obligation) = commit(StateCommitment.Entity("O", executionKeyBytes(k), Canon.bytes { str(o.status.name); long(o.cashResidual); long(o.shareResidual) }))
-    private fun commitAttempt(k: ExecutionKey, n: Int, d: Disposition) = commit(StateCommitment.Entity("A", Canon.bytes { execution(k); int(n) }, Canon.bytes { str(d.name) }))
+    private fun positionEntity(k: Pair<AccountId, AssetId>, v: Long) = StateCommitment.Entity("P", Canon.bytes { str(k.first.value); str(k.second.value) }, Canon.bytes { long(v) })
+    private fun executionEntity(k: ExecutionKey, c: Captured) = StateCommitment.Entity("X", executionKeyBytes(k), Canon.bytes { str(c.buyer.value); str(c.seller.value); long(c.quantity); long(c.priceNanos) })
+    private fun obligationEntity(k: ExecutionKey, o: Obligation) = StateCommitment.Entity("O", executionKeyBytes(k), Canon.bytes { str(o.status.name); long(o.cashResidual); long(o.shareResidual) })
+    private fun attemptEntity(k: ExecutionKey, n: Int, d: Disposition) = StateCommitment.Entity("A", Canon.bytes { execution(k); int(n) }, Canon.bytes { str(d.name) })
+    private fun commitPosition(k: Pair<AccountId, AssetId>, v: Long) = commit(positionEntity(k, v))
+    private fun commitExecution(k: ExecutionKey, c: Captured) = commit(executionEntity(k, c))
+    private fun commitObligation(k: ExecutionKey, o: Obligation) = commit(obligationEntity(k, o))
+    private fun commitAttempt(k: ExecutionKey, n: Int, d: Disposition) = commit(attemptEntity(k, n, d))
     private fun commitAction(k: ActionKey, r: ActionRecord) = commit(StateCommitment.Entity("K", actionKeyBytes(k), Canon.bytes { str(r.digest); str(r.disposition.name) }))
 
     private fun executionKeyBytes(k: ExecutionKey) = Canon.bytes { execution(k) }
@@ -360,6 +365,39 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
          * (positions, pending obligations with their executions and attempts); everything else is counted, entered in the trie and the filter, and left in [backing].
          * The pairing of executions with obligations is then checked by count; the trie digest the caller compares with the head decision covers the rest.
          */
+        private fun snapshotBytes(out: java.io.DataOutputStream, b: ByteArray) { out.writeInt(b.size); out.write(b) }
+        private fun snapshotBytes(input: java.io.DataInputStream, max: Int): ByteArray { val n = input.readInt(); require(n in 0..max) { "corrupt ledger snapshot" }; return ByteArray(n).also { input.readFully(it) } }
+
+        /**
+         * The evicting ledger [writeSnapshot] wrote, checked as far as it can be without the store: every resident entity must be a leaf of the snapshot's trie with exactly
+         * that value, the counts must add up to the trie's leaf count and to the filter's key count, the pairing and residency rules of [restoreEvicting] hold, and
+         * [finishRestore]'s checks pass. Whether this is the state the store's head decision committed to is the caller's check ([CapacityStore.readSnapshot] and restore): this
+         * reads the trie's stored root, it does not re-hash it.
+         */
+        fun readSnapshot(config: CapacityConfig, backing: EntityBacking, input: java.io.DataInputStream): CapacityLedger {
+            val ledger = CapacityLedger(config, backing)
+            val sequence = input.readLong(); val controls = input.readInt(); val chain = String(snapshotBytes(input, 64), Charsets.UTF_8)
+            require(sequence >= 0 && controls >= 0) { "negative scalar" }
+            ledger.executionCount = input.readInt(); ledger.obligationCount = input.readInt(); ledger.attemptCount = input.readInt(); ledger.actionCount = input.readLong(); ledger.fundedCount = input.readInt()
+            require(ledger.executionCount >= 0 && ledger.obligationCount >= 0 && ledger.attemptCount >= 0 && ledger.actionCount >= 0 && ledger.fundedCount >= 0) { "negative count" }
+            val residents = input.readInt(); require(residents >= 0) { "corrupt ledger snapshot" }
+            val entities = ArrayList<StateCommitment.Entity>(minOf(residents, 1 shl 16))
+            repeat(residents) { entities += CapacityStore.decodeEntity(String(snapshotBytes(input, 4 + 2 * 4 * 4096), Charsets.ISO_8859_1), snapshotBytes(input, 1 shl 16)) }
+            ledger.writtenKeys = EntityFilter.readFrom(input)
+            ledger.trie = FlatStateTrie.readFrom(input)
+            var order = 0
+            for (e in entities) {
+                val rank = "OXAP".indexOf(e.tag); require(rank >= order) { "resident entities out of order" }; order = rank
+                ledger.loadResident(e)
+            }
+            require(ledger.executionCount == ledger.obligationCount) { "an execution without an obligation or the reverse" }
+            require(ledger.executions.keys == ledger.obligations.keys) { "a pending obligation without its execution or the reverse" }
+            require(ledger.trie.size.toLong() == ledger.executionCount.toLong() + ledger.obligationCount + ledger.attemptCount + ledger.actionCount + ledger.positions.size) { "the counts do not add up to the committed entities" }
+            require(ledger.writtenKeys!!.count == ledger.executionCount + ledger.actionCount) { "the filter does not hold every written key" }
+            for (k in ledger.executions.keys) require(ledger.writtenKeys!!.mightContain('X', ledger.executionKeyBytes(k))) { "the filter does not hold a resident execution" }
+            return ledger.finishRestore(sequence, controls, chain)
+        }
+
         fun restoreEvicting(config: CapacityConfig, backing: EntityBacking, source: EntitySource, sequence: Long, controls: Int, chain: String): CapacityLedger {
             require(sequence >= 0 && controls >= 0) { "negative scalar" }
             val ledger = CapacityLedger(config, backing)
@@ -372,6 +410,27 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
 
     /** The commitment trie as a snapshot (see [FlatStateTrie.writeTo]); it makes every digest current first. */
     fun writeTrieSnapshot(out: java.io.DataOutputStream) = trie.writeTo(out)
+
+    /**
+     * Writes everything an evicting ledger holds, for a restart that does not rebuild it from the store ([readSnapshot]; the file framing, its checksum and the checks that
+     * bind it to the store's head are [CapacityStore.writeSnapshot]'s): sequence, controls, chain, the five counts, the resident objects as stored entities (pending
+     * obligations, their executions and attempts, every position; in the order O, X, A, P), the filter of written keys and the commitment trie. Only after [persisted]: the
+     * resident objects are then exactly the open work, as after an evicting restore.
+     */
+    fun writeSnapshot(out: java.io.DataOutputStream) {
+        check(backing != null) { "only an evicting ledger is snapshotted" }
+        check(retiredActions.isEmpty() && retiredExecutions.isEmpty()) { "the ledger has writes that are not yet persisted" }
+        out.writeLong(sequence); out.writeInt(controls); snapshotBytes(out, chain.toByteArray(Charsets.UTF_8))
+        out.writeInt(executionCount); out.writeInt(obligationCount); out.writeInt(attemptCount); out.writeLong(actionCount); out.writeInt(fundedCount)
+        out.writeInt(obligations.size + executions.size + attempts.size + positions.size)
+        fun entity(e: StateCommitment.Entity) { snapshotBytes(out, CapacityStore.entityKey(e).toByteArray(Charsets.ISO_8859_1)); snapshotBytes(out, CapacityStore.entityValue(e)) }
+        for ((k, o) in obligations) entity(obligationEntity(k, o))
+        for ((k, c) in executions) entity(executionEntity(k, c))
+        for ((k, d) in attempts) entity(attemptEntity(k.first, k.second, d))
+        for ((k, v) in positions) entity(positionEntity(k, v))
+        writtenKeys!!.writeTo(out)
+        trie.writeTo(out)
+    }
 
     /** `C(S)` of the current state (the value the head decision's `stateDigest` must equal in the synchronous profile). */
     fun commitment(): String = StateCommitment.commitment(sequence, controls, trie.root())
@@ -423,6 +482,34 @@ internal class CapacityLedger(val config: CapacityConfig, private val backing: E
         require(trie.get(k) == null) { "two entities have the same trie key" }
         trie.put(k, StateCommitment.leafOf(e, k))
         require(trie.size == before + 1) { "entity not added" }
+    }
+
+    /** Enters one resident entity of a snapshot: into the maps only (the counts, the filter and the trie come with the snapshot), and only if the trie holds exactly it. */
+    private fun loadResident(e: StateCommitment.Entity) {
+        val trieKey = StateCommitment.keyOf(e)
+        require(trie.get(trieKey)?.contentEquals(StateCommitment.leafOf(e, trieKey)) == true) { "a resident entity of the snapshot is not in its committed state" }
+        val key = DecodedFields(e.keyBytes); val value = DecodedFields(e.valueBytes)
+        fun execution() = ExecutionKey(key.text(), key.text(), key.text(), key.text())
+        when (e.tag) {
+            "P" -> { val k = AccountId(key.text()) to AssetId(key.text()); key.end(); require(positions.put(k, value.long().also { value.end() }) == null) { "duplicate resident entity" } }
+            "O" -> {
+                val k = execution(); key.end(); val o = Obligation(ObligationStatus.valueOf(value.text()), value.long(), value.long()).also { value.end() }
+                require(o.status == ObligationStatus.PENDING) { "a settled obligation is resident in the snapshot" }
+                require(obligations.put(k, o) == null) { "duplicate resident entity" }
+            }
+            "X" -> {
+                val k = execution(); key.end(); val captured = Captured(AccountId(value.text()), AccountId(value.text()), value.long(), value.long()).also { value.end() }
+                require(k in obligations) { "a resident execution without a pending obligation" }
+                require(executions.put(k, captured) == null) { "duplicate resident entity" }
+            }
+            "A" -> {
+                val exec = execution(); val n = key.int(); key.end(); val d = Disposition.valueOf(value.text()).also { value.end() }
+                require(exec in obligations) { "a resident attempt without a pending obligation" }
+                require(attempts.put(exec to n, d) == null) { "duplicate resident entity" }
+                attemptNumbers.getOrPut(exec) { ArrayList(2) } += n
+            }
+            else -> throw IllegalArgumentException("entity class ${e.tag} is never resident in a snapshot")
+        }
     }
 
     private fun checkRestoredPositions() {

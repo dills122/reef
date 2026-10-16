@@ -53,7 +53,8 @@ internal class CapacityProcessorConfig(
      * When true, each lane keeps in memory only what its next decision can still change (positions, pending trades) and reads every settled trade and old action back
      * from its store through an in-heap filter, so memory grows only by the commitment trie (about 350 bytes per combined trade) and the filter (about 3 bytes per key), not by the
      * trades themselves. Decisions, chains, commitments and stored entities are byte-identical
-     * either way; only restore, which then streams the entities instead of building every object, and the lane's memory differ.
+     * either way; only restore, which then streams the entities instead of building every object, and the lane's memory differ. An evicting lane also writes a lane
+     * snapshot into its task's state directory on a clean close and restarts from it when it is exactly at the store's head ([CapacityStore.restore]); otherwise it scans.
      */
     val evictSettled: Boolean = false,
 ) {
@@ -89,24 +90,56 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
     /** Inputs refused before the ledger (unusable records) and refused by it, for operators; not persisted. */
     var badInputs = 0L; private set
     var refusals = 0L; private set
+    /** The evicting lane's snapshot file, in the task's own state directory; null when the lane does not evict. */
+    private var snapshotFile: java.nio.file.Path? = null
+    /** How the last [init] restored: "snapshot", or "scan" with the reason the snapshot was not used (operators and tests). */
+    var restoredFrom = ""; private set
+    /**
+     * True only while the ledger is exactly the state of the last record whose writes reached the store: false from the start of [process] until it ends, so a close after
+     * a failed record (the ledger may have moved without the store) writes no snapshot. The restore checks would refuse such a snapshot anyway; this keeps it from being written.
+     */
+    private var consistent = false
 
     override fun init(context: ProcessorContext<String, ByteArray>) {
+        consistent = false      // a re-init after a failure must not inherit the flag of the previous run
         this.context = context
         kv = StreamsLifecycleKv(context.getStateStore(config.storeName))
         lane = context.taskId().partition()
         require(lane in 0 until config.lanes) { "partition $lane is outside the ${config.lanes} configured lanes" }
         laneSpec = config.spec(lane)
         configDigest = laneSpec.capacity.digest()      // fixed for the run: not recomputed (sorting and hashing the account and security sets) for every record
-        ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest, config.evictSettled) ?: CapacityLedger(laneSpec.capacity, if (config.evictSettled) EntityBacking { kv.get(it) } else null)
+        // the task's own directory; none (no snapshots) when the context has no state directory (a test context without one throws instead of returning null)
+        val stateDir: java.io.File? = try { context.stateDir() } catch (_: NullPointerException) { null }
+        val snapshot = stateDir?.let { java.io.File(it, "calcify-${config.storeName}.lane-snapshot").toPath() }
+        snapshot?.let { runCatching { java.nio.file.Files.deleteIfExists(it.resolveSibling("${it.fileName}.tmp")) } }       // a close cut off mid-write leaves a partial temp file; it is never read, only removed
+        snapshotFile = if (config.evictSettled) snapshot else { snapshot?.let { java.nio.file.Files.deleteIfExists(it) }; null }     // a lane that does not evict never keeps one
+        var why: String? = "absent"
+        ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest, config.evictSettled, snapshotFile) { why = it } ?: CapacityLedger(laneSpec.capacity, if (config.evictSettled) EntityBacking { kv.get(it) } else null)
+        restoredFrom = if (why == null) "snapshot" else "scan ($why)"
+        if (why == null) System.err.println("calcify capacity lane $lane: restored from the lane snapshot at sequence ${ledger.sequence}")
+        else if (config.evictSettled && why != "absent") System.err.println("calcify capacity lane $lane: lane snapshot not used ($why); restored by scan")
         config.logHead?.let { head ->
             val expected = head(lane)
             check(if (expected == null) ledger.sequence == 0L else ledger.sequence == expected.first && ledger.chain == expected.second) {
                 "lane $lane: the restored store (sequence ${ledger.sequence}) is not the head of the decision log (${expected?.first ?: 0})"
             }
         }
+        consistent = true
+    }
+
+    /**
+     * Writes the lane snapshot of an evicting lane. Streams also closes processors on a dirty shutdown (before an aborted transaction is rolled back and the state wiped),
+     * so the snapshot is never trusted on its own: the next [init] uses it only if it is exactly at the restored store's head. A failure here only costs the next start a scan.
+     */
+    override fun close() {
+        val file = snapshotFile ?: return
+        if (!consistent) return
+        try { CapacityStore.writeSnapshot(ledger, laneSpec.bindingDigest, file) }
+        catch (e: Exception) { runCatching { java.nio.file.Files.deleteIfExists(file) }; System.err.println("calcify capacity lane $lane: lane snapshot not written (${e.message}); the next start scans") }
     }
 
     override fun process(record: Record<ByteArray, ByteArray>) {
+        consistent = false
         val metadata = context.recordMetadata().orElseThrow { IllegalStateException("record metadata unavailable") }
         val role = when (metadata.topic()) { config.captureTopic -> "CAPTURE"; config.controlTopic -> "CONTROL"; else -> throw IllegalStateException("unexpected input topic") }
         require(metadata.partition() == lane) { "record from partition ${metadata.partition()} reached lane $lane" }
@@ -149,6 +182,7 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
             ledger.persisted()      // the store now holds everything the ledger decided: settled objects may leave memory
         }
         forwards.forEach { (key, value) -> context.forward(record.withKey(key).withValue(value)) }
+        consistent = true
     }
 
     /** The ledger the processor is running on (tests and operators). */
