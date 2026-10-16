@@ -293,6 +293,21 @@ class CapacitySnapshotTest {
             kotlin.test.assertFailsWith<IllegalStateException> { failing.process(org.apache.kafka.streams.processor.api.Record(ByteArray(0), ByteArray(1), 0L)) }
             failing.close()
             assertFalse(clean.file.exists(), "no snapshot after a failed record")
+
+            // the case the flag exists for: an input is decided and then the record throws before its writes reach the store (a bad second member under failOnBadCapture)
+            val strict = CapacityProcessorConfig(1, { CapacityLaneSpec(binding, cfg) }, "CAPTURE", "CONTROL", "DECISIONS", "snapshot-test", failOnBadCapture = true, evictSettled = true)
+            val aheadOfStore = CapacityProcessor(strict, CapacityInputDecoder { _, _, _, _ ->
+                listOf(CapacityItem.Run(FinanceInput.Capture(ActionKey("n", "capture", "ahead-of-store"), ExecutionKey("r", "s", "AAPL", "ahead-of-store"), AccountId("acct-0"), AccountId("acct-1"), 1, 1)), CapacityItem.Bad("bad-member"))
+            }).also { it.init(clean.context) }
+            val sequenceInStore = clean.processor.currentLedger().sequence
+            clean.context.setRecordMetadata("CAPTURE", 0, clean.offset++)
+            kotlin.test.assertFailsWith<IllegalStateException> { aheadOfStore.process(org.apache.kafka.streams.processor.api.Record(ByteArray(0), ByteArray(1), 0L)) }
+            assertEquals(sequenceInStore + 1, aheadOfStore.currentLedger().sequence, "the ledger decided the first member before the record failed")
+            aheadOfStore.close()
+            assertFalse(clean.file.exists(), "no snapshot while the ledger is ahead of the store")
+            val afterwards = CapacityProcessor(clean.pc, decoder).also { it.init(clean.context) }
+            assertTrue(afterwards.restoredFrom.startsWith("scan"), afterwards.restoredFrom)
+            assertEquals(sequenceInStore, afterwards.currentLedger().sequence, "the restart rebuilds the store's state, not the ledger that ran ahead")
         }
     }
 }

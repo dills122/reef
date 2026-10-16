@@ -92,7 +92,7 @@ internal class EntityFilter(private val initialKeys: Int = 1 shl 20) {
             for (i in 0 until layers) {
                 val capacity = input.readLong(); val bits = input.readInt(); val count = input.readLong(); val words = input.readInt()
                 val previous = filter.layerList.lastOrNull()
-                require(if (previous == null) capacity in 64L..Int.MAX_VALUE && bits == 13 else capacity == previous.capacity * 2 && bits == minOf(previous.bitsPerKey + 1, 24)) { "corrupt filter layer shape" }
+                require(if (previous == null) capacity in 64L..(1L shl 22) && bits == 13 else capacity == previous.capacity * 2 && bits == minOf(previous.bitsPerKey + 1, 24)) { "corrupt filter layer shape" }
                 require(previous == null || previous.count == previous.capacity) { "corrupt filter: a layer before the newest is not full" }
                 require(count in 0..capacity && (count > 0 || i == 0)) { "corrupt filter layer count" }
                 val layer = Layer(capacity, bits)

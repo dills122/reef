@@ -150,7 +150,11 @@ internal object CapacityStore {
      * a newer store after a rebalance) is never used. Any refusal or error falls back to the scan, which stays the verified path, and the file is deleted either way, so a
      * snapshot is used at most once and cannot outlive a later crash. [onSnapshot] hears null when the snapshot was used, or why it was not (absent included).
      */
-    fun restore(config: CapacityConfig, kv: LifecycleKv, bindingDigest: String, evictSettled: Boolean = false, snapshot: java.nio.file.Path? = null, onSnapshot: (String?) -> Unit = {}): CapacityLedger? {
+    fun restore(config: CapacityConfig, kv: LifecycleKv, bindingDigest: String, evictSettled: Boolean = false, snapshot: java.nio.file.Path? = null, onSnapshot: (String?) -> Unit = {}): CapacityLedger? =
+        try { restoreChecked(config, kv, bindingDigest, evictSettled, snapshot, onSnapshot) }
+        finally { if (snapshot != null) runCatching { java.nio.file.Files.deleteIfExists(snapshot) } }     // also when a check before the snapshot step refuses the start: a snapshot is never kept past one start
+
+    private fun restoreChecked(config: CapacityConfig, kv: LifecycleKv, bindingDigest: String, evictSettled: Boolean, snapshot: java.nio.file.Path?, onSnapshot: (String?) -> Unit): CapacityLedger? {
         val metaBytes = kv.get(META) ?: run {
             snapshot?.let { if (java.nio.file.Files.deleteIfExists(it)) onSnapshot("the store is empty") }
             require(kv.scan("").isEmpty()) { "capacity store has entries but no meta" }; return null

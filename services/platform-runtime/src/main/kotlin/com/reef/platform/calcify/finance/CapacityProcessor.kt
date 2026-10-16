@@ -101,6 +101,7 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
     private var consistent = false
 
     override fun init(context: ProcessorContext<String, ByteArray>) {
+        consistent = false      // a re-init after a failure must not inherit the flag of the previous run
         this.context = context
         kv = StreamsLifecycleKv(context.getStateStore(config.storeName))
         lane = context.taskId().partition()
@@ -110,6 +111,7 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
         // the task's own directory; none (no snapshots) when the context has no state directory (a test context without one throws instead of returning null)
         val stateDir: java.io.File? = try { context.stateDir() } catch (_: NullPointerException) { null }
         val snapshot = stateDir?.let { java.io.File(it, "calcify-${config.storeName}.lane-snapshot").toPath() }
+        snapshot?.let { runCatching { java.nio.file.Files.deleteIfExists(it.resolveSibling("${it.fileName}.tmp")) } }       // a close cut off mid-write leaves a partial temp file; it is never read, only removed
         snapshotFile = if (config.evictSettled) snapshot else { snapshot?.let { java.nio.file.Files.deleteIfExists(it) }; null }     // a lane that does not evict never keeps one
         var why: String? = "absent"
         ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest, config.evictSettled, snapshotFile) { why = it } ?: CapacityLedger(laneSpec.capacity, if (config.evictSettled) EntityBacking { kv.get(it) } else null)
