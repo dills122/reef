@@ -28,8 +28,9 @@ internal object CapacityStore {
     private val HEX_DIGITS = "0123456789abcdef".toByteArray(StandardCharsets.ISO_8859_1)
 
     /** `e/<tag>/<lowercase hex of the framed key fields>`: one pass into one Latin-1 array, then one string (the tag is one ASCII character). */
-    fun entityKey(e: StateCommitment.Entity): String {
-        val key = e.keyBytes; val tag = e.tag
+    fun entityKey(e: StateCommitment.Entity): String = entityKey(e.tag, e.keyBytes)
+
+    fun entityKey(tag: String, key: ByteArray): String {
         if (tag.length != 1 || tag[0].code >= 0x80) return "e/$tag/${hex.formatHex(key)}"
         val out = ByteArray(4 + 2 * key.size)
         out[0] = 'e'.code.toByte(); out[1] = '/'.code.toByte(); out[2] = tag[0].code.toByte(); out[3] = '/'.code.toByte()
@@ -68,6 +69,13 @@ internal object CapacityStore {
         return out
     }
 
+    /** The value fields of a stored entity: the bytes behind the version frame. */
+    fun valueFields(stored: ByteArray): ByteArray {
+        val version = ENTITY_PREFIX
+        require(stored.size >= version.size && stored.copyOfRange(0, version.size).contentEquals(version)) { "unknown entity version" }
+        return stored.copyOfRange(version.size, stored.size)
+    }
+
     private fun decodeEntity(key: String, value: ByteArray): StateCommitment.Entity {
         val parts = key.split("/"); require(parts.size == 3 && parts[0] == "e" && parts[1].length == 1) { "malformed entity key" }
         val keyBytes = try { hex.parseHex(parts[2]) } catch (e: IllegalArgumentException) { throw IllegalArgumentException("malformed entity key", e) }
@@ -79,14 +87,15 @@ internal object CapacityStore {
     }
 
     /** The restored ledger, or null for an empty store (genesis). Refuses anything that is not exactly the state the head decision committed to. */
-    fun restore(config: CapacityConfig, kv: LifecycleKv, bindingDigest: String): CapacityLedger? {
+    fun restore(config: CapacityConfig, kv: LifecycleKv, bindingDigest: String, evictSettled: Boolean = false): CapacityLedger? {
         val metaBytes = kv.get(META) ?: run { require(kv.scan("").isEmpty()) { "capacity store has entries but no meta" }; return null }
         val meta = Meta.parse(metaBytes)
         require(meta.bindingDigest == bindingDigest) { "capacity store belongs to a different binding" }
         val head = kv.get(HEAD)?.let { FinanceWire.fromProto(reef.contracts.calcify.finance.v1.FinanceDecisionV1.parseFrom(it)) }
         require((head == null) == (meta.sequence == 0L)) { "head decision presence differs from sequence" }
         require(meta.configDigest == config.digest()) { "capacity store was written under a different configuration" }
-        val ledger = kv.scanStreaming("e/") { entries -> CapacityLedger.restore(config, entries.map { (k, v) -> decodeEntity(k, v) }.asIterable(), meta.sequence, meta.controls, meta.chain) }
+        val ledger = if (!evictSettled) kv.scanStreaming("e/") { entries -> CapacityLedger.restore(config, entries.map { (k, v) -> decodeEntity(k, v) }.asIterable(), meta.sequence, meta.controls, meta.chain) }
+        else CapacityLedger.restoreEvicting(config, EntityBacking { kv.get(it) }, CapacityLedger.Companion.EntitySource { tag, each -> kv.scanStreaming("e/$tag/") { entries -> for ((k, v) in entries) each(decodeEntity(k, v)) } }, meta.sequence, meta.controls, meta.chain)
         if (head == null) {
             require(meta.chain == ledger.genesisChain && ledger.entityCount == 0) { "genesis store is not empty or on another genesis" }
         } else {

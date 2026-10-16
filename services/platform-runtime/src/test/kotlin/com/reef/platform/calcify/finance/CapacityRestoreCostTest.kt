@@ -32,7 +32,8 @@ class CapacityRestoreCostTest {
         val mode = DecisionMode.ofWire(env("CAP_DECISION_MODE", DecisionMode.CAPTURE_SETTLE.wire))
         val accounts = (0 until accountCount).map { AccountId("acct-$it") }; val securities = (0 until instrumentCount).map { AssetId("I$it") }
         val capacity = CapacityConfig(null, usd, securities.toSet(), opening, 100_000_000, 100_000_000, 100_000_000, 100_000_000, mode)
-        val cfg = CapacityProcessorConfig("b".repeat(64), capacity, "CAPTURE", "CONTROL", "DECISIONS", "restore-cost")
+        val evict = env("CAP_EVICT", "false") == "true"
+        val cfg = CapacityProcessorConfig("b".repeat(64), capacity, "CAPTURE", "CONTROL", "DECISIONS", "restore-cost", evictSettled = evict)
         val dir = java.nio.file.Files.createTempDirectory("capacity-restore-cost").toFile()
         try {
             val props = Properties().also { it["application.id"] = "restore-cost"; it["bootstrap.servers"] = "localhost:1"; it["state.dir"] = dir.path }
@@ -48,16 +49,16 @@ class CapacityRestoreCostTest {
             val materialized = object : LifecycleKv { override fun get(key: String) = kv.get(key); override fun scan(prefix: String) = kv.scan(prefix) }   // the default scanStreaming materializes
             val liveBase = usedGb()
             val entries = store.approximateNumEntries()
-            for (label in listOf("materialized", "streamed", "materialized", "streamed")) {
+            for (label in if (evict) listOf("evicting", "evicting") else listOf("materialized", "streamed", "materialized", "streamed")) {
                 val source: LifecycleKv = if (label == "materialized") materialized else kv
                 usedGb(); resetPeaks()
                 val t0 = System.nanoTime()
-                val restored = CapacityStore.restore(capacity, source, "b".repeat(64)) ?: error("empty store")
+                val restored = CapacityStore.restore(capacity, source, "b".repeat(64), evictSettled = label == "evicting") ?: error("empty store")
                 val seconds = (System.nanoTime() - t0) / 1e9
                 val peak = peakGb()
                 check(restored.sequence == head.first && restored.commitment() == head.second) { "restored state is not the head the run produced" }
-                println("RESTORE-RUN mode=${mode.wire} trades=$trades entries=$entries $label scan: ${"%.2f".format(seconds)} s, peak heap ${"%.2f".format(peak)} GB, live before ${"%.2f".format(liveBase)} GB, live after ${"%.2f".format(usedGb())} GB")
-                if (label == "streamed") snapshotCost(restored, dir)
+                println("RESTORE-RUN mode=${mode.wire} trades=$trades entries=$entries $label restore (resident objects ${restored.residentObjects}): ${"%.2f".format(seconds)} s, peak heap ${"%.2f".format(peak)} GB, live before ${"%.2f".format(liveBase)} GB, live after ${"%.2f".format(usedGb())} GB")
+                if (label == "streamed" || label == "evicting") snapshotCost(restored, dir)
             }
         } finally {
             dir.deleteRecursively()
@@ -102,6 +103,7 @@ class CapacityRestoreCostTest {
             if (i % 5_000 == 0) context.resetForwards()
         }
         val ledger = processor.currentLedger()
+        println("RESTORE-RUN running lane heap after $trades trades (evict=${cfg.evictSettled}): ${"%.2f".format(usedGb())} GB, resident objects ${ledger.residentObjects}, ${"%.0f".format(usedGb() * 1e9 / trades)} B/trade")
         return ledger.sequence to ledger.commitment()
     }
 }
