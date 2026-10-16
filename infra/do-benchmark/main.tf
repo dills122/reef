@@ -1,5 +1,6 @@
 locals {
-  tags = distinct(var.tags)
+  tags    = distinct(var.tags)
+  two_box = var.load_droplet_size != ""
 }
 
 resource "digitalocean_droplet" "benchmark" {
@@ -42,6 +43,72 @@ resource "digitalocean_firewall" "benchmark" {
     protocol         = "tcp"
     port_range       = "22"
     source_addresses = var.allowed_ssh_cidrs
+  }
+
+  # Two-box runs: the load box reaches the venue's API (8080) over the private network, and nothing else is opened.
+  dynamic "inbound_rule" {
+    for_each = local.two_box ? [1] : []
+    content {
+      protocol           = "tcp"
+      port_range         = "8080"
+      source_droplet_ids = [digitalocean_droplet.load[0].id]
+    }
+  }
+
+  outbound_rule {
+    protocol              = "tcp"
+    port_range            = "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "udp"
+    port_range            = "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "icmp"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+}
+
+# Optional second box (var.load_droplet_size): runs the load generator (later, the bot workers) so the venue box serves only the system under test.
+# Same region, so both boxes sit in the region's default VPC and reach each other on private addresses.
+resource "digitalocean_droplet" "load" {
+  count             = local.two_box ? 1 : 0
+  image             = var.image
+  name              = "${var.droplet_name}-load"
+  region            = var.region
+  size              = var.load_droplet_size
+  monitoring        = var.monitoring
+  backups           = false
+  graceful_shutdown = true
+  tags              = local.tags
+
+  user_data = templatefile("${path.module}/cloud-init.yml.tftpl", {
+    ssh_user       = var.ssh_user
+    ssh_public_key = trimspace(var.ssh_public_key)
+  })
+}
+
+resource "digitalocean_firewall" "load" {
+  count       = local.two_box ? 1 : 0
+  name        = "${var.droplet_name}-load-fw"
+  droplet_ids = [digitalocean_droplet.load[0].id]
+  tags        = local.tags
+
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "22"
+    source_addresses = var.allowed_ssh_cidrs
+  }
+
+  # The venue box starts and collects the load run over SSH on the private network.
+  inbound_rule {
+    protocol           = "tcp"
+    port_range         = "22"
+    source_droplet_ids = [digitalocean_droplet.benchmark.id]
   }
 
   outbound_rule {

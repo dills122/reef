@@ -9,10 +9,13 @@
 #   (calcify-direct-bootstrap.mjs: Netty, in-memory intake with a durable Redpanda ack, 16 lanes, standing makers) with the data volumes on tmpfs, as a ladder of paced rates
 #   (REEF_FC_RATES, default "2500 5000 7500 10000" booked trades/s, REEF_FC_SECONDS each, default 60) and optionally one long hold (REEF_FC_LONG_RATE, REEF_FC_LONG_SECONDS, default 900);
 #   the smoke is 20 s at 500/s. Needs RAM for the tmpfs limits (REEF_FC_TMPFS_BOUNDARY_GB 40, REEF_FC_TMPFS_BROKER_GB 24). Knobs: REEF_FC_MODE, REEF_FC_EVICT, REEF_FC_QUANTITY (64 instruments over 16 lanes, fixed by the bootstrap).
+#   Two boxes: REEF_DO_LOAD_SIZE=<droplet size> adds a second droplet in the same region and VPC that runs the load generator (calcify-load) against the venue's API on the private
+#   network, so the venue box serves only the system under test (result.json then says topology "two-box"). The venue box starts and collects the load over SSH with a throwaway key
+#   made at run time; the venue firewall opens 8080 to the load box only. The load box is billed while it exists, and the same destroy removes both.
 #   `soak` / `soaksmoke` (docs/work/CALCIFY_SOAK_HARNESS.md) hold 10,000 trades/s for 15 and 30 minutes on the finance lane and projection only, in capture-settle-v1 mode.
 #   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then the finance lane cases; `enginesmoke` is a few seconds of the engine drain.
 #
-# Needs DIGITALOCEAN_TOKEN in .env or the environment, an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
+# Needs DIGITALOCEAN_TOKEN in the environment or in this checkout's .env (a git worktree has its own .env: export the token when it lacks one), an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -56,6 +59,11 @@ remote() {
   ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$ROOT_DIR/.tmp-do-known-hosts" -o ServerAliveInterval=30 "$USER_NAME@$HOST" "$@"
 }
 
+# The same, on the optional second box that runs the load generator (REEF_DO_LOAD_SIZE).
+remote_load() {
+  ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$ROOT_DIR/.tmp-do-known-hosts" -o ServerAliveInterval=30 "$USER_NAME@$LOAD_HOST" "$@"
+}
+
 # Untracked files are deliberately allowed (the owner's local notes and .env live there): `git archive HEAD` below ships tracked files only, so the shipped tree is exactly HEAD.
 if [ "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" != 0 ]; then
   echo "tracked changes present; run from a clean checkout so the shipped tree is exactly HEAD" >&2; exit 1
@@ -83,6 +91,25 @@ if ! remote "sudo test -f /var/log/reef-benchmark-bootstrap.done"; then
   remote "sudo test -f /var/log/reef-benchmark-bootstrap.done" || { log "bootstrap still not done after the repair; giving up (the droplet is destroyed on exit)"; exit 1; }
 fi
 log "host bootstrap ready"
+
+# Two-box run (REEF_DO_LOAD_SIZE=<droplet size>): the load generator runs on its own small box in the same VPC and reaches the venue's API on the private network, so the venue box
+# serves only the system under test. The venue box drives it over SSH with a throwaway key made here and installed on the load box; the key never leaves the two droplets.
+LOAD_ENV=""
+if [ -n "${REEF_DO_LOAD_SIZE:-}" ]; then
+  LOAD_HOST="$(outputs load_public_ipv4)"; LOAD_PRIVATE="$(outputs load_private_ipv4)"; VENUE_PRIVATE="$(outputs venue_private_ipv4)"
+  [ -n "$LOAD_HOST" ] && [ -n "$LOAD_PRIVATE" ] && [ -n "$VENUE_PRIVATE" ] || { log "the load box or a private address is missing from the tofu outputs; refusing to run two-box"; exit 1; }
+  log "load box $USER_NAME@$LOAD_HOST (private $LOAD_PRIVATE), venue private $VENUE_PRIVATE; waiting for SSH"
+  for _ in $(seq 1 60); do remote_load "true" 2>/dev/null && break; sleep 5; done
+  remote_load "true" || { log "the load box never accepted SSH"; exit 1; }
+  # cloud-init keeps installing packages for a few minutes after the user exists; let it finish so it does not take CPU from the load run
+  for _ in $(seq 1 120); do remote_load "sudo test -f /var/log/reef-benchmark-bootstrap.done" 2>/dev/null && break; sleep 5; done
+  remote_load "lscpu | grep -E 'Model name|^CPU\\(s\\)'; free -g | head -2" 2>&1 | tee "$OUT_DIR/load-host.txt"
+  remote "rm -f ~/.ssh/loadbox ~/.ssh/loadbox.pub && mkdir -p ~/.ssh && ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/loadbox"
+  remote "cat ~/.ssh/loadbox.pub" | remote_load "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+  remote "ssh -i ~/.ssh/loadbox -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR $USER_NAME@$LOAD_PRIVATE true" || { log "the venue box cannot SSH to the load box on the private network"; exit 1; }
+  LOAD_ENV="FC_LOAD_SSH=$USER_NAME@$LOAD_PRIVATE FC_LOAD_KEY=/home/$USER_NAME/.ssh/loadbox FC_VENUE_URL=http://$VENUE_PRIVATE:8080"
+  log "two-box: load generator on the load box, venue API at http://$VENUE_PRIVATE:8080"
+fi
 
 if [ "$VOLUME_GB" -gt 0 ]; then
   VOLNAME="$(outputs volume_name)"
@@ -147,7 +174,7 @@ run_fullchain() {
   local id="fc${label//[^A-Za-z0-9]/}"
   local timeout_s=$(( seconds + ${REEF_FC_DRAIN_SECONDS:-600} + 1500 ))
   log "case $label (${rate} trades/s for ${seconds}s, id $id: $*)"
-  remote "cd $REMOTE_DIR && (test -f .env || cp .env.example .env) && rm -rf /tmp/fcout/$label && mkdir -p /tmp/fcout/$label && env FC_ID=$id FC_RATE=$rate FC_SECONDS=$seconds FC_OUT_DIR=/tmp/fcout/$label FC_TMPFS=true FC_MODE=${REEF_FC_MODE:-capture-settle-v1} FC_EVICT=${REEF_FC_EVICT:-true} FC_QUANTITY=${REEF_FC_QUANTITY:-1} FC_TMPFS_BOUNDARY_GB=${REEF_FC_TMPFS_BOUNDARY_GB:-40} FC_TMPFS_BROKER_GB=${REEF_FC_TMPFS_BROKER_GB:-24} $* timeout $timeout_s node scripts/dev/calcify-fullchain-soak.mjs 2>&1 | tee /tmp/fcout/$label/run.log | grep -E 'FULLCHAIN-RESULT|FAILED|fullchain .* t=' | tail -n 200; echo \"leftover containers: \$(docker ps -aq | wc -l)\"" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+  remote "cd $REMOTE_DIR && (test -f .env || cp .env.example .env) && rm -rf /tmp/fcout/$label && mkdir -p /tmp/fcout/$label && env FC_ID=$id FC_RATE=$rate FC_SECONDS=$seconds FC_OUT_DIR=/tmp/fcout/$label FC_TMPFS=true FC_MODE=${REEF_FC_MODE:-capture-settle-v1} FC_EVICT=${REEF_FC_EVICT:-true} FC_QUANTITY=${REEF_FC_QUANTITY:-1} FC_TMPFS_BOUNDARY_GB=${REEF_FC_TMPFS_BOUNDARY_GB:-40} FC_TMPFS_BROKER_GB=${REEF_FC_TMPFS_BROKER_GB:-24} $LOAD_ENV $* timeout $timeout_s node scripts/dev/calcify-fullchain-soak.mjs 2>&1 | tee /tmp/fcout/$label/run.log | grep -E 'FULLCHAIN-RESULT|FAILED|fullchain .* t=' | tail -n 200; echo \"leftover containers: \$(docker ps -aq | wc -l)\"" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
   mkdir -p "$OUT_DIR/fullchain"
   remote "tar -C /tmp/fcout -czf - $label" | tar -C "$OUT_DIR/fullchain" -xzf - || log "could not fetch the full-chain output of $label"
   log "fetched $OUT_DIR/fullchain/$label: $(ls "$OUT_DIR/fullchain/$label" 2>/dev/null | tr '\n' ' ')"

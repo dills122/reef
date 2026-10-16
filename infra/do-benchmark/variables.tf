@@ -61,3 +61,9 @@ variable "volume_size_gb" {
   type        = number
   default     = 0
 }
+
+variable "load_droplet_size" {
+  description = "Droplet size slug of an optional second box that runs the load generator (empty = single box). Same region, so it shares the default VPC with the venue box."
+  type        = string
+  default     = ""
+}

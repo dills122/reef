@@ -15,6 +15,8 @@
 // (limits), FC_SAMPLE_SECONDS (10), FC_DRAIN_SECONDS (600), FC_OUT_DIR, FC_TEARDOWN (true: remove the capacity container and the compose project at the end), FC_SKIP_BUILD (true: use
 // the images already built), FC_CAPACITY_JAVA_OPTS (default "-Xmx8g -XX:+UseParallelGC"), FC_ENGINE_BATCH (matching batch, default the bootstrap's 500).
 // The stack has 16 partitions and so 16 capacity lanes (fixed by the bootstrap).
+// Two-box runs: FC_LOAD_SSH (user@host of a second box on the private network), FC_LOAD_KEY (private key path on this box) and FC_VENUE_URL (this box's API as the load box sees it, e.g.
+// http://10.x.x.x:8080) run `calcify-load` on the other box, so the load generator's CPU is not taken from the system under test. The binary is built here and copied over.
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync, appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -37,6 +39,9 @@ const tmpfs = env("FC_TMPFS", "false") === "true";
 const skipBuild = env("FC_SKIP_BUILD", "false") === "true";
 const outDir = resolve(env("FC_OUT_DIR", `reports/calcify-fullchain/${id}`));
 const lanes = 16;
+const loadSsh = env("FC_LOAD_SSH", ""), loadKey = env("FC_LOAD_KEY", ""), venueUrl = env("FC_VENUE_URL", "http://127.0.0.1:8080");
+const twoBox = loadSsh !== "";
+if (twoBox && (!loadKey || venueUrl.startsWith("http://127."))) throw new Error("FC_LOAD_SSH needs FC_LOAD_KEY and an FC_VENUE_URL the other box can reach");
 if (!Number.isSafeInteger(rate) || rate < 1 || !Number.isSafeInteger(seconds) || seconds < 1 || !["two-step", "capture-settle-v1"].includes(mode) ||
     !["true", "false"].includes(evict) || !/^[1-9][0-9]{0,8}$/.test(quantity)) throw new Error("invalid FC_* settings");
 mkdirSync(outDir, { recursive: true });
@@ -55,6 +60,9 @@ const redpanda = `${project}-redpanda`;
 const boundaryDb = "reef-boundary-postgres";
 const log = (message) => console.log(`[fullchain ${new Date().toISOString().slice(11, 19)}] ${message}`);
 let instruments = [];
+const sshOptions = ["-i", loadKey, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR", "-o", "ServerAliveInterval=30"];
+const remoteBinary = "/tmp/calcify-load", remoteReport = "/tmp/calcify-load-report.json";
+const shellQuote = (value) => `'${String(value).replace(/'/g, `'\\''`)}'`;
 
 try { await main(); } catch (error) { log(`FAILED: ${error?.stack ?? error}`); await finish(false); process.exitCode = 1; }
 
@@ -115,20 +123,28 @@ async function main() {
   log("building the load tool");
   const loadBinary = await buildLoadTool();
 
+  if (twoBox) {
+    log(`copying the load tool to ${loadSsh}`);
+    await runCapture("scp", [...sshOptions, loadBinary, `${loadSsh}:${remoteBinary}`]);
+    await runCapture("ssh", [...sshOptions, loadSsh, `chmod +x ${remoteBinary}`]);
+  }
   log("starting the load and the sampler");
   const startedAt = Date.now();
   const csv = join(outDir, "samples.csv");
   writeFileSync(csv, "t_s,engine_acked,events_hw,resolved_hw,decisions_hw,projected,cpu_engine,cpu_capacity,cpu_redpanda,cpu_resolver,cpu_api,cpu_extractor,cpu_verifier,cpu_pg_boundary,cpu_pg_runtime,load1\n");
   const loadReport = join(outDir, "load-report.json");
   const loadArgs = ["-smoke-id", id, "-workload-mode", "aggressor", "-duration", `${seconds}s`, "-pairs-per-second", String(rate), "-workers", String(workers), "-instrument-ids", instruments.join(","),
-    "-quantity", quantity, "-base-url", "http://127.0.0.1:8080", "-report-out", loadReport];
-  const loadDone = runLogged(loadBinary, loadArgs, join(outDir, "load.log"), {}, root);
+    "-quantity", quantity, "-base-url", venueUrl, "-report-out", twoBox ? remoteReport : loadReport];
+  const loadDone = twoBox
+    ? runLogged("ssh", [...sshOptions, loadSsh, `rm -f ${remoteReport}; ${remoteBinary} ${loadArgs.map(shellQuote).join(" ")}`], join(outDir, "load.log"), {}, root)
+    : runLogged(loadBinary, loadArgs, join(outDir, "load.log"), {}, root);
   let loadFinished = false; loadDone.then(() => { loadFinished = true; });
   while (!loadFinished) {
     await Promise.race([loadDone, sleep(sampleSeconds * 1000)]);
     await sample(csv, startedAt);
   }
   const loadCode = await loadDone;
+  if (twoBox) await runCapture("scp", [...sshOptions, `${loadSsh}:${remoteReport}`, loadReport], true);
   log(`load finished with code ${loadCode}; draining`);
 
   const result = await drain(loadReport, loadCode);
@@ -282,7 +298,7 @@ async function drain(loadReport, loadCode) {
   if (proj !== want) problems.push(`projected ${proj} decisions, expected exactly ${want} (${trades} trades x ${perTrade} + ${fundingRecords} funding records)`);
   if (report.droppedPairs) problems.push(`the load tool dropped ${report.droppedPairs} trade jobs`);
   if ((report.acceptedOrders ?? 0) !== trades) problems.push(`accepted ${report.acceptedOrders} orders for ${trades} trades (aggressor mode: one order per trade)`);
-  return { id, project, profile: "direct in-memory intake + durable Redpanda ack, 16 lanes, standing makers (D7 profile)", mode, evict: evict === "true", lanes, instruments: instruments.length, quantity: Number(quantity), tmpfs,
+  return { id, project, profile: "direct in-memory intake + durable Redpanda ack, 16 lanes, standing makers (D7 profile)", mode, evict: evict === "true", lanes, instruments: instruments.length, quantity: Number(quantity), tmpfs, topology: twoBox ? "two-box (load generator on its own box)" : "one-box (load generator on the venue box)",
     targetTradesPerSecond: rate, seconds, expectedTrades, loadAcceptedOrders: report.acceptedOrders ?? null, loadCompletedTrades: trades, loadExitCode: loadCode,
     loadReportSummary: { acceptedOrdersPerSecond: report.acceptedOrdersPerSecond ?? null, acceptedOrdersAtDeadline: report.acceptedOrdersAtDeadline ?? null, droppedPairs: report.droppedPairs ?? null, retries: report.retries ?? null,
       failures: report.failures ?? null, gatePassed: report.gatePassed ?? null, gateReasons: report.gateReasons ?? null },

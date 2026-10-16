@@ -864,6 +864,7 @@ configure_tf_vars() {
   export TF_VAR_image="${REEF_DO_IMAGE:-ubuntu-24-04-x64}"
   export TF_VAR_ssh_user="${REEF_DO_SSH_USER:-reefbench}"
   export TF_VAR_droplet_name="${REEF_DO_DROPLET_NAME:-reef-stream-ack-benchmark}"
+  export TF_VAR_load_droplet_size="${REEF_DO_LOAD_SIZE:-}"   # a second box for the load generator; empty keeps a single box
   export TF_VAR_allowed_ssh_cidrs
   log "resolving allowed SSH CIDRs"
   TF_VAR_allowed_ssh_cidrs="$(allowed_ssh_cidrs_json "$mode")"
