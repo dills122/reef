@@ -73,17 +73,23 @@ class CapacityStoreTest {
         assertFailsWith<IllegalArgumentException> { CapacityStore.restore(config, stray, binding) }
     }
 
+    private var evictMode = false
+
     private fun refused(kv: MemoryLifecycleKv, what: String, cfg: CapacityConfig = config, bindingDigest: String = binding) {
-        val failure = runCatching { CapacityStore.restore(cfg, kv, bindingDigest) }.exceptionOrNull()
+        val failure = runCatching { CapacityStore.restore(cfg, kv, bindingDigest, evictSettled = evictMode) }.exceptionOrNull()
         assertTrue(failure is IllegalArgumentException || failure is IllegalStateException || failure is com.google.protobuf.InvalidProtocolBufferException || failure is java.util.NoSuchElementException, "$what: expected a refusal, got $failure")
     }
 
     private fun copy(kv: MemoryLifecycleKv) = MemoryLifecycleKv().also { c -> kv.entries.forEach { (k, v) -> c.entries[k] = v.copyOf() } }
 
-    @Test fun anythingThatIsNotExactlyTheCommittedStateIsRefused() {
+    @Test fun anythingThatIsNotExactlyTheCommittedStateIsRefused() { evictMode = false; tamper() }
+
+    @Test fun anythingThatIsNotExactlyTheCommittedStateIsRefusedByAnEvictingRestoreToo() { evictMode = true; tamper() }
+
+    private fun tamper() {
         val rnd = Random(42); val inputs = generateSequence { input(rnd) }.take(200).toList()
         val (ledger, kv, decisions) = run(inputs); assertTrue(decisions.size > 40)
-        assertNotNull(CapacityStore.restore(config, kv, binding), "the untouched store restores")
+        assertNotNull(CapacityStore.restore(config, kv, binding, evictSettled = evictMode), "the untouched store restores")
         val entityKeys = kv.entries.keys.filter { it.startsWith("e/") }
         assertTrue(entityKeys.size > 30)
 
@@ -93,6 +99,10 @@ class CapacityStoreTest {
         for (key in entityKeys.shuffled(Random(2)).take(15)) { val t = copy(kv); t.entries.remove(key); refused(t, "remove $key") }
         run { val t = copy(kv); t.entries["e/P/" + CapacityStore.entityKey(StateCommitment.Entity("P", Canon.bytes { str("acct-1"); str("MSFT") }, ByteArray(0))).removePrefix("e/P/")] = t.entries.getValue(entityKeys.first { it.startsWith("e/P/") }); refused(t, "extra position in an unknown asset") }
         run { val t = copy(kv); t.entries["e/Z/00"] = ByteArray(10); refused(t, "unknown class") }
+        run { val t = copy(kv); t.entries["e/a/00"] = ByteArray(10); refused(t, "unknown lower-case class") }
+        run { val t = copy(kv); t.entries["e/"] = ByteArray(10); refused(t, "bare prefix") }
+        run { val t = copy(kv); t.entries["e/X"] = ByteArray(10); refused(t, "class without separator") }
+        run { val t = copy(kv); t.entries["e/X0"] = ByteArray(10); refused(t, "key just past a class") }
         run { val t = copy(kv); t.entries.remove(CapacityStore.HEAD); refused(t, "head missing") }
         run { val t = copy(kv); t.entries.remove(CapacityStore.META); refused(t, "meta missing") }
         run { val t = copy(kv); val m = CapacityStore.Meta.parse(t.entries.getValue(CapacityStore.META)); t.entries[CapacityStore.META] = m.copy(controls = m.controls + 1).bytes(); refused(t, "controls differ") }

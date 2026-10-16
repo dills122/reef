@@ -82,6 +82,13 @@ internal object CapacityRuntime {
      */
     internal fun streamsStateDirectory(configured: Path): Path = configured.resolve("streams")
 
+    /** `CALCIFY_CAPACITY_EVICT_SETTLED`: unset or blank means on; `false` keeps every trade of the session in each lane's memory (the way to rule eviction out when diagnosing). */
+    internal fun evictSettled(lookup: (String) -> String?): Boolean = when (val raw = lookup("CALCIFY_CAPACITY_EVICT_SETTLED")?.takeIf { it.isNotBlank() }) {
+        null, "true" -> true
+        "false" -> false
+        else -> error("CALCIFY_CAPACITY_EVICT_SETTLED must be true or false, not $raw")
+    }
+
     /** Builds (does not start) the launcher. Reads files and the environment only: no broker or database connection is opened here. */
     fun create(lookup: (String) -> String? = System::getenv): CapacityLauncher {
         fun required(key: String) = lookup(key)?.takeIf { it.isNotBlank() } ?: error("missing $key")
@@ -123,7 +130,7 @@ internal object CapacityRuntime {
             connectTimeout = 5; socketTimeout = 120; reWriteBatchedInserts = true
         }
         return CapacityLauncher(deployment.plan, deployment.decoder, deployment.topics, deployment.applicationId, evidenceProps, streamsProps, streamsStateDirectory(stateDir).toString(), dataSource,
-            threads = threads, projectionIntervalMs = interval, maxApply = maxApply)
+            threads = threads, projectionIntervalMs = interval, maxApply = maxApply, evictSettled = evictSettled(lookup))
     }
 
     /** The capacity role is its own process: it must not share a JVM (or credentials) with the finite roles or a Calcify stage. */

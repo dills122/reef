@@ -49,13 +49,20 @@ internal class CapacityProcessorConfig(
      * mistakes and are only counted. The launcher turns this on; it is off here so the processor's own tests can exercise the counting path.
      */
     val failOnBadCapture: Boolean = false,
+    /**
+     * When true, each lane keeps in memory only what its next decision can still change (positions, pending trades) and reads every settled trade and old action back
+     * from its store through an in-heap filter, so memory grows only by the commitment trie (about 350 bytes per combined trade) and the filter (about 3 bytes per key), not by the
+     * trades themselves. Decisions, chains, commitments and stored entities are byte-identical
+     * either way; only restore, which then streams the entities instead of building every object, and the lane's memory differ.
+     */
+    val evictSettled: Boolean = false,
 ) {
     /** One lane, lane 0. */
-    constructor(bindingDigest: String, capacity: CapacityConfig, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance") :
-        this(1, { lane -> require(lane == 0) { "single-lane configuration" }; CapacityLaneSpec(bindingDigest, capacity) }, captureTopic, controlTopic, decisionsTopic, applicationId, storeName)
+    constructor(bindingDigest: String, capacity: CapacityConfig, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", evictSettled: Boolean = false) :
+        this(1, { lane -> require(lane == 0) { "single-lane configuration" }; CapacityLaneSpec(bindingDigest, capacity) }, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, evictSettled = evictSettled)
 
-    constructor(plan: CapacityPlan, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", logHead: ((Int) -> Pair<Long, String>?)? = null, failOnBadCapture: Boolean = false) :
-        this(plan.lanes, plan::spec, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, logHead, failOnBadCapture)
+    constructor(plan: CapacityPlan, captureTopic: String, controlTopic: String, decisionsTopic: String, applicationId: String, storeName: String = "capacity-finance", logHead: ((Int) -> Pair<Long, String>?)? = null, failOnBadCapture: Boolean = false, evictSettled: Boolean = false) :
+        this(plan.lanes, plan::spec, captureTopic, controlTopic, decisionsTopic, applicationId, storeName, logHead, failOnBadCapture, evictSettled)
 
     /** Streams names the store's changelog `<application.id>-<store>-changelog`. */
     val changelogTopic: String get() = "$applicationId-$storeName-changelog"
@@ -90,7 +97,7 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
         require(lane in 0 until config.lanes) { "partition $lane is outside the ${config.lanes} configured lanes" }
         laneSpec = config.spec(lane)
         configDigest = laneSpec.capacity.digest()      // fixed for the run: not recomputed (sorting and hashing the account and security sets) for every record
-        ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest) ?: CapacityLedger(laneSpec.capacity)
+        ledger = CapacityStore.restore(laneSpec.capacity, kv, laneSpec.bindingDigest, config.evictSettled) ?: CapacityLedger(laneSpec.capacity, if (config.evictSettled) EntityBacking { kv.get(it) } else null)
         config.logHead?.let { head ->
             val expected = head(lane)
             check(if (expected == null) ledger.sequence == 0L else ledger.sequence == expected.first && ledger.chain == expected.second) {
@@ -139,6 +146,7 @@ internal class CapacityProcessor(private val config: CapacityProcessorConfig, pr
             writes[CapacityStore.HEAD] = it
             writes[CapacityStore.META] = CapacityStore.Meta(laneSpec.bindingDigest, configDigest, ledger.sequence, ledger.chain, ledger.controls).bytes()
             kv.apply(writes)
+            ledger.persisted()      // the store now holds everything the ledger decided: settled objects may leave memory
         }
         forwards.forEach { (key, value) -> context.forward(record.withKey(key).withValue(value)) }
     }
