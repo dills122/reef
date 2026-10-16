@@ -47,6 +47,9 @@ internal data class CapacityConfig(
     })
 }
 
+/** Where an evicting [CapacityLedger] reads back an entity it no longer holds: the durable store, by [CapacityStore.entityKey]. */
+internal fun interface EntityBacking { fun get(storeKey: String): ByteArray? }
+
 /** What one input did: its disposition, and the decision when it was recorded (refusals are not recorded and change nothing). */
 internal data class CapacityOutcome(val disposition: Disposition, val decision: Decision?)
 
@@ -61,7 +64,7 @@ internal data class CapacityOutcome(val disposition: Disposition, val decision: 
  *
  * This commits synchronously (the root after every decision). The lagged option of design 5.6 is a separate, gated stage.
  */
-internal class CapacityLedger(val config: CapacityConfig) {
+internal class CapacityLedger(val config: CapacityConfig, private val backing: EntityBacking? = null) {
     val genesisChain: String = CapacityChain.genesisOf(config)
 
     private val positions = HashMap<Pair<AccountId, AssetId>, Long>()
@@ -72,6 +75,31 @@ internal class CapacityLedger(val config: CapacityConfig) {
     /** Accounts admitted by funding (only used when the configuration has no fixed account set); derived from the positions at restore, so it is not separate state. */
     private val admitted = HashSet<AccountId>()
     private val trie = FlatStateTrie()
+
+    // ---- eviction (only when [backing] is given) ----
+    // Counts stand in for the maps' sizes, because the maps no longer hold everything. With a backing store, an execution, its obligation, its attempts and every action leave
+    // the maps once the store holds them, and a settled trade is never held again: the maps keep only what the next decision can still change (pending trades and their attempts).
+    private var executionCount = 0; private var obligationCount = 0; private var attemptCount = 0; private var actionCount = 0L; private var fundedCount = 0
+    /** Which keys of classes X (executions, hence obligations) and K (actions) were ever written: a key it has never seen is answered without a store read. Null when nothing is evicted. */
+    private val writtenKeys: EntityFilter? = if (backing != null) EntityFilter() else null
+    private val retiredActions = ArrayList<ActionKey>(); private val retiredExecutions = ArrayList<ExecutionKey>()
+    private val attemptNumbers = HashMap<ExecutionKey, ArrayList<Int>>()
+
+    /** Objects held in the entity maps (a metric and a test aid). */
+    val residentObjects: Int get() = executions.size + obligations.size + attempts.size + actions.size
+
+    /**
+     * The caller has applied every write the ledger reported so far (see [lastWrites]) to the backing store: the objects the ledger no longer needs may leave memory.
+     * Call it after each batch of decisions is stored and before the next decision that may read it back; a ledger without a backing store ignores it.
+     */
+    fun persisted() {
+        if (backing == null) return
+        for (a in retiredActions) actions.remove(a)
+        retiredActions.clear()
+        for (e in retiredExecutions) { executions.remove(e); obligations.remove(e); attemptNumbers.remove(e)?.forEach { attempts.remove(e to it) } }
+        retiredExecutions.clear()
+    }
+
     var sequence = 0L; private set
     var controls = 0; private set
     var chain: String = genesisChain; private set
@@ -79,7 +107,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
     val entityCount: Int get() = trie.size
 
     /** The abstract state as an immutable [FinanceState] (O(n); tests, restore checks and the reference commitment). */
-    fun snapshot(): FinanceState = FinanceState(HashMap(positions), HashMap(executions), HashMap(obligations), HashMap(attempts), HashMap(actions), sequence, chain, controls)
+    fun snapshot(): FinanceState = check(backing == null) { "an evicting ledger does not hold the whole state" }.let { FinanceState(HashMap(positions), HashMap(executions), HashMap(obligations), HashMap(attempts), HashMap(actions), sequence, chain, controls) }
 
     /** Branch hashes the commitment trie has computed so far (a metric: the cost of a commitment update is the stale branches it re-hashes). */
     val branchHashes: Long get() = trie.branchHashes
@@ -93,12 +121,31 @@ internal class CapacityLedger(val config: CapacityConfig) {
     /** The entities the last recorded decision wrote, in write order (an entity written twice appears twice; the last one wins). Empty after a refusal. A caller that persists the ledger stores exactly these. */
     val lastWrites: List<StateCommitment.Entity> get() = writes
 
-    private fun commit(e: StateCommitment.Entity) { writes += e; val k = StateCommitment.keyOf(e); trie.put(k, StateCommitment.leafOf(e, k)) }
+    private fun commit(e: StateCommitment.Entity) {
+        writes += e; val k = StateCommitment.keyOf(e); trie.put(k, StateCommitment.leafOf(e, k))
+        if (writtenKeys != null && (e.tag == "X" || e.tag == "K")) writtenKeys.add(e.tag[0], e.keyBytes)
+    }
     private fun commitPosition(k: Pair<AccountId, AssetId>, v: Long) = commit(StateCommitment.Entity("P", Canon.bytes { str(k.first.value); str(k.second.value) }, Canon.bytes { long(v) }))
-    private fun commitExecution(k: ExecutionKey, c: Captured) = commit(StateCommitment.Entity("X", Canon.bytes { execution(k) }, Canon.bytes { str(c.buyer.value); str(c.seller.value); long(c.quantity); long(c.priceNanos) }))
-    private fun commitObligation(k: ExecutionKey, o: Obligation) = commit(StateCommitment.Entity("O", Canon.bytes { execution(k) }, Canon.bytes { str(o.status.name); long(o.cashResidual); long(o.shareResidual) }))
+    private fun commitExecution(k: ExecutionKey, c: Captured) = commit(StateCommitment.Entity("X", executionKeyBytes(k), Canon.bytes { str(c.buyer.value); str(c.seller.value); long(c.quantity); long(c.priceNanos) }))
+    private fun commitObligation(k: ExecutionKey, o: Obligation) = commit(StateCommitment.Entity("O", executionKeyBytes(k), Canon.bytes { str(o.status.name); long(o.cashResidual); long(o.shareResidual) }))
     private fun commitAttempt(k: ExecutionKey, n: Int, d: Disposition) = commit(StateCommitment.Entity("A", Canon.bytes { execution(k); int(n) }, Canon.bytes { str(d.name) }))
-    private fun commitAction(k: ActionKey, r: ActionRecord) = commit(StateCommitment.Entity("K", Canon.bytes { str(k.namespace); str(k.domain); str(k.actionId) }, Canon.bytes { str(r.digest); str(r.disposition.name) }))
+    private fun commitAction(k: ActionKey, r: ActionRecord) = commit(StateCommitment.Entity("K", actionKeyBytes(k), Canon.bytes { str(r.digest); str(r.disposition.name) }))
+
+    private fun executionKeyBytes(k: ExecutionKey) = Canon.bytes { execution(k) }
+    private fun actionKeyBytes(k: ActionKey) = Canon.bytes { str(k.namespace); str(k.domain); str(k.actionId) }
+
+    // ---- lookups: the maps first, then (when evicting) the filter and the store ----
+
+    /** The stored value fields of entity class [tag] under [keyBytes], or null when the filter says it was never written or the store has nothing (a false positive). */
+    private fun stored(tag: Char, keyBytes: ByteArray): DecodedFields? {
+        if (backing == null || !writtenKeys!!.mightContain(tag, keyBytes)) return null
+        val raw = backing.get(CapacityStore.entityKey(tag.toString(), keyBytes)) ?: return null
+        return DecodedFields(CapacityStore.valueFields(raw))
+    }
+    private fun actionOf(k: ActionKey): ActionRecord? = actions[k] ?: stored('K', actionKeyBytes(k))?.let { v -> ActionRecord(v.text().also { d -> require(hex64.matches(d)) { "action digest is not 64 lowercase hex" } }, Disposition.valueOf(v.text())).also { v.end() } }
+    private fun executionOf(k: ExecutionKey): Captured? = executions[k] ?: stored('X', executionKeyBytes(k))?.let { v -> Captured(AccountId(v.text()), AccountId(v.text()), v.long(), v.long()).also { v.end() } }
+    /** An evicted obligation is SETTLED by construction: a pending one is never evicted. */
+    private fun obligationOf(k: ExecutionKey): Obligation? = obligations[k] ?: stored('X', executionKeyBytes(k))?.let { Obligation(ObligationStatus.SETTLED, 0, 0) }
 
     private fun pos(a: AccountId, s: AssetId) = positions[a to s] ?: 0L
     /** May [a] take part in a capture: in the fixed set, or admitted by funding. */
@@ -129,7 +176,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
     fun decide(input: FinanceInput): CapacityOutcome {
         writes.clear()
         val digest = input.digest()
-        actions[input.action]?.let { prior -> return refused(if (prior.digest == digest) Disposition.PRIOR_RESULT else Disposition.ACTION_CONFLICT) }
+        actionOf(input.action)?.let { prior -> return refused(if (prior.digest == digest) Disposition.PRIOR_RESULT else Disposition.ACTION_CONFLICT) }
         return when (input) {
             is FinanceInput.Capture -> capture(input, digest)
             is FinanceInput.CaptureSettle -> captureSettle(input, digest)
@@ -141,13 +188,14 @@ internal class CapacityLedger(val config: CapacityConfig) {
     /** Records the decision: the action, the sequence, the commitment of the post-state, the chain link. Everything before it has already been checked, so a decision either happens whole or not at all. */
     private fun record(input: FinanceInput, digest: String, disposition: Disposition, legs: List<Leg>): CapacityOutcome {
         sequence++
-        val rec = ActionRecord(digest, disposition); actions[input.action] = rec; commitAction(input.action, rec)
+        val rec = ActionRecord(digest, disposition); actions[input.action] = rec; actionCount++; commitAction(input.action, rec)
+        if (backing != null) retiredActions += input.action
         val stateDigest = StateCommitment.commitment(sequence, controls, trie.root())
         val priorChain = chain
         chain = checksumOf(sequence, input.action, digest, disposition, legs, priorChain, stateDigest)
         // Local invariants in place of the whole-state check (design 5.5).
         check(legsBalance(legs)) { "legs do not balance" }
-        check(sequence == actions.size.toLong()) { "action count differs from sequence" }
+        check(sequence == actionCount) { "action count differs from sequence" }
         return CapacityOutcome(disposition, Decision(sequence, input.action, digest, disposition, legs, priorChain, stateDigest, chain))
     }
 
@@ -160,7 +208,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
         if (AssetId(execution.instrumentId) !in config.securities) return Disposition.INVALID_INPUT
         if (buyer == seller || quantity <= 0 || priceNanos < 0) return Disposition.INVALID_INPUT
         try { Math.multiplyExact(quantity, priceNanos) } catch (_: ArithmeticException) { return Disposition.AMOUNT_OVERFLOW }
-        executions[execution]?.let { old ->
+        executionOf(execution)?.let { old ->
             return if (old.buyer == buyer && old.seller == seller && old.quantity == quantity && old.priceNanos == priceNanos) Disposition.EXECUTION_ALREADY_CAPTURED else Disposition.EXECUTION_CONFLICT
         }
         return null
@@ -168,10 +216,10 @@ internal class CapacityLedger(val config: CapacityConfig) {
 
     private fun capture(i: FinanceInput.Capture, digest: String): CapacityOutcome {
         captureRefusal(i.execution, i.buyer, i.seller, i.quantity, i.priceNanos)?.let { return refused(it) }
-        if (executions.size >= config.maxCaptures || obligations.size >= config.maxObligations) return refused(Disposition.BUDGET_EXCEEDED)
+        if (executionCount >= config.maxCaptures || obligationCount >= config.maxObligations) return refused(Disposition.BUDGET_EXCEEDED)
         val captured = Captured(i.buyer, i.seller, i.quantity, i.priceNanos)
         val obligation = Obligation(ObligationStatus.PENDING, Math.multiplyExact(i.quantity, i.priceNanos), i.quantity)
-        executions[i.execution] = captured; obligations[i.execution] = obligation
+        executions[i.execution] = captured; obligations[i.execution] = obligation; executionCount++; obligationCount++
         commitExecution(i.execution, captured); commitObligation(i.execution, obligation)
         return record(i, digest, Disposition.CAPTURED, emptyList())
     }
@@ -188,7 +236,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
     private fun captureSettle(i: FinanceInput.CaptureSettle, digest: String): CapacityOutcome {
         if (config.decisionMode != DecisionMode.CAPTURE_SETTLE) return refused(Disposition.INVALID_INPUT)      // a lane in another mode never sees this input; refuse it, never half-handle it
         captureRefusal(i.execution, i.buyer, i.seller, i.quantity, i.priceNanos)?.let { return refused(it) }
-        if (executions.size >= config.maxCaptures || obligations.size >= config.maxObligations) return refused(Disposition.BUDGET_EXCEEDED)
+        if (executionCount >= config.maxCaptures || obligationCount >= config.maxObligations) return refused(Disposition.BUDGET_EXCEEDED)
         val amount = Math.multiplyExact(i.quantity, i.priceNanos)
         val security = AssetId(i.execution.instrumentId)
         // the settle checks run against the state a capture would leave: a capture touches no position
@@ -204,19 +252,25 @@ internal class CapacityLedger(val config: CapacityConfig) {
             if (plan == null) why = Disposition.BALANCE_OVERFLOW
         }
         // everything that can refuse has now been checked, before anything is written: the trade is booked whole or not at all
-        if (why != null && attempts.size >= config.maxSettleAttempts) return refused(Disposition.BUDGET_EXCEEDED)
+        if (why != null && attemptCount >= config.maxSettleAttempts) return refused(Disposition.BUDGET_EXCEEDED)
         val captured = Captured(i.buyer, i.seller, i.quantity, i.priceNanos)
-        executions[i.execution] = captured
+        executions[i.execution] = captured; executionCount++; obligationCount++
         if (why != null) {
             val pending = Obligation(ObligationStatus.PENDING, amount, i.quantity); obligations[i.execution] = pending
-            attempts[i.execution to 1] = why
+            putAttempt(i.execution, 1, why)
             commitExecution(i.execution, captured); commitObligation(i.execution, pending); commitAttempt(i.execution, 1, why)
             return record(i, digest, why, emptyList())
         }
         val applied = apply(plan!!)
         val settled = Obligation(ObligationStatus.SETTLED, 0, 0); obligations[i.execution] = settled
         commitExecution(i.execution, captured); commitObligation(i.execution, settled)
+        if (backing != null) retiredExecutions += i.execution
         return record(i, digest, Disposition.SETTLED, applied)
+    }
+
+    private fun putAttempt(k: ExecutionKey, n: Int, d: Disposition) {
+        attempts[k to n] = d; attemptCount++
+        if (backing != null) attemptNumbers.getOrPut(k) { ArrayList(2) } += n
     }
 
     private fun fund(i: FinanceInput.Fund, digest: String): CapacityOutcome {
@@ -226,13 +280,13 @@ internal class CapacityLedger(val config: CapacityConfig) {
         val plan = planLegs(listOf(Leg(config.openingAccount, i.asset, -i.amount), Leg(i.account, i.asset, i.amount))) ?: return refused(Disposition.BALANCE_OVERFLOW)
         if (controls >= config.maxControls) return refused(Disposition.BUDGET_EXCEEDED)
         val applied = apply(plan)
-        controls++; if (config.accounts == null) admitted += i.account
+        controls++; fundedCount++; if (config.accounts == null) admitted += i.account
         return record(i, digest, Disposition.FUNDED, applied)
     }
 
     private fun settle(i: FinanceInput.Settle, digest: String): CapacityOutcome {
         if (i.authority != Authority.OPERATOR) return refused(Disposition.UNAUTHORIZED)
-        val obligation = obligations[i.execution] ?: return refused(Disposition.UNKNOWN_EXECUTION)
+        val obligation = obligationOf(i.execution) ?: return refused(Disposition.UNKNOWN_EXECUTION)
         if (i.attempt < 1) return refused(Disposition.INVALID_INPUT)
         if (obligation.status == ObligationStatus.SETTLED) return refused(Disposition.ALREADY_SETTLED)
         val attemptKey = i.execution to i.attempt
@@ -244,16 +298,17 @@ internal class CapacityLedger(val config: CapacityConfig) {
             pos(execution.seller, security) < obligation.shareResidual -> Disposition.INSUFFICIENT_SHARES
             else -> null
         }
-        if (attempts.size >= config.maxSettleAttempts) return refused(Disposition.BUDGET_EXCEEDED)
-        if (shortfall != null) { attempts[attemptKey] = shortfall; commitAttempt(i.execution, i.attempt, shortfall); return record(i, digest, shortfall, emptyList()) }
+        if (attemptCount >= config.maxSettleAttempts) return refused(Disposition.BUDGET_EXCEEDED)
+        if (shortfall != null) { putAttempt(i.execution, i.attempt, shortfall); commitAttempt(i.execution, i.attempt, shortfall); return record(i, digest, shortfall, emptyList()) }
         val cash = config.cashAsset
         val plan = planLegs(listOf(
             Leg(execution.buyer, cash, -obligation.cashResidual), Leg(execution.seller, cash, obligation.cashResidual),
             Leg(execution.seller, security, -obligation.shareResidual), Leg(execution.buyer, security, obligation.shareResidual)))
-        if (plan == null) { attempts[attemptKey] = Disposition.BALANCE_OVERFLOW; commitAttempt(i.execution, i.attempt, Disposition.BALANCE_OVERFLOW); return record(i, digest, Disposition.BALANCE_OVERFLOW, emptyList()) }
+        if (plan == null) { putAttempt(i.execution, i.attempt, Disposition.BALANCE_OVERFLOW); commitAttempt(i.execution, i.attempt, Disposition.BALANCE_OVERFLOW); return record(i, digest, Disposition.BALANCE_OVERFLOW, emptyList()) }
         val applied = apply(plan)
-        attempts[attemptKey] = Disposition.SETTLED; commitAttempt(i.execution, i.attempt, Disposition.SETTLED)
+        putAttempt(i.execution, i.attempt, Disposition.SETTLED); commitAttempt(i.execution, i.attempt, Disposition.SETTLED)
         val settled = Obligation(ObligationStatus.SETTLED, 0, 0); obligations[i.execution] = settled; commitObligation(i.execution, settled)
+        if (backing != null) retiredExecutions += i.execution
         return record(i, digest, Disposition.SETTLED, applied)
     }
 
@@ -293,32 +348,74 @@ internal class CapacityLedger(val config: CapacityConfig) {
             require(sequence >= 0 && controls >= 0) { "negative scalar" }
             val ledger = CapacityLedger(config)
             for (e in entities) ledger.load(e)
-            require(ledger.actions.size.toLong() == sequence) { "action count differs from sequence" }
-            require(ledger.actions.values.count { it.disposition == Disposition.FUNDED } == controls) { "funded action count differs from controls" }
             require(ledger.executions.keys == ledger.obligations.keys) { "an execution without an obligation or the reverse" }
-            ledger.sequence = sequence; ledger.controls = controls; ledger.chain = chain
-            if (config.accounts == null) for (k in ledger.positions.keys) if (k.first != config.openingAccount) ledger.admitted += k.first
-            ledger.checkRestoredPositions()
-            return ledger
+            return ledger.finishRestore(sequence, controls, chain)
+        }
+
+        /** Where an evicting restore reads the entities of one class from, streamed. */
+        fun interface EntitySource { fun scan(tag: String, each: (StateCommitment.Entity) -> Unit) }
+
+        /**
+         * [restore] for a ledger that evicts: entities are streamed class by class, obligations first, and only what the next decision can still change stays in memory
+         * (positions, pending obligations with their executions and attempts); everything else is counted, entered in the trie and the filter, and left in [backing].
+         * The pairing of executions with obligations is then checked by count; the trie digest the caller compares with the head decision covers the rest.
+         */
+        fun restoreEvicting(config: CapacityConfig, backing: EntityBacking, source: EntitySource, sequence: Long, controls: Int, chain: String): CapacityLedger {
+            require(sequence >= 0 && controls >= 0) { "negative scalar" }
+            val ledger = CapacityLedger(config, backing)
+            for (tag in listOf("O", "X", "A", "K", "P")) source.scan(tag) { require(it.tag == tag) { "an entity of class ${it.tag} in the $tag scan" }; ledger.load(it) }
+            require(ledger.executionCount == ledger.obligationCount) { "an execution without an obligation or the reverse" }
+            require(ledger.executions.keys == ledger.obligations.keys) { "a pending obligation without its execution or the reverse" }
+            return ledger.finishRestore(sequence, controls, chain)
         }
     }
+
+    /** The commitment trie as a snapshot (see [FlatStateTrie.writeTo]); it makes every digest current first. */
+    fun writeTrieSnapshot(out: java.io.DataOutputStream) = trie.writeTo(out)
 
     /** `C(S)` of the current state (the value the head decision's `stateDigest` must equal in the synchronous profile). */
     fun commitment(): String = StateCommitment.commitment(sequence, controls, trie.root())
 
+    private fun finishRestore(sequence: Long, controls: Int, chain: String): CapacityLedger {
+        require(actionCount == sequence) { "action count differs from sequence" }
+        require(fundedCount == controls) { "funded action count differs from controls" }
+        this.sequence = sequence; this.controls = controls; this.chain = chain
+        if (config.accounts == null) for (k in positions.keys) if (k.first != config.openingAccount) admitted += k.first
+        checkRestoredPositions()
+        return this
+    }
+
+    /**
+     * Enters one stored entity. A plain ledger holds every object; an evicting one holds only what a later decision can change, which relies on the classes arriving
+     * in the order O, X, A, K, P (see [restoreEvicting]): an execution or attempt is kept only if its obligation, already seen, is pending.
+     */
     private fun load(e: StateCommitment.Entity) {
         val key = DecodedFields(e.keyBytes); val value = DecodedFields(e.valueBytes)
         fun execution() = ExecutionKey(key.text(), key.text(), key.text(), key.text())
         val before = trie.size
         when (e.tag) {
             "P" -> { val k = AccountId(key.text()) to AssetId(key.text()); key.end(); positions[k] = value.long().also { value.end() } }
-            "X" -> { val k = execution(); key.end(); executions[k] = Captured(AccountId(value.text()), AccountId(value.text()), value.long(), value.long()).also { value.end() } }
-            "O" -> { val k = execution(); key.end(); obligations[k] = Obligation(ObligationStatus.valueOf(value.text()), value.long(), value.long()).also { value.end() } }
-            "A" -> { val k = execution() to key.int(); key.end(); attempts[k] = Disposition.valueOf(value.text()).also { value.end() } }
+            "X" -> {
+                val k = execution(); key.end(); val captured = Captured(AccountId(value.text()), AccountId(value.text()), value.long(), value.long()).also { value.end() }
+                executionCount++; writtenKeys?.add('X', e.keyBytes)
+                if (backing == null || k in obligations) executions[k] = captured
+            }
+            "O" -> {
+                val k = execution(); key.end(); val o = Obligation(ObligationStatus.valueOf(value.text()), value.long(), value.long()).also { value.end() }
+                obligationCount++
+                if (backing == null || o.status == ObligationStatus.PENDING) obligations[k] = o
+            }
+            "A" -> {
+                val exec = execution(); val n = key.int(); key.end(); val d = Disposition.valueOf(value.text()).also { value.end() }
+                attemptCount++
+                if (backing == null || exec in obligations) { attempts[exec to n] = d; if (backing != null) attemptNumbers.getOrPut(exec) { ArrayList(2) } += n }
+            }
             "K" -> {
                 val k = ActionKey(key.text(), key.text(), key.text()); key.end()
-                val digest = value.text(); require(Regex("^[0-9a-f]{64}$").matches(digest)) { "action digest is not 64 lowercase hex" }
-                actions[k] = ActionRecord(digest, Disposition.valueOf(value.text())).also { value.end() }
+                val digest = value.text(); require(hex64.matches(digest)) { "action digest is not 64 lowercase hex" }
+                val record = ActionRecord(digest, Disposition.valueOf(value.text())).also { value.end() }
+                actionCount++; if (record.disposition == Disposition.FUNDED) fundedCount++; writtenKeys?.add('K', e.keyBytes)
+                if (backing == null) actions[k] = record
             }
             else -> throw IllegalArgumentException("unknown entity class ${e.tag}")
         }
@@ -339,6 +436,8 @@ internal class CapacityLedger(val config: CapacityConfig) {
         }
         require(net.values.all { it.signum() == 0 }) { "positions do not balance per asset" }
     }
+
+    private val hex64 = Regex("^[0-9a-f]{64}$")
 
     /** Strict reader of the Canon framing: text is int32 length plus strict UTF-8, integers are big-endian; trailing bytes are an error. */
     private class DecodedFields(bytes: ByteArray) {

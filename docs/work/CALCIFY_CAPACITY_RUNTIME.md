@@ -40,6 +40,7 @@ Strict JSON, every field required, numbers as decimal text:
 | `CALCIFY_CAPACITY_STATE_DIRECTORY` | owner-only directory for the RocksDB state |
 | `CALCIFY_CAPACITY_POSTGRES_JDBC_URL` (no password in it), `_USER`, `_PASSWORD_FILE` | the projector role (SELECT, INSERT, UPDATE on `boundary.calcify_finance_*`) |
 | optional `CALCIFY_CAPACITY_STREAM_THREADS` (lanes), `_PROJECTION_INTERVAL_MS` (100), `_PROJECTION_CHUNK` (2000 decisions per transaction), `_SESSION_TIMEOUT_MS` (6000 to 45000) | tuning |
+| optional `CALCIFY_CAPACITY_EVICT_SETTLED` (unset or `true`: on; `false`: off; anything else is refused) | each lane keeps only open work in memory and reads settled trades and old actions back from its RocksDB store through an in-heap filter (docs/work/CALCIFY_BOUNDED_MEMORY_DESIGN.md); decisions, chains, commitments and stored bytes are identical either way, so switching it needs no migration |
 
 Inline secrets (a variable without `_FILE`) are refused.
 

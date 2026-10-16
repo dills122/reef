@@ -46,6 +46,11 @@ internal class CapacityLauncher(
     private val maxTransientProjectionFailures: Int = 10, private val persistent: Boolean = true,
     /** Decisions per projector transaction. Position rows are coalesced per transaction, so a larger chunk writes fewer rows per decision (and makes each commit, and the read lag behind it, longer). */
     private val maxApply: Int = 2_000,
+    /**
+     * Keep only open work in each lane's memory and read settled trades back from its store (see [CapacityProcessorConfig.evictSettled]). On by default: decisions, chains,
+     * commitments and stored bytes are identical either way (differential tests), and a 15 minute soak at 10,000 trades/s holds the lane at about a third of the memory.
+     */
+    private val evictSettled: Boolean = true,
 ) {
     class Running internal constructor(
         private val streams: KafkaStreams, private val loops: List<Thread>, private val failure: AtomicReference<Throwable?>,
@@ -89,7 +94,7 @@ internal class CapacityLauncher(
                 val log = reader.logReader(topics.decisions, lane).also { logs += it }
                 FinanceProjectionRunner.tailing({ val s = System.nanoTime(); FinanceProjectionRunner.decode(log.readNext()).also { readNanos.addAndGet(System.nanoTime() - s) } }, projector, digest, epoch, maxApply = maxApply, sequenceBound = plan.sequenceBound).also { it.open() }
             }
-            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] }, failOnBadCapture = true)
+            val config = CapacityProcessorConfig(plan, topics.capture, topics.control, topics.decisions, applicationId, logHead = { heads[it] }, failOnBadCapture = true, evictSettled = evictSettled)
             streams = KafkaStreams(CapacityTopology.build(config, decoder, persistent), properties)
         } catch (e: Throwable) { logs.forEach { runCatching { it.close() } }; throw e }
         val streamsFailed = AtomicBoolean(false); val closing = AtomicBoolean(false); val failure = AtomicReference<Throwable?>(null)

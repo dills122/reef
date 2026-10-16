@@ -51,7 +51,8 @@ tasks.test {
         if (!project.hasProperty("researchTests")) excludeTags("research")
     }
     // Research runs hold millions of entities in memory (S3c scale spike); the default 512 MiB test heap cannot.
-    if (project.hasProperty("researchTests")) maxHeapSize = "12g"
+    // -PtestHeap=NNg raises it for the paced soak (the capacity ledger keeps every execution of the run in memory).
+    if (project.hasProperty("researchTests")) maxHeapSize = (project.findProperty("testHeap") as String?) ?: "12g"
     // Research runs measure throughput. The JaCoCo agent instruments every class the test JVM loads (Kafka, protobuf, RocksDB included) and slows it, so the capacity ledger must not be measured with it.
     if (project.hasProperty("researchTests")) {
         extensions.getByType(org.gradle.testing.jacoco.plugins.JacocoTaskExtension::class.java).isEnabled = false

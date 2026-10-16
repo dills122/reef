@@ -98,4 +98,55 @@ class FlatStateTrieTest {
         k[0] = 0; l[1] = 0
         assertEquals(before, hex.formatHex(t.root()))
     }
+
+    private fun snapshotOf(t: FlatStateTrie): ByteArray = java.io.ByteArrayOutputStream().also { b -> java.io.DataOutputStream(b).use { t.writeTo(it) } }.toByteArray()
+    private fun readSnapshot(bytes: ByteArray): FlatStateTrie = java.io.DataInputStream(java.io.ByteArrayInputStream(bytes)).use { FlatStateTrie.readFrom(it) }
+
+    @Test fun aSnapshotRestoresTheSameTrieAndKeepsGrowingIdentically() {
+        for (seed in 1..300) {
+            val rnd = Random(seed.toLong()); val base = ByteArray(32).also { rnd.nextBytes(it) }
+            val original = FlatStateTrie(); val keys = ArrayList<ByteArray>()
+            repeat(rnd.nextInt(0, 400)) { val k = key(rnd, base); original.put(k, leafFor(rnd)); keys += k; if (rnd.nextInt(5) == 0) original.root() }   // some branches stay stale at snapshot time
+            val copy = readSnapshot(snapshotOf(original))
+            assertEquals(original.size, copy.size)
+            assertEquals(hex.formatHex(original.root()), hex.formatHex(copy.root()))
+            repeat(100) {
+                val k = if (keys.isNotEmpty() && rnd.nextBoolean()) keys[rnd.nextInt(keys.size)] else key(rnd, base); val l = leafFor(rnd)
+                original.put(k, l); copy.put(k, l); keys += k
+                if (it % 9 == 0) assertEquals(hex.formatHex(original.root()), hex.formatHex(copy.root()))
+            }
+            assertEquals(hex.formatHex(original.root()), hex.formatHex(copy.root()))
+            for (k in keys.take(20)) { assertEquals(original.depthOf(k), copy.depthOf(k)); assertEquals(original.get(k)?.let(hex::formatHex), copy.get(k)?.let(hex::formatHex)) }
+        }
+    }
+
+    @Test fun aSnapshotSpanningSeveralChunksRoundTrips() {
+        val rnd = Random(11); val t = FlatStateTrie()
+        repeat(200_000) { t.put(ByteArray(32).also { rnd.nextBytes(it) }, leafFor(rnd)) }
+        val expected = hex.formatHex(t.root())
+        assertEquals(expected, hex.formatHex(readSnapshot(snapshotOf(t)).root()))
+    }
+
+    @Test fun aSnapshotWithAnyChangedByteIsRefusedAndReadingStopsAtTheTrailer() {
+        val t = FlatStateTrie(); val rnd = Random(9); repeat(3_000) { t.put(ByteArray(32).also { rnd.nextBytes(it) }, leafFor(rnd)) }
+        val bytes = snapshotOf(t); val expected = hex.formatHex(t.root())
+        assertEquals(expected, hex.formatHex(readSnapshot(bytes).root()))
+        // a changed byte in the keys, the node records, the digests and the trailer itself: all refused (a flipped digest would otherwise be returned by root() unexamined)
+        for (at in listOf(20, 60, 100, 1_000, bytes.size / 2, bytes.size / 2 + 777, bytes.size - 70, bytes.size - 33, bytes.size - 32, bytes.size - 1)) {
+            val tampered = bytes.copyOf().also { it[at] = (it[at].toInt() xor 0x10).toByte() }
+            assertFailsWith<Exception>("a changed byte at $at") { readSnapshot(tampered) }
+        }
+        // every byte of the checksummed part counts, not only the sampled ones
+        for (at in (0 until bytes.size step 509)) assertFailsWith<Exception>("a changed byte at $at") { readSnapshot(bytes.copyOf().also { it[at] = (it[at].toInt() xor 1).toByte() }) }
+        // bytes after the snapshot belong to whatever follows it in the stream: reading stops at the trailer
+        val stream = java.io.DataInputStream(java.io.ByteArrayInputStream(bytes + byteArrayOf(1, 2, 3)))
+        assertEquals(expected, hex.formatHex(FlatStateTrie.readFrom(stream).root())); assertEquals(3, stream.available())
+    }
+
+    @Test fun aCorruptOrTruncatedSnapshotIsRefused() {
+        val t = FlatStateTrie(); val rnd = Random(3); repeat(50) { t.put(ByteArray(32).also { rnd.nextBytes(it) }, leafFor(rnd)) }
+        val bytes = snapshotOf(t)
+        assertFailsWith<Exception> { readSnapshot(bytes.copyOf(bytes.size - 5)) }
+        assertFailsWith<Exception> { readSnapshot(bytes.copyOf().also { it[0] = (it[0] + 1).toByte() }) }
+    }
 }
