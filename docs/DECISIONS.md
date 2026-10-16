@@ -1181,6 +1181,26 @@ Status: implementation under validation
   instrument row counts. Required benchmark health counters must be present and
   valid; missing counters never mean zero failures.
 
+### D-058: Calcify Capacity Path Goal, Session Lengths And Decision Modes
+
+Status: accepted by the owner in chat, October 14 to 16, 2026. The capacity profile is built and merged, opt-in; no financial-authority, credit or capacity claim follows.
+
+- Delivery goal: **10,000 booked trades/s sustained** through the capacity path. Arena sessions that matter are **15 to 30 minutes** (30 is the top end; 15 for runs whose records are kept; 5 is trivial; 60 is parked). 15 to 20k/s is later work and is not scheduled.
+- The capacity profile (instrument-sharded finance lanes, cash held per lane, resolved match contexts on engine-aligned lanes, per-decision state commitment) is separate from the finite P3 profile and does not use its binding.
+- Decision mode `two-step` (Capture then first Settle, two decisions per trade) stays the default. `capture-settle-v1` (one `CaptureSettle` decision per booked trade) is opt-in; the mode is bound into the configuration digest only when it is not the default, so every two-step digest and golden vector is unchanged. Making it the default is a separate owner decision and has not been taken.
+- Evidence rules: laptop numbers overstate target hardware 2 to 2.7x, so throughput claims name the hardware class (the EPYC 9555P line has SHA-256 instructions; the Xeon 8168 line does not and is not a target). Dedicated-host runs are paid and need an explicit owner go with size and cost stated in chat.
+- References: [program status update](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md#0-update-october-16-2026-capacity-track-goal-10000-booked-tradess-for-15-to-30-minutes), [capacity profile](work/CALCIFY_CAPACITY_PROFILE.md), [throughput ledger](THROUGHPUT_BASELINES.md).
+
+### D-059: Bounded Capacity Lane Memory
+
+Status: stage 1 accepted and implemented (on by default); stage 2 not accepted.
+
+- A lane's memory must not grow with the number of settled trades beyond its commitment trie. Stage 1 is contract-neutral: decisions, chains, state commitments, published records and stored entities are byte-identical with and without it. Settled executions, obligations, attempts and actions leave memory once the record's writes are in the store and are read back through an in-heap filter and one store read; restore streams the entities. `CALCIFY_CAPACITY_EVICT_SETTLED=false` turns it off.
+- Stage 2 (commitment v2: a mountain range or creation chain for append-only entities, a trie for positions only) is design only and needs its own owner decision. Inclusion proofs by sequence rather than by key are acceptable for it; proofs of absence are not required.
+- A crash may cost a full-scan restore (about 11 s per million trades). A trie snapshot, when wired, is taken on clean shutdown or checkpoint, integrity-protected and bound to the sequence and commitment it was taken at.
+- Soak acceptance at 10k trades/s for 15 minutes used a 1.6 s booking-lag cap.
+- References: [bounded memory design](work/CALCIFY_BOUNDED_MEMORY_DESIGN.md), [capacity runtime](work/CALCIFY_CAPACITY_RUNTIME.md).
+
 ## 2026-09-24 — Serialize projection invalidations before claiming freshness
 
 Online synthetic C3 validation found382stale lifecycle rows and39market snapshots

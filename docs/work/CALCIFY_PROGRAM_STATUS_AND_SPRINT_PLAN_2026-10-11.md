@@ -1,11 +1,32 @@
 # Calcify program status and three-sprint implementation plan — October 11, 2026
 
-Status: **planning document; proposes no authority, makes no capacity claim, changes no contract.** It is the single place that
+Status: **planning document; proposes no authority, makes no capacity claim, changes no contract.** Sections 1 to 9 are the October 11 plan and baseline;
+**section 0 is the October 16 update** (what the capacity track has done since, owner decisions, what is open). It is the single place that
 states where Calcify stands, whether the path is sound, and what to build next. Execution status stays on the
-[work board](../WORK_PLAN.md#calcify-program--current-state-and-next-actions-october-11-2026); measurements stay in the
+[work board](../WORK_PLAN.md#calcify-program--current-state-and-next-actions-october-16-2026); measurements stay in the
 [throughput ledger](../THROUGHPUT_BASELINES.md); the architecture stays in the [RFC](CALCIFY_SYSTEM_ARCHITECTURE_RFC.md) (proposed).
 Where this document and a dated evidence record disagree, the evidence record wins for its stated scope.
 Baseline: `master` after PR485 (O1), PR488 (O2), PR489 (O3 packet, role definition), PR490 (research) and PR491 (O3a module).
+
+## 0. Update, October 16, 2026 (capacity track, goal 10,000 booked trades/s for 15 to 30 minutes)
+
+**Owner scope (2026-10-14 to 16):** the delivery goal is **10,000 booked trades/s sustained**; 15 to 20k/s is later work. Arena sessions that matter are **15 to 30 minutes** (30 = top end; 15 for runs whose records are kept; 5 trivial; 60 parked). Decision mode `capture-settle-v1` (one decision per booked trade) is opt-in, the default stays `two-step`. Bounded lane memory is a requirement. Inclusion proofs by sequence are acceptable (no absence proofs needed) if a later commitment v2 is built. Soak runs use a 1.6 s booking-lag cap.
+
+**Built and merged since October 11** (all on the capacity path, which is separate from the finite P3 profile): reference commitment, incremental trie, O(touched) ledger, store and restore, Streams processor, lanes, launcher, process role, resolved-context source on engine-aligned lanes (#553 to #561); typed engine batch checksum (#562), oversize event batch no longer wedges the engine lane (#565, #569), canonical encoder and flat state trie, byte-identical, finance lane +41% (#566, #570), lz4 producer compression (#571), droplet run tooling (#572), opt-in combined decision mode (#573); bounded memory (eviction of settled trades, on by default; #574). Design and results: [capacity profile](CALCIFY_CAPACITY_PROFILE.md), [capacity runtime](CALCIFY_CAPACITY_RUNTIME.md), [throughput budget](CALCIFY_THROUGHPUT_BUDGET.md), [hot instrument design](CALCIFY_HOT_INSTRUMENT_DESIGN.md), [bounded memory design](CALCIFY_BOUNDED_MEMORY_DESIGN.md), [soak harness](CALCIFY_SOAK_HARNESS.md); measurements in the [throughput ledger](../THROUGHPUT_BASELINES.md) (CAL-FIN-P1 to the latest entry).
+
+**Where it stands (component level, finance lane and projection only; the front door and engine are not in these runs):**
+
+| Question | Result | Where |
+| --- | --- | --- |
+| Can one hot instrument reach 10k trades/s? | Yes on a fast core with SHA-256 hardware: AMD EPYC 9555P, one lane projects 9.9 to 10.0k trades/s in `two-step` and 16.5k in `capture-settle-v1`. The Xeon 8168 line (no SHA extension, 454 ns per branch hash) does not. Laptops (M1 Max) overstate the target hardware 2 to 2.7x. | ledger CAL-FIN-P23 to P26 |
+| Does a 15 minute session hold 10k trades/s? | Yes in the harness: 9M trades, integrity ok, 9,983 to 9,996 trades/s end to end, booking lag at most 0.4 s on the plain laptop run and 0.11 s on the EPYC run, one 1.4 s spike on the evicting laptop run (cause unknown; inside the 1.6 s cap). The lane uses about 73% of one core at 10k/s, so roughly 1.3x headroom per lane on that hardware. | [bounded memory design](CALCIFY_BOUNDED_MEMORY_DESIGN.md) |
+| Does memory stay bounded? | Heap per booked trade falls from about 1.2 to 1.5 KB to about 0.36 to 0.54 KB (the commitment trie, 112 B per entity); 9M trades take about 4.6 GB instead of 10.2 GB; GC time is a third. Stage 2 (commitment v2) is design only. | same |
+| What does a restart cost? | A full scan, about 11 s per million trades (3.3 minutes at 18M); a trie snapshot with checksum exists but is not wired into a lane. | same |
+| Disk for a session? | Broker about 1.9 KB and Postgres about 1.7 KB per trade at combined mode: a 15 minute session (9M trades) measured 16 to 18 GB of broker and 14 GB of Postgres, a 30 minute one about double; tmpfs or NVMe, no block-storage volume needed. | [soak harness](CALCIFY_SOAK_HARNESS.md), droplet matrices |
+
+**Not established (do not claim):** the full chain (API, engine lane, resolver, finance lane, projection) at 10k trades/s for 15 minutes on one host has not been run end to end; the engine lane was the first limit through the real stack (about 4.5k trades/s sustained before #562, 8 to 9k pairs/s after it, laptop); soaks used synthetic identities, a fixed account and instrument mix and one lane (hash skew across lanes and a skewed hot instrument beyond 10k are not covered); no financial-authority, credit or capacity claim exists and none is made here.
+
+**Open, in priority order for the 10k goal:** (1) a full-chain 15 minute run on target hardware (needs an owner go and cost); (2) wire the trie snapshot into clean restarts (bind it to sequence and commitment first); (3) a kill-mid-transaction broker test with eviction on; (4) calibrate and adopt the arena throughput contract numbers (session wording now 15 to 30 minutes); (5) finite P3 O2 live replay and binding v3 (unchanged from section 8); (6) credit calibration (unchanged). Parked until the owner asks: 15 to 20k trades/s, stage 2 commitment v2, engine pipelining, splitting one hot instrument.
 
 ## 1. Verdict in four lines
 

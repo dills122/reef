@@ -2150,3 +2150,28 @@ Two droplets, the same code and cases, about $0.65 in total, both destroyed and 
 **One hot lane, projected booked trades/s.** AMD EPYC 9555P (`g5-8vcpu-32gb-50gb`, $0.36/hr, SHA-256 of 64 bytes 81 ns): `two-step` **9.9k to 10.0k** (processed 13.4k), `capture-settle-v1` **16.5k** (processed 19.1k to 19.3k). Intel Xeon 8168 (`c-32`, 454 ns): `two-step` 4.1k (processed 4.65k), `capture-settle-v1` 6.7k to 6.9k. Four uniform lanes on the Xeon: 12.6k (`two-step`), **20.1k** (`capture-settle-v1`). On the same Xeon the earlier code (CAL-FIN-P23) gave 3.5k and 11.0k.
 
 **Reading.** The Xeon was the hot-lane problem (single thread 2.6 times slower, no fast SHA): on the EPYC one instrument reaches the 10k trades/s target with the lane changes alone and 1.65 times it with the combined decision. The combined decision gains most at the projector (two decision rows per trade become one). Short runs on tmpfs: nothing here shows a lane holding a rate for 15 or 30 minutes (the paced soak harness is the next step), and the engine lane has not been measured on the EPYC.
+
+## Bounded lane memory: restore cost, store lookups, eviction and 15 minute soaks, CAL-FIN-P27 (October 15 to 16, 2026)
+
+Finance lane and projection only (the front door, engine and resolver are not in these runs), combined decision mode (`capture-settle-v1`), one lane, no capacity claim. Design, tables and review history: `docs/work/CALCIFY_BOUNDED_MEMORY_DESIGN.md` (code: PR 574). Hosts: Apple M1 Max (10 cores, 64 GB) for the laptop runs; one DigitalOcean `g5-8vcpu-64gb-50gb` in atl1 (AMD EPYC 9555P, 8 vCPU, 64 GB, $0.49/hr) for the droplet run. Raw CSVs and logs are staged for Reef Records, not committed.
+
+**Restore against a real RocksDB store** (`CapacityRestoreCostTest`, ledger dropped first, each restore run twice): 2.0M entities 6.6 s (materialized scan, peak heap 2.5 to 2.7 GB) and 6.7 s (streamed, 1.5 to 1.7 GB); 6.0M entities 22.0 to 22.5 s (6.6 to 7.1 GB) and 22.5 to 22.8 s (5.0 to 5.1 GB). About 3.7 us per entity, about 11 s per million trades; streaming lowers the peak by 25 to 30% and does not speed it up. A trie snapshot is 112 bytes per entity and reads in 0.12 to 0.16 s at 6.0M entities (about 150 times faster than the scan); not wired into a lane.
+
+**Store lookups** (`RocksDbLookupCostTest`, 10M entries, 512 MB block cache): negative get 8.66 us without a bloom filter and 3.19 us with; positive get 5.39 and 4.47 us. Two bloom-filtered gets are about 20% of the 31 us lane cost, so an in-heap filter (about 3 bytes per key, 1.47% false positives) answers new executions and actions without a read.
+
+**Eviction of settled trades** (`CapacityRestoreCostTest` on the real store, same final commitment in both modes at every size): running lane heap per booked trade 1,558 / 1,299 / 1,282 bytes plain against 648 / 371 / 359 bytes evicting at 300k / 1M / 2M trades; restore peak heap at 1M trades 2.5 to 3.8 GB against 0.74 to 0.77 GB; building 2M trades through the real store took 106.3 s plain and 106.9 s evicting; no-broker lane harness 25.4k and 26.0k (plain) against 24.9k and 26.5k (evicting) trades/s, inside run-to-run noise.
+
+**15 minute soaks at 10,000 trades/s, 9M trades** (`CapacitySoakTest`, real Redpanda and Postgres, broker and Postgres in container storage on the laptop and on tmpfs on the droplet, integrity ok in all three):
+
+| | end to end trades/s | live heap after drain | peak heap | GC total | max sent-to-booked lag |
+| --- | --- | --- | --- | --- | --- |
+| laptop, plain | 9,983 | 10.2 GB (1,191 B/trade) | 15.2 GB | 8.3 s | 0.40 s |
+| laptop, evicting | 9,985 | 4.6 GB (541 B/trade) | 6.3 GB | 2.6 s | 1.37 s |
+| EPYC droplet, evicting | 9,996 | not printed (heap 4.1 to 4.4 GB at the end) | 4.4 GB | 8.1 s (ParallelGC) | 0.11 s |
+
+The lane's Streams thread used 73% of one core on average (90% at most) at 10k trades/s on the droplet, so one lane has about 1.3x headroom on this hardware. Broker bytes per trade 1.8 to 1.9 KB, Postgres 1.66 KB. The owner's lag cap for these runs was 1.6 s. The 1.4 s spike in the laptop evicting run has no known cause (GC was 11 ms at that sample).
+
+**Runs and corrections.** The first droplet attempt (about 6 minutes, about $0.05) failed in `compileTestKotlin` with a Kotlin compiler `OutOfMemoryError` before any soak code ran and measured nothing; the script now writes a 3 GB Gradle and Kotlin daemon heap on the host and the services carry a `gradle.properties`. The second attempt ran 20.8 minutes (about $0.43). Both droplets were destroyed and verified through the API. An earlier hand-written runner removed every container on the machine, not only the harness's; it was stopped within seconds and only the harness's two containers were removed.
+
+**Not shown.** The full chain at 10k trades/s for 15 minutes on one host; 30 minute sessions; more than one lane or a skewed hot instrument in a soak; a crash during a soak; restore time at session scale with the snapshot wired.
+
