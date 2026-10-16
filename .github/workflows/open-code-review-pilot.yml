@@ -2,10 +2,13 @@ name: OpenCodeReview pilot
 
 # pull_request_target loads this workflow and the OCR rule from the trusted base.
 # The pinned Action fetches PR head objects for review; do not execute PR files here.
+# Reviews are on demand, not on every push: they run when the ocr-pilot label is added, a PR is marked ready for review or is reopened. Pushes (synchronize) do not
+# run a review, so a PR can be developed and tested, in draft or not, and reviewed once when it is finished. To review later pushes, remove and re-add the label
+# (or convert to draft and mark ready again); the checkpoint range keeps that review to the new changes.
 on:
   pull_request_target:
     branches: [master]
-    types: [labeled, synchronize, reopened, ready_for_review]
+    types: [labeled, reopened, ready_for_review]
 
 permissions: {}
 
