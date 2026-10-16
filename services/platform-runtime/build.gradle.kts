@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm") version "2.4.20"
+    kotlin("jvm") version "2.4.21"
     application
     jacoco
 }
@@ -14,12 +14,12 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
-    implementation("org.postgresql:postgresql:42.7.13")
+    implementation("org.postgresql:postgresql:42.7.14")
     implementation("com.zaxxer:HikariCP:7.1.0")
-    implementation("io.grpc:grpc-netty-shaded:1.84.0")
-    implementation("io.grpc:grpc-protobuf:1.84.0")
-    implementation("io.grpc:grpc-stub:1.84.0")
-    implementation("io.nats:jnats:2.26.3")
+    implementation("io.grpc:grpc-netty-shaded:1.84.2")
+    implementation("io.grpc:grpc-protobuf:1.84.2")
+    implementation("io.grpc:grpc-stub:1.84.2")
+    implementation("io.nats:jnats:2.26.4")
     implementation("org.apache.kafka:kafka-clients:4.3.1")
     implementation("org.apache.kafka:kafka-streams:4.3.1")
     testImplementation("org.apache.kafka:kafka-streams-test-utils:4.3.1")
