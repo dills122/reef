@@ -12,7 +12,11 @@ internal data class CapacityTopics(val capture: String, val control: String, val
 /** The Streams settings of the capacity app: the finite profile's pinned exactly-once configuration with one stream thread per lane. */
 internal object CapacityStreams {
     fun properties(applicationId: String, bootstrap: String, stateDir: String, threads: Int): Properties =
-        FinanceTopology.streamsProperties(applicationId, bootstrap, stateDir).apply { put("num.stream.threads", threads) }
+        FinanceTopology.streamsProperties(applicationId, bootstrap, stateDir).apply {
+            put("num.stream.threads", threads)
+            // A choice, not a pin: decisions and changelog records are repetitive, so lz4 sends less than half the bytes per decision (871 to 395 measured) for 1.5 to 2.4 us of thread CPU.
+            put("producer.compression.type", "lz4")
+        }
 
     fun verifyPinned(props: Properties, lanes: Int) {
         val pinned = mapOf("processing.guarantee" to "exactly_once_v2", "num.standby.replicas" to "0", "auto.offset.reset" to "earliest")
