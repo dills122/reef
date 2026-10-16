@@ -128,7 +128,7 @@ class CapacitySoakTest {
         val instrumentCount = env("CAP_INSTRUMENTS", "64").toInt(); val accountCount = env("CAP_ACCOUNTS", "200").toInt(); val hotShare = env("CAP_HOT_SHARE", "0").toDouble()
         val source = env("CAP_SOURCE", "resolved"); val resolved = when (source) { "resolved" -> true; "lifecycle" -> false; else -> error("CAP_SOURCE must be resolved or lifecycle, not $source") }
         val mode = DecisionMode.ofWire(env("CAP_DECISION_MODE", DecisionMode.TWO_STEP.wire)); val dpt = SoakAccounting.decisionsPerTrade(mode)
-        val evict = env("CAP_EVICT", "true").toBoolean()
+        val evict = when (val raw = env("CAP_EVICT", "true")) { "true" -> true; "false" -> false; else -> error("CAP_EVICT must be true or false, not $raw") }
         val maxApply = env("CAP_MAX_APPLY", "2000").toInt(); val pgSyncOff = env("CAP_PG_SYNC_OFF", "false").toBoolean()
         val sampleSeconds = env("CAP_SOAK_SAMPLE_SECONDS", "10").toLong(); val maxLagSeconds = env("CAP_SOAK_MAX_LAG_SECONDS", "30").toDouble(); val sustainSeconds = env("CAP_SOAK_LAG_SUSTAIN_SECONDS", "60").toDouble()
         val abortOnLag = env("CAP_SOAK_ABORT_ON_LAG", "true").toBoolean(); val drainSeconds = env("CAP_SOAK_DRAIN_SECONDS", "600").toLong(); val stallSeconds = env("CAP_SOAK_STALL_SECONDS", "120").toLong()
