@@ -127,6 +127,22 @@ class FlatStateTrieTest {
         assertEquals(expected, hex.formatHex(readSnapshot(snapshotOf(t)).root()))
     }
 
+    @Test fun aSnapshotWithAnyChangedByteOrAnyAddedByteIsRefused() {
+        val t = FlatStateTrie(); val rnd = Random(9); repeat(3_000) { t.put(ByteArray(32).also { rnd.nextBytes(it) }, leafFor(rnd)) }
+        val bytes = snapshotOf(t); val expected = hex.formatHex(t.root())
+        assertEquals(expected, hex.formatHex(readSnapshot(bytes).root()))
+        // a changed byte in the keys, the node records, the digests and the trailer itself: all refused (a flipped digest would otherwise be returned by root() unexamined)
+        for (at in listOf(20, 60, 100, 1_000, bytes.size / 2, bytes.size / 2 + 777, bytes.size - 70, bytes.size - 33, bytes.size - 32, bytes.size - 1)) {
+            val tampered = bytes.copyOf().also { it[at] = (it[at].toInt() xor 0x10).toByte() }
+            assertFailsWith<Exception>("a changed byte at $at") { readSnapshot(tampered) }
+        }
+        // every byte of the checksummed part counts, not only the sampled ones
+        for (at in (0 until bytes.size step 509)) assertFailsWith<Exception>("a changed byte at $at") { readSnapshot(bytes.copyOf().also { it[at] = (it[at].toInt() xor 1).toByte() }) }
+        // bytes after the snapshot belong to whatever follows it in the stream: reading stops at the trailer
+        val stream = java.io.DataInputStream(java.io.ByteArrayInputStream(bytes + byteArrayOf(1, 2, 3)))
+        assertEquals(expected, hex.formatHex(FlatStateTrie.readFrom(stream).root())); assertEquals(3, stream.available())
+    }
+
     @Test fun aCorruptOrTruncatedSnapshotIsRefused() {
         val t = FlatStateTrie(); val rnd = Random(3); repeat(50) { t.put(ByteArray(32).also { rnd.nextBytes(it) }, leafFor(rnd)) }
         val bytes = snapshotOf(t)

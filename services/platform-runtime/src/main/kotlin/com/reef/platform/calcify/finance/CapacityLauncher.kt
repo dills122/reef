@@ -42,8 +42,11 @@ internal class CapacityLauncher(
     private val maxTransientProjectionFailures: Int = 10, private val persistent: Boolean = true,
     /** Decisions per projector transaction. Position rows are coalesced per transaction, so a larger chunk writes fewer rows per decision (and makes each commit, and the read lag behind it, longer). */
     private val maxApply: Int = 2_000,
-    /** Keep only open work in each lane's memory and read settled trades back from its store (see [CapacityProcessorConfig.evictSettled]); off until a long soak has shown it holds. */
-    private val evictSettled: Boolean = false,
+    /**
+     * Keep only open work in each lane's memory and read settled trades back from its store (see [CapacityProcessorConfig.evictSettled]). On by default: decisions, chains,
+     * commitments and stored bytes are identical either way (differential tests), and a 15 minute soak at 10,000 trades/s holds the lane at about a third of the memory.
+     */
+    private val evictSettled: Boolean = true,
 ) {
     class Running internal constructor(
         private val streams: KafkaStreams, private val loops: List<Thread>, private val failure: AtomicReference<Throwable?>,

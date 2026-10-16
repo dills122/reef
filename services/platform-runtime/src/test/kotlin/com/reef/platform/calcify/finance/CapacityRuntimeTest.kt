@@ -118,6 +118,12 @@ class CapacityRuntimeTest {
         CapacityRuntime.create(lookup)      // a restart: the configured parent is still owner-only
     }
 
+    @Test fun evictionOfSettledTradesIsOnUnlessTheEnvironmentTurnsItOff() {
+        assertTrue(CapacityRuntime.evictSettled { null }); assertTrue(CapacityRuntime.evictSettled { "" }); assertTrue(CapacityRuntime.evictSettled { "true" })
+        assertEquals(false, CapacityRuntime.evictSettled { "false" })
+        for (bad in listOf("TRUE", "yes", "1", "off")) assertFailsWith<IllegalStateException>(bad) { CapacityRuntime.evictSettled { bad } }
+    }
+
     @Test fun theRoleRefusesToShareAProcessWithAnotherCalcifyRole() {
         CapacityRuntime.requireExclusive { null }
         for (other in listOf("CALCIFY_STAGE", "CALCIFY_FINITE_BINDING_DIGEST", "CALCIFY_FINANCE_BINDING_DIGEST")) assertFailsWith<IllegalArgumentException>(other) { CapacityRuntime.requireExclusive { k -> if (k == other) "x" else null } }

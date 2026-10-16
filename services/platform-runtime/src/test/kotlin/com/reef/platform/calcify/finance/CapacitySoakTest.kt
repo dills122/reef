@@ -33,7 +33,7 @@ import reef.contracts.calcify.finance.v1.FinanceDecisionV1
  * projections, Redpanda and Postgres 16 in containers), fed by a lazy deterministic generator and ONE paced sender thread against System.nanoTime.
  *
  * Environment: CAP_SOAK_SECONDS (120), CAP_SOAK_RATE (10000 trades/s), CAP_LANES (1), CAP_INSTRUMENTS (64), CAP_ACCOUNTS (200), CAP_HOT_SHARE (0), CAP_SOURCE (`resolved`|`lifecycle`),
- * CAP_DECISION_MODE (`two-step`|`capture-settle-v1`), CAP_EVICT (false: true keeps only open work in each lane's memory), CAP_MAX_APPLY (2000), CAP_PG_SYNC_OFF (false), CAP_SOAK_SAMPLE_SECONDS (10), CAP_SOAK_MAX_LAG_SECONDS (30),
+ * CAP_DECISION_MODE (`two-step`|`capture-settle-v1`), CAP_EVICT (true: each lane keeps only open work in memory, as the launcher does by default; false keeps every trade), CAP_MAX_APPLY (2000), CAP_PG_SYNC_OFF (false), CAP_SOAK_SAMPLE_SECONDS (10), CAP_SOAK_MAX_LAG_SECONDS (30),
  * CAP_SOAK_LAG_SUSTAIN_SECONDS (60), CAP_SOAK_ABORT_ON_LAG (true: stop at the first breach; false: run to the end, report and then fail), CAP_SOAK_DRAIN_SECONDS (600),
  * CAP_SOAK_STALL_SECONDS (120), CAP_SOAK_COUNT_ROWS (true), CAP_SOAK_OUT_DIR (build/capacity-soak), CAP_SOAK_LABEL (soak); S4_RP_DOCKER / S4_PG_DOCKER / S4_SMP / S4_BROKER_MEM as the other
  * capacity tests. The test fails (loudly, with the time series) if the producer or a lane is behind by more than the lag threshold for the sustain period, or if the end-of-run integrity
@@ -128,7 +128,7 @@ class CapacitySoakTest {
         val instrumentCount = env("CAP_INSTRUMENTS", "64").toInt(); val accountCount = env("CAP_ACCOUNTS", "200").toInt(); val hotShare = env("CAP_HOT_SHARE", "0").toDouble()
         val source = env("CAP_SOURCE", "resolved"); val resolved = when (source) { "resolved" -> true; "lifecycle" -> false; else -> error("CAP_SOURCE must be resolved or lifecycle, not $source") }
         val mode = DecisionMode.ofWire(env("CAP_DECISION_MODE", DecisionMode.TWO_STEP.wire)); val dpt = SoakAccounting.decisionsPerTrade(mode)
-        val evict = env("CAP_EVICT", "false").toBoolean()
+        val evict = env("CAP_EVICT", "true").toBoolean()
         val maxApply = env("CAP_MAX_APPLY", "2000").toInt(); val pgSyncOff = env("CAP_PG_SYNC_OFF", "false").toBoolean()
         val sampleSeconds = env("CAP_SOAK_SAMPLE_SECONDS", "10").toLong(); val maxLagSeconds = env("CAP_SOAK_MAX_LAG_SECONDS", "30").toDouble(); val sustainSeconds = env("CAP_SOAK_LAG_SUSTAIN_SECONDS", "60").toDouble()
         val abortOnLag = env("CAP_SOAK_ABORT_ON_LAG", "true").toBoolean(); val drainSeconds = env("CAP_SOAK_DRAIN_SECONDS", "600").toLong(); val stallSeconds = env("CAP_SOAK_STALL_SECONDS", "120").toLong()

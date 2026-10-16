@@ -34,12 +34,15 @@ internal class FlatStateTrie {
         private fun validRef(ref: Int, branches: Int, leaves: Int) = if (ref >= 0) ref < branches else ref.inv() < leaves
 
         /**
-         * The trie [writeTo] wrote. Range checks on counts and references only. It does **not** prove the snapshot is intact: [root] returns the digest stored in the
-         * snapshot without re-hashing, so comparing it with the committed digest only compares the snapshot's own header. A caller that wires a snapshot into a restore
-         * must first protect it (a checksum trailer written with the snapshot, and the snapshot bound to the sequence and digest it was taken at), or re-hash every branch.
-         * The tree shape (each node referenced once, bit indices increasing along a path) is not validated either.
+         * The trie [writeTo] wrote, refused if any byte of it changed: the snapshot ends in the SHA-256 of everything before it, which is checked after the last array is
+         * read, so what is returned is exactly what was written. That is integrity against corruption and truncation, not authenticity: whoever can rewrite the file can
+         * rewrite the trailer. The digest [root] returns is the one stored in the snapshot (nothing is re-hashed), so a caller that restores from a snapshot must still bind
+         * it to the state it was taken at (compare the commitment with the head decision's, see [CapacityStore]) and must never take a snapshot from outside the lane's own
+         * private state directory. The tree shape is checked by range only.
          */
-        fun readFrom(input: java.io.DataInputStream): FlatStateTrie {
+        fun readFrom(source: java.io.DataInputStream): FlatStateTrie {
+            val sum = MessageDigest.getInstance("SHA-256")
+            val input = java.io.DataInputStream(java.security.DigestInputStream(source, sum))
             require(input.readInt() == SNAPSHOT_MAGIC) { "not a trie snapshot" }
             val leaves = input.readInt(); val branches = input.readInt(); val root = input.readInt()
             require(leaves >= 0 && branches >= 0 && (if (leaves == 0) branches == 0 else branches == leaves - 1)) { "corrupt trie snapshot counts" }
@@ -65,6 +68,8 @@ internal class FlatStateTrie {
                 t.digChunks[c] = ByteArray(CHUNK * 64).also { input.readFully(it, 0, n * 64) }
                 left -= n; c++
             }
+            val computed = sum.digest(); val stored = ByteArray(32); source.readFully(stored)
+            require(MessageDigest.isEqual(computed, stored)) { "trie snapshot checksum mismatch" }
             return t
         }
     }
@@ -203,11 +208,13 @@ internal class FlatStateTrie {
     }
 
     /**
-     * Writes the trie as raw arrays (about 112 bytes per entity): the counts, the root, and the used part of each chunk. First makes every digest current, so no stale
-     * flag is stored and the snapshot is exactly what [root] would return.
+     * Writes the trie as raw arrays (about 112 bytes per entity): the counts, the root, and the used part of each chunk, then the SHA-256 of all of it (see [readFrom]). First
+     * makes every digest current, so no stale flag is stored and the snapshot is exactly what [root] would return.
      */
-    fun writeTo(out: java.io.DataOutputStream) {
+    fun writeTo(target: java.io.DataOutputStream) {
         root()
+        val sum = MessageDigest.getInstance("SHA-256")
+        val out = java.io.DataOutputStream(java.security.DigestOutputStream(target, sum))
         out.writeInt(SNAPSHOT_MAGIC); out.writeInt(leafCount); out.writeInt(branchCount); out.writeInt(rootRef); out.write(rootDigest)
         var left = leafCount; var c = 0
         while (left > 0) { val n = minOf(left, CHUNK); out.write(keyChunks[c]!!, 0, n * 32); left -= n; c++ }
@@ -219,6 +226,8 @@ internal class FlatStateTrie {
             out.write(staging.array(), 0, n * 16); out.write(digChunks[c]!!, 0, n * 64)
             left -= n; c++
         }
+        out.flush()
+        target.write(sum.digest())
     }
 
     /** The depth (number of branches) on the path to [key]'s leaf or its closest leaf; a test aid. */
