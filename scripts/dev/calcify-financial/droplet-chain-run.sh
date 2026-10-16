@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# One time-boxed run of the finance chain spike (S4EndToEndSpikeTest) on a quiet dedicated DigitalOcean droplet, owner-approved 2026-10-14.
+# Time-boxed Calcify capacity runs on a quiet dedicated DigitalOcean droplet. Every run is paid and needs the owner's explicit go with size and cost stated in chat.
 # It provisions the existing do-benchmark stack, ships ONLY tracked files (git archive of HEAD: never .env, .planning, .mcp.json or other untracked files),
 # installs a JDK on the host, runs a short matrix, fetches the outputs, and destroys the droplet on every exit path.
 #
-#   REEF_DO_SIZE=c-16 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]    (matrix: default | compare | tmpfs | baseline | smoke | s1smoke | soak | soaksmoke)
-#   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then one finance lane with its projector on tmpfs stores; `capmode` runs the finance cases in both decision modes; `capmini` is only the finance cases (one hot lane twice, four lanes); `lanesmoke` is the same at a few seconds each and `enginesmoke` is only its engine case.
-#   `soak` (docs/work/CALCIFY_SOAK_HARNESS.md) holds 10,000 trades/s for 15 and 30 minutes in capture-settle-v1 mode, with broker and Postgres on tmpfs and with Postgres on the root disk (synchronous_commit=off), and fetches the CSV time series; `soaksmoke` is 60 s of each. Knobs: REEF_SOAK_RATE, REEF_SOAK_SHORT_SECONDS (900), REEF_SOAK_LONG_SECONDS (1800), REEF_SOAK_CASES, REEF_SOAK_RP_TMPFS_GB, REEF_SOAK_PG_TMPFS_GB, REEF_SOAK_HEAP_GB (limits; defaults differ for the 15 and 30 minute cases), REEF_SOAK_PG_STORE (root | volume), REEF_SOAK_FORCE.
-#   `fullchain` (docs/work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md section 0) runs the whole stack on the host (HTTP intake, engine, Phase 1 and 2 sidecars, capacity lanes, projection) with the data volumes on tmpfs and drives it at a ladder of paced rates (REEF_FC_RATES, default "2500 5000 7500 10000" booked trades/s, REEF_FC_SECONDS each, default 60), then optionally one long hold (REEF_FC_LONG_RATE, REEF_FC_LONG_SECONDS, default 900); `fullchainsmoke` is 20 s at 500/s on 8 instruments. Needs a host with enough RAM for the tmpfs limits (REEF_FC_TMPFS_BOUNDARY_GB 40, REEF_FC_TMPFS_BROKER_GB 24). Knobs: REEF_FC_MODE (capture-settle-v1), REEF_FC_INSTRUMENTS (64), REEF_FC_EVICT (true), REEF_FC_QUANTITY (1).
-#   `compare` runs the single-thread microbenchmarks first, then lanes 1 to 4 with the projector and lanes 1 and 3 without it, all with -XX:+UseParallelGC, then the S1 shard cases.
+#   REEF_DO_SIZE=g5-16vcpu-64gb-50gb REEF_DO_REGION=atl1 scripts/dev/calcify-financial/droplet-chain-run.sh [matrix]
+# Matrices (the supported ones; the S4/S1-era spike matrices were archived to Reef Records on 2026-10-16, see docs/RECORDS_RETENTION.md):
+#   `fullchain` / `fullchainsmoke` (docs/work/CALCIFY_CAPACITY_RUNTIME.md, "Full-chain paced run") run the whole path on the host on the validated 10k ingress profile
+#   (calcify-direct-bootstrap.mjs: Netty, in-memory intake with a durable Redpanda ack, 16 lanes, standing makers) with the data volumes on tmpfs, as a ladder of paced rates
+#   (REEF_FC_RATES, default "2500 5000 7500 10000" booked trades/s, REEF_FC_SECONDS each, default 60) and optionally one long hold (REEF_FC_LONG_RATE, REEF_FC_LONG_SECONDS, default 900);
+#   the smoke is 20 s at 500/s. Needs RAM for the tmpfs limits (REEF_FC_TMPFS_BOUNDARY_GB 40, REEF_FC_TMPFS_BROKER_GB 24). Knobs: REEF_FC_MODE, REEF_FC_INSTRUMENTS, REEF_FC_EVICT, REEF_FC_QUANTITY.
+#   `soak` / `soaksmoke` (docs/work/CALCIFY_SOAK_HARNESS.md) hold 10,000 trades/s for 15 and 30 minutes on the finance lane and projection only, in capture-settle-v1 mode.
+#   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then the finance lane cases; `enginesmoke` is a few seconds of the engine drain.
 #
 # Needs DIGITALOCEAN_TOKEN in .env or the environment, an SSH key as the harness expects, and REEF_DO_CONFIRM_DESTROYABLE=1 is set here.
 set -euo pipefail
@@ -15,7 +18,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 HARNESS="$ROOT_DIR/scripts/dev/do-benchmark-host.sh"
 INFRA_DIR="$ROOT_DIR/infra/do-benchmark"
-MATRIX="${1:-default}"
+MATRIX="${1:-fullchainsmoke}"
 OUT_DIR="${REEF_DROPLET_OUT_DIR:-$ROOT_DIR/reports/do-benchmark/chain-run-$(date -u +%Y%m%dT%H%M%SZ)}"
 REMOTE_DIR=reef-chain
 # The soak matrix runs four cases of 15 to 30 minutes each (about 100 minutes of load plus drains and builds); every other matrix is a few short cases.
@@ -106,14 +109,6 @@ scp -i "$KEY" -o UserKnownHostsFile="$ROOT_DIR/.tmp-do-known-hosts" "$ROOT_DIR"/
 scp -i "$KEY" -o UserKnownHostsFile="$ROOT_DIR/.tmp-do-known-hosts" "$ROOT_DIR/scripts/dev/calcify-financial/droplet-sizes.sh" "$USER_NAME@$HOST:/tmp/" >/dev/null
 { remote "java /tmp/Bench.java && java /tmp/Par.java"; } 2>&1 | tee "$OUT_DIR/microbench.txt" || log "microbenchmarks failed"
 
-run_case() {
-  # run_case LABEL ENV...   -- each case runs the S4 test once with 100,000 trades per lane and keeps its output
-  local label="$1"; shift
-  if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
-  log "case $label ($*)"
-  remote "sudo rm -rf /mnt/pgvol/pg/* /mnt/pgvol/rp/* 2>/dev/null; (bash /tmp/droplet-sizes.sh /tmp/sizes-$label.txt & echo \$! > /tmp/sizes.pid) ; cd $REMOTE_DIR/services/platform-runtime && env S4_TRADES=${S4_TRADES:-100000} $* S0_OUT_DIR=/tmp/s4out S4_ACCOUNTS=1000 S4_PG=nobindingfk timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.wholeChainOnOneMachine' -i --no-daemon 2>&1 | grep -E '^ +S4 |lanes together|projectors together|CPU per decision|  gc |  lane |S4-|FAILED|AssertionFailed|BUILD' ; kill \$(cat /tmp/sizes.pid) 2>/dev/null; grep '^topic:' /tmp/sizes-$label.txt | sort -k1,1 -k2,2nr | awk '!seen[\$1]++' | sed 's/^/MAX-TOPIC-KIB /'; for d in redpanda postgres; do echo \"MAX-DATA-DIR \$d KiB: \$(grep \"^\$d \" /tmp/sizes-$label.txt | cut -d' ' -f2 | sort -n | tail -1)\"; done; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
-}
-
 run_engine_drain() {
   # run_engine_drain LABEL PAIRS BATCHES [ENV...]  -- the Go lane drain test (real source, real transactional publisher) against a Redpanda whose data directory is tmpfs.
   # The Go toolchain runs in the golang image matching go.mod so the host needs no Go; the event topic's max.message.bytes and the producer limit are raised by the test itself.
@@ -178,54 +173,8 @@ run_soak() {
   log "fetched $OUT_DIR/soak/$label: $(ls "$OUT_DIR/soak/$label" 2>/dev/null | tr '\n' ' ')"
 }
 
-run_s1() {
-  # run_s1 LABEL ENV...   -- the S1 instrument-shard prototype (ample cash, so no cross-shard cash moves), 300,000 trades over 1,000 participants
-  local label="$1"; shift
-  if [ "$(elapsed)" -gt "$DEADLINE_SECONDS" ]; then log "deadline reached before $label; stopping the matrix"; return 1; fi
-  log "case $label ($*)"
-  remote "cd $REMOTE_DIR/services/platform-runtime && env $* S0_OUT_DIR=/tmp/s4out S1_PARTICIPANTS=1000 S1_TRADES=300000 S1_CASH_TRADES=1000 timeout 1500 ./gradlew cleanTest test -PbrokerTests -PresearchTests --tests '*S4EndToEndSpikeTest.shardedByInstrument' -i --no-daemon 2>&1 | grep -E '^ +S1 |planned:|lanes:|moves planned|machine load|FAILED|AssertionFailed|BUILD' ; docker ps -a --format 'LEFTOVER {{.Names}}'" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
-}
-
 : > "$OUT_DIR/matrix.txt"
 case "$MATRIX" in
-  compare)
-    PG=JAVA_TOOL_OPTIONS=-XX:+UseParallelGC
-    run_case "lanes1" $PG S4_LANES=1
-    run_case "lanes1-noproject" $PG S4_LANES=1 S4_PROJECT=false
-    run_case "lanes2" $PG S4_LANES=2
-    run_case "lanes3" $PG S4_LANES=3
-    run_case "lanes3-noproject" $PG S4_LANES=3 S4_PROJECT=false
-    run_case "lanes4" $PG S4_LANES=4
-    run_case "lanes5" $PG S4_LANES=5
-    run_case "lanes1-g1" S4_LANES=1
-    run_case "lanes1-again" $PG S4_LANES=1
-    run_s1 "s1-shards1" $PG S1_SHARDS=1
-    run_s1 "s1-shards2" $PG S1_SHARDS=2
-    run_s1 "s1-shards3" $PG S1_SHARDS=3
-    ;;
-  tmpfs)
-    # Option A of the capacity plan: broker and Postgres data on tmpfs (not durable; a lost host means rerun from the captured inputs), ParallelGC, projector on.
-    T="JAVA_TOOL_OPTIONS=-XX:+UseParallelGC S4_PG_DOCKER=--tmpfs=/var/lib/postgresql/data:rw,size=6g,mode=1777 S4_RP_DOCKER=--tmpfs=/var/lib/redpanda/data:rw,size=6g,uid=101,gid=101,mode=0777"
-    run_case "tmpfs-lanes2" $T S4_LANES=2
-    run_case "tmpfs-lanes3" $T S4_LANES=3
-    run_case "tmpfs-lanes1" $T S4_LANES=1
-    run_case "tmpfs-lanes4" $T S4_LANES=4
-    run_case "tmpfs-lanes2-again" $T S4_LANES=2
-    ;;
-  baseline)
-    # Arena baseline (owner decisions 2026-10-14): one server, everything on a durable disk, full retention, projector on, ParallelGC. REEF_BASELINE_STORE=root (default) or volume (broker and Postgres on the attached volume);
-    # REEF_BASELINE_LANES is the lane counts to try; the sustained case runs the middle count with more trades.
-    G="JAVA_TOOL_OPTIONS=-XX:+UseParallelGC"
-    if [ "${REEF_BASELINE_STORE:-root}" = volume ]; then G="$G S4_PG_DOCKER=--volume=/mnt/pgvol/pg:/var/lib/postgresql/data S4_RP_DOCKER=--volume=/mnt/pgvol/rp:/var/lib/redpanda/data"; fi
-    if [ "${REEF_BASELINE_STORE:-root}" = tmpfs ]; then G="$G S4_PG_DOCKER=--tmpfs=/var/lib/postgresql/data:rw,size=12g,mode=1777 S4_RP_DOCKER=--tmpfs=/var/lib/redpanda/data:rw,size=24g,uid=101,gid=101,mode=0777"; fi
-    LANES_LIST=(${REEF_BASELINE_LANES:-4 6 8})
-    for n in "${LANES_LIST[@]}"; do run_case "base-l$n" $G S4_LANES=$n; done
-    MID="${LANES_LIST[$(( ${#LANES_LIST[@]} / 2 ))]}"
-    S4_TRADES=250000 run_case "sustained-l$MID" $G S4_LANES=$MID
-    run_case "base-l$MID-again" $G S4_LANES=$MID
-    # Is one broker core the limit? Same lanes with a four-core broker (only meaningful with the stores off the slow disk).
-    if [ "${REEF_BASELINE_STORE:-root}" != root ]; then run_case "base-l$MID-smp4" $G S4_LANES=$MID S4_SMP=4 S4_BROKER_MEM=4G; fi
-    ;;
   lane)
     # CAL-FIN-P23: what one quiet, dedicated host says about the engine lane and the finance lane. Three interleaved sweeps of the engine drain (the laptop's three agreed within 2 percent),
     # one sweep with compression off, then one hot finance lane with its projector (default and 8,000 record chunks, twice each), then four uniform lanes for the aggregate.
@@ -236,22 +185,6 @@ case "$MATRIX" in
       run_cap "cap-hot-lane-$r" CAP_LANES=1 CAP_TRADES=600000
       run_cap "cap-hot-lane-apply8000-$r" CAP_LANES=1 CAP_TRADES=600000 CAP_MAX_APPLY=8000
     done
-    run_cap "cap-4lanes" CAP_LANES=4 CAP_TRADES=1200000
-    ;;
-  capmode)
-    # CAL-FIN-P25: the same finance cases in both decision modes on one host (hot lane twice per mode, then the uniform lanes once per mode unless REEF_CAP_SKIP_4LANES=1).
-    for mode in two-step capture-settle-v1; do
-      run_cap "cap-hot-$mode-1" CAP_LANES=1 CAP_TRADES=600000 CAP_DECISION_MODE=$mode
-      run_cap "cap-hot-$mode-2" CAP_LANES=1 CAP_TRADES=600000 CAP_DECISION_MODE=$mode
-    done
-    if [ "${REEF_CAP_SKIP_4LANES:-0}" != 1 ]; then
-      for mode in two-step capture-settle-v1; do run_cap "cap-4lanes-$mode" CAP_LANES=4 CAP_TRADES=${REEF_CAP_4LANE_TRADES:-1200000} CAP_DECISION_MODE=$mode; done
-    fi
-    ;;
-  capmini)
-    # The finance lane only (CAL-FIN-P25): one hot lane twice and four uniform lanes, to compare hosts and code versions cheaply (about 20 minutes after bootstrap).
-    run_cap "cap-hot-lane-1" CAP_LANES=1 CAP_TRADES=600000
-    run_cap "cap-hot-lane-2" CAP_LANES=1 CAP_TRADES=600000
     run_cap "cap-4lanes" CAP_LANES=4 CAP_TRADES=1200000
     ;;
   soak)
@@ -292,29 +225,9 @@ case "$MATRIX" in
   enginesmoke)
     run_engine_drain "engine-smoke" 5000 500,2000
     ;;
-  lanesmoke)
-    run_engine_drain "engine-smoke" 5000 500,2000
-    run_cap "cap-smoke" CAP_LANES=1 CAP_TRADES=20000
-    ;;
-  smoke) run_case "smoke-1lane" S4_LANES=1 S4_TRADES=5000 ;;
-  s1smoke) run_s1 "s1-smoke" S1_SHARDS=2 ;;
   *)
-    run_case "lanes1-a" S4_LANES=1
-    run_case "lanes2-a" S4_LANES=2
-    run_case "lanes3-a" S4_LANES=3
-    run_case "lanes4-a" S4_LANES=4
-    run_case "lanes1-b" S4_LANES=1
-    run_case "lanes2-b" S4_LANES=2
-    run_case "lanes3-b" S4_LANES=3
-    run_case "lanes3-smp2" S4_LANES=3 S4_SMP=2 S4_BROKER_MEM=2G
-    run_case "lanes2-free" S4_LANES=2 S4_FREE=true S4_VERIFY_ASYNC=true
-    run_s1 "s1-shards1" S1_SHARDS=1
-    run_s1 "s1-shards2" S1_SHARDS=2
-    run_s1 "s1-shards3" S1_SHARDS=3
-    run_s1 "s1-shards4" S1_SHARDS=4
+    echo "unknown matrix: $MATRIX (lane | enginesmoke | soak | soaksmoke | fullchain | fullchainsmoke)" >&2; exit 1
     ;;
 esac
 
-log "fetching the metrics file"
-remote "cat /tmp/s4out/s0-metrics.properties 2>/dev/null; cat /tmp/s4out/s4-end-to-end.txt 2>/dev/null" > "$OUT_DIR/metrics-and-last-log.txt" || true
 log "done in $(elapsed)s; the droplet is destroyed on exit"

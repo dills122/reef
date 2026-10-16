@@ -96,57 +96,13 @@ no-restart capacity as a successful recovery proof.
 must coordinate source topic `max.message.bytes` and consumer source-byte budgets.
 This setting changes neither command batch size nor transaction ordering.
 
-Run `make dev-smoke-calcify-full-path` for a local functional check through
-PostgreSQL-backed HTTP intake, Redpanda command log, Go matching, and all three
-Calcify stages. It creates isolated topics and registers a local source
-generation, then checks a zero-trade resting batch and one crossing trade against
-its exact receipt. It leaves stack running; use matching `REEF_COMPOSE_FILES` and
-`DEV_COMPOSE_PROFILES` on `make dev-down` when finished. This smoke does not
-measure capacity or exercise financial settlement.
+**One supported way to run Calcify locally.** Every Calcify run starts from `scripts/dev/calcify-direct-bootstrap.mjs`, the profile that held 10k trades/s (October 2, D7): Netty HTTP, in-memory bounded intake with a durable Redpanda acknowledgement, 16 command partitions and 16 direct matching lanes, the Phase 1 extractor and verifier, the managed Phase 2 resolver, and standing BUY makers so that one timed SELL is one trade. Do not assemble another stack by hand: a per-order PostgreSQL intake on the JDK HTTP server with four partitions is a different, much slower profile, and two campaigns reported false limits from it.
 
-Run `make dev-stress-calcify-basic PAIRS=1000` for a bounded local burst through
-the same path. It checks intake, matched source commands/trades, both link
-streams, final receipts, and stage-end timestamps; [diagnostic evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/work/CALCIFY_PHASE1_IMPLEMENTATION.md#bounded-full-path-load-cal-p1-l2)
-records the observed rate, drain, and limits. This is not a sustained gate.
+- `make calcify-fullchain-soak FC_RATE=1000 FC_SECONDS=60` (`scripts/dev/calcify-fullchain-soak.mjs`): the whole path including the capacity finance lanes and their projection, paced, with a sampler for every stage and an exact decision count at the end. Builds the images from the checkout and tears the stack down. See docs/work/CALCIFY_CAPACITY_RUNTIME.md, "Full-chain paced run".
+- `scripts/dev/calcify-direct-capacity.mjs`: the capture-stage qualification driver (frozen policy, independent full-fact parity oracle); see [direct throughput](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md) for its reproduction recipe.
+- Dedicated hosts: `make calcify-droplet-run MATRIX=fullchainsmoke` (paid; needs the owner's go with size and cost).
 
-Run `make dev-soak-calcify-phase1 DURATION_SECONDS=300 PAIRS_PER_SECOND=100`
-for a five-minute paced local diagnostic. Optional `OUT=/absolute/path.json`
-saves five-second receipt-gap samples and exact final stage counts. This local
-gate requires at least 95% of requested intake rate, sampled receipt gap at
-most two seconds at p95 and five seconds at peak, exact final counts, and final
-drain within five seconds. Compare with the separate burst; neither qualifies
-hosted or production capacity.
-
-For higher-rate single-lane Phase 1 pressure, first create fresh source
-generation with `SMOKE_ID=calcify-highrate-local make dev-smoke-calcify-high-rate`.
-Note generation printed by smoke, then run
-`make dev-soak-calcify-high-rate-load SMOKE_ID=calcify-highrate-local GENERATION=21 DURATION=300s PAIRS_PER_SECOND=2500 WORKERS=512 OUT=/private/tmp/calcify-highrate-load.json`
-with actual printed generation in place of `21`. Check source and both link
-streams with
-`make dev-verify-calcify-high-rate LOAD_REPORT=/private/tmp/calcify-highrate-load.json OUT=/private/tmp/calcify-highrate-verify.json`.
-Load command reports offered, dropped, accepted, five-second conservative
-upper receipt gap, and drain; its gate requires at least 95% requested
-acceptance, at most 5% offered pairs dropped, exact receipts, bounded gap,
-and drain within five seconds. Verification command enforces
-exact intake, source, commitment, verification, receipt, and matching counts.
-Use fresh smoke ID/generation for each run; do not reuse pair ID ranges.
-Run short higher-rate probe and five-minute gate after each material phase.
-Loader now classifies every validated HTTP acknowledgement against fixed monotonic
-deadline, excluding late/equal acknowledgements. Receipt drain starts at HTTP
-worker completion, before waiting for final progress query. Reports include
-start/deadline/completion epoch timestamps and definitions. Older artifacts retain
-their original sampled-deadline and post-sampler-drain measurements.
-
-Joined Phase1/2 measurements use `scripts/dev/calcify-joined-capacity.mjs`,
-a prebuilt Go load binary, and compiled test observers. Each run requires fresh
-evidence directory, source generation and topics. Lightweight resolved counter
-runs during load; independent source-to-Protobuf full-fact audit and exact Phase1
-accounting run afterward. Scope and actual broker durability must be frozen;
-RF1 local results do not qualify RF3/hosted capacity.
-Optional `--instrument-ids` CSV on Go loader spreads complete pairs across instruments;
-seed extras with `DEV_CALCIFY_FULL_PATH_INSTRUMENT_IDS` and pass same list via
-`CALCIFY_JOINED_INSTRUMENT_IDS`. Default remains single `AAPL-<smoke-id>` lane.
-Observe actual partition spread; distinct instruments need not map to distinct partitions.
+On October 16, 2026 the older entry points were archived to Reef Records ([import note](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/docs/imports/2026-10-16-reef-script-cleanup.md)): `calcify-full-path-smoke.mjs` and the Make targets that wrapped it (`dev-smoke-calcify-full-path`, `dev-stress-calcify-basic`, `dev-soak-calcify-phase1`, `dev-smoke-calcify-high-rate`, `dev-soak-calcify-high-rate-load`, `dev-verify-calcify-high-rate`, `dev-smoke-calcify-phase2`), `calcify-joined-capacity.mjs`, `calcify-verify-existing.mjs` and the October 1 resolver runners. The Go load tool (`services/simulator/cmd/calcify-load`) stays; its `-instrument-ids`, `-workload-mode` and `-quantity` flags are the supported knobs.
 `REEF_BOUNDARY_PG_SHARED_BUFFERS` defaults128MB; `REEF_BOUNDARY_PG_COMMIT_DELAY_MICROS`
 defaults0. Nonzero commit delay groups concurrent WAL flushes while keeping
 `fsync` and `synchronous_commit` on; record actual settings and latency tradeoff.

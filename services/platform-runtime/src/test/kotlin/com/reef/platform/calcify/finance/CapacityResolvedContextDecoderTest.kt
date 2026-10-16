@@ -61,7 +61,7 @@ class CapacityResolvedContextDecoderTest {
     }
 
     @Test fun theRoutingIsTheOneTheRealEngineStackUsed() {
-        // Observed in the compose stack (make dev-smoke-calcify-full-path, DEV_CALCIFY_PHASE2=1, id capsmoke1, four partitions): the real trade of AAPL-capsmoke1 was published
+        // Observed in the compose stack (the generic full-path smoke (archived to Reef Records 2026-10-16), DEV_CALCIFY_PHASE2=1, id capsmoke1, four partitions): the real trade of AAPL-capsmoke1 was published
         // to venue event partition 2 and its resolved context to resolved partition 2.
         assertEquals(2, com.reef.platform.api.StreamCommandEnvelopeBuilder.partition("capsmoke1", "session-capsmoke1", "AAPL-capsmoke1", 4))
         val observed = CapacityPlan("p", "capsmoke1", "session-capsmoke1", AssetId("USD"), AccountId("opening"), CapacityRouting.engineLanes("capsmoke1", "session-capsmoke1", listOf("AAPL-capsmoke1", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"), 4), 100, 100, 200, 50)

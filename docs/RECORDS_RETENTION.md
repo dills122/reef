@@ -136,3 +136,8 @@ remain local, plus concise checkpoints and repaired immutable links. Prior
 archived README revision unchanged; source checkpoint links preserve later context.
 Active finite-P3/finance code, contracts and harnesses, Claude work and all ignored
 local data excluded. No runtime, authority or performance claim changed.
+
+## October 16 Calcify harness and spike cleanup
+
+19 superseded Calcify run harnesses and research spikes (214,895 bytes) moved from Reef source commit `df8695dc29354f5b8d0e1924864797bbd2f3445e` to Records `fc291fce3931fe644101da534c4d17b0d677d722` ([import note](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/docs/imports/2026-10-16-reef-script-cleanup.md), [Records PR #15](https://github.com/dills122/reef-records/pull/15)). [Relocation inventory](records/2026-10-16-script-cleanup-migration.json) pins source and archive hashes. Reef keeps one supported way to run the path (`calcify-direct-bootstrap.mjs`, `calcify-direct-capacity.mjs`, `calcify-fullchain-soak.mjs`, the droplet runner and the capacity-path tests); the legacy Make targets and the droplet matrices of the S4/S1-era spikes were removed with them (ordinary versions stay in Git history).
+
