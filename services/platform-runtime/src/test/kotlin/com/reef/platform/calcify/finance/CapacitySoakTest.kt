@@ -33,7 +33,7 @@ import reef.contracts.calcify.finance.v1.FinanceDecisionV1
  * projections, Redpanda and Postgres 16 in containers), fed by a lazy deterministic generator and ONE paced sender thread against System.nanoTime.
  *
  * Environment: CAP_SOAK_SECONDS (120), CAP_SOAK_RATE (10000 trades/s), CAP_LANES (1), CAP_INSTRUMENTS (64), CAP_ACCOUNTS (200), CAP_HOT_SHARE (0), CAP_SOURCE (`resolved`|`lifecycle`),
- * CAP_DECISION_MODE (`two-step`|`capture-settle-v1`), CAP_MAX_APPLY (2000), CAP_PG_SYNC_OFF (false), CAP_SOAK_SAMPLE_SECONDS (10), CAP_SOAK_MAX_LAG_SECONDS (30),
+ * CAP_DECISION_MODE (`two-step`|`capture-settle-v1`), CAP_EVICT (false: true keeps only open work in each lane's memory), CAP_MAX_APPLY (2000), CAP_PG_SYNC_OFF (false), CAP_SOAK_SAMPLE_SECONDS (10), CAP_SOAK_MAX_LAG_SECONDS (30),
  * CAP_SOAK_LAG_SUSTAIN_SECONDS (60), CAP_SOAK_ABORT_ON_LAG (true: stop at the first breach; false: run to the end, report and then fail), CAP_SOAK_DRAIN_SECONDS (600),
  * CAP_SOAK_STALL_SECONDS (120), CAP_SOAK_COUNT_ROWS (true), CAP_SOAK_OUT_DIR (build/capacity-soak), CAP_SOAK_LABEL (soak); S4_RP_DOCKER / S4_PG_DOCKER / S4_SMP / S4_BROKER_MEM as the other
  * capacity tests. The test fails (loudly, with the time series) if the producer or a lane is behind by more than the lag threshold for the sustain period, or if the end-of-run integrity
@@ -128,6 +128,7 @@ class CapacitySoakTest {
         val instrumentCount = env("CAP_INSTRUMENTS", "64").toInt(); val accountCount = env("CAP_ACCOUNTS", "200").toInt(); val hotShare = env("CAP_HOT_SHARE", "0").toDouble()
         val source = env("CAP_SOURCE", "resolved"); val resolved = when (source) { "resolved" -> true; "lifecycle" -> false; else -> error("CAP_SOURCE must be resolved or lifecycle, not $source") }
         val mode = DecisionMode.ofWire(env("CAP_DECISION_MODE", DecisionMode.TWO_STEP.wire)); val dpt = SoakAccounting.decisionsPerTrade(mode)
+        val evict = env("CAP_EVICT", "false").toBoolean()
         val maxApply = env("CAP_MAX_APPLY", "2000").toInt(); val pgSyncOff = env("CAP_PG_SYNC_OFF", "false").toBoolean()
         val sampleSeconds = env("CAP_SOAK_SAMPLE_SECONDS", "10").toLong(); val maxLagSeconds = env("CAP_SOAK_MAX_LAG_SECONDS", "30").toDouble(); val sustainSeconds = env("CAP_SOAK_LAG_SUSTAIN_SECONDS", "60").toDouble()
         val abortOnLag = env("CAP_SOAK_ABORT_ON_LAG", "true").toBoolean(); val drainSeconds = env("CAP_SOAK_DRAIN_SECONDS", "600").toLong(); val stallSeconds = env("CAP_SOAK_STALL_SECONDS", "120").toLong()
@@ -171,7 +172,7 @@ class CapacitySoakTest {
                 rp.admin().use { admin -> admin.createTopics(listOf(topics.capture, topics.control, topics.decisions).map { NewTopic(it, lanes, 1.toShort()).configs(mapOf("retention.ms" to "-1", "retention.bytes" to "-1")) }).all().get(30, TimeUnit.SECONDS) }
                 println("CAPACITY-SOAK-BROKER data_dir_mount=${probe("docker", "exec", rp.name, "sh", "-c", "df -P /var/lib/redpanda/data | tail -1")?.trim()}")
                 val client = Properties().apply { put("bootstrap.servers", rp.bootstrap) }
-                val launcher = CapacityLauncher(plan, if (resolved) CapacityResolvedContextDecoder(plan) else CapacityInputDecoders(plan, captureBinding, true), topics, appId, client, client, stateDir.path, ds, maxApply = maxApply).start()
+                val launcher = CapacityLauncher(plan, if (resolved) CapacityResolvedContextDecoder(plan) else CapacityInputDecoders(plan, captureBinding, true), topics, appId, client, client, stateDir.path, ds, maxApply = maxApply, evictSettled = evict).start()
                 val producer = KafkaProducer<ByteArray, ByteArray>(Properties().apply {
                     put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rp.bootstrap); put(ProducerConfig.ACKS_CONFIG, "all"); put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
                     put(ProducerConfig.LINGER_MS_CONFIG, 5); put(ProducerConfig.BATCH_SIZE_CONFIG, 131_072)
@@ -398,6 +399,10 @@ class CapacitySoakTest {
                     // ---- report ----
                     fun perTrade(final: Long?, base: Long?) = if (final != null && base != null) "%.0f".format((final - base) * 1024.0 / sent.get()) else "?"      // net of the after-funding baseline; du counts allocated blocks
                     val perTradeRp = perTrade(finalSample.rpTotalKib, baseline.rpTotal); val perTradePg = perTrade(finalSample.pgDirKib, baseline.pgDir)
+                    // the heap that is still reachable once everything is drained and collected: what a long session leaves resident in the lane (and the harness)
+                    repeat(3) { System.gc() }
+                    val liveMib = ManagementFactory.getMemoryMXBean().heapMemoryUsage.used shr 20
+                    println("CAPACITY-SOAK-LIVE evict=$evict live_heap_mib=$liveMib trades=${sent.get()} live_bytes_per_trade=${"%.0f".format(liveMib * 1048576.0 / sent.get())}")
                     println("CAPACITY-SOAK-RESULT label=$label mode=${mode.wire} source=$source lanes=$lanes target_rate=$rate seconds=$seconds sent=${sent.get()} booked=$bookedTrades projected=$projectedTrades " +
                         "producer_rate=${"%.0f".format(sent.get() / sentSeconds)}/s drain_s=${"%.1f".format(drainTotal)} booked_after_producer_s=${"%.1f".format(bookedAt)} projected_after_producer_s=${"%.1f".format(projectedAt)} " +
                         "end_to_end_projected_per_s=${"%.0f".format(sent.get() / (sentSeconds + drainTotal))} max_producer_behind_s=${"%.2f".format(maxProducerBehindS)} max_booking_lag_s=${"%.2f".format(maxBookingLagS)} max_projection_lag_s=${"%.2f".format(maxProjectionLagS)} " +
