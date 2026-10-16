@@ -12,10 +12,19 @@ internal class CapacityPlan(
     val planId: String, val run: String, val session: String, val cashAsset: AssetId, val openingAccount: AccountId,
     val laneInstruments: List<Set<String>>,
     val maxObligations: Int, val maxCaptures: Int, val maxSettleAttempts: Int, val maxControls: Int,
-    /** Instant profile: every captured execution is followed by its first settlement attempt, decided in the same record (a booked trade is two decisions). */
+    /**
+     * Instant profile: every captured execution is followed by its first settlement attempt, made by the decoder in the same consumed record. How many decisions that is
+     * depends on [decisionMode]: two ([DecisionMode.TWO_STEP], a Capture and a Settle of attempt 1) or one ([DecisionMode.CAPTURE_SETTLE]). With `false` the decoder emits the
+     * Capture only and every settlement is an operator control (netting or deferred settlement later); that is only meaningful in the two-step mode.
+     */
     val autoSettle: Boolean = true,
     /** The most decisions one lane's projection will ever hold (migration 0016); the default covers a 5-minute slice at the contract rate with room to spare. Part of the lane binding. */
     val sequenceBound: Long = 8_000_000L,
+    /**
+     * Opt-in, off by default. `capture-settle-v1` books each trade as ONE decision (the sequence counts trades, not inputs, so the sequence bound covers twice the slice). Part of
+     * the lane's configuration digest (see [CapacityConfig.digest]) and therefore of [bindingDigest]; the default leaves every existing digest unchanged.
+     */
+    val decisionMode: DecisionMode = DecisionMode.TWO_STEP,
 ) {
     init {
         require(planId.isNotBlank() && run.isNotBlank() && session.isNotBlank()) { "plan identity" }
@@ -23,6 +32,7 @@ internal class CapacityPlan(
         require(laneInstruments.flatMap { it }.let { it.size == it.toSet().size }) { "an instrument belongs to exactly one lane" }
         require(laneInstruments.flatten().none { it == cashAsset.value }) { "an instrument cannot be the cash asset" }
         require(sequenceBound in FinanceProjector.FINITE_SEQUENCE_BOUND..FinanceProjector.MAX_SEQUENCE_BOUND) { "sequence bound out of range" }
+        require(decisionMode == DecisionMode.TWO_STEP || autoSettle) { "decisionMode ${decisionMode.wire} settles the first attempt with the capture: autoSettle must be true" }
         capacity(0)      // the budgets are validated by the ledger configuration now, not at first use
     }
 
@@ -44,7 +54,7 @@ internal class CapacityPlan(
 
     fun capacity(lane: Int): CapacityConfig {
         require(lane in 0 until lanes) { "lane $lane is outside the plan" }
-        return CapacityConfig(null, cashAsset, laneInstruments[lane].map { AssetId(it) }.toSet(), openingAccount, maxObligations, maxCaptures, maxSettleAttempts, maxControls)
+        return CapacityConfig(null, cashAsset, laneInstruments[lane].map { AssetId(it) }.toSet(), openingAccount, maxObligations, maxCaptures, maxSettleAttempts, maxControls, decisionMode)
     }
 
     fun bindingDigest(lane: Int): String = Canon.sha(Canon.bytes {

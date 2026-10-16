@@ -286,6 +286,7 @@ class S0ProjectorCostSpikeTest {
                             att.setInt(6, input.attempt); att.setString(7, d.disposition.name); att.addBatch()
                             if (d.disposition == Disposition.SETTLED) { upd.setString(1, digest); upd.setString(2, e.runId); upd.setString(3, e.venueSessionId); upd.setString(4, e.instrumentId); upd.setString(5, e.executionId); upd.addBatch() } }
                         is FinanceInput.Fund -> Unit
+                        is FinanceInput.CaptureSettle -> throw IllegalStateException("capture-settle is not part of this test")
                     }
                     lastSeq = d.sequence; lastChain = d.checksum
                 }

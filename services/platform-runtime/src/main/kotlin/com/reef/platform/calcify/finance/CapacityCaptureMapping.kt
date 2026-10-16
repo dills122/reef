@@ -47,7 +47,13 @@ internal object CapacityCaptureMapping {
             positive(fact.quantity.units), positive(fact.price.nanos))
     }
 
-    /** The first settlement attempt of an execution, decided in the same record as its capture (the instant profile). */
+    /** The action key of a combined capture and first settlement (decision mode `capture-settle-v1`): one key, one action leaf per booked trade. */
+    fun captureSettleKey(executionId: String) = ActionKey(NAMESPACE, "capture-settle", executionId)
+
+    /** The combined input of a mapped capture (same economics, the first settlement attempt implied). */
+    fun captureSettle(c: FinanceInput.Capture) = FinanceInput.CaptureSettle(captureSettleKey(c.execution.executionId), c.execution, c.buyer, c.seller, c.quantity, c.priceNanos)
+
+    /** The first settlement attempt of an execution, decided in the same record as its capture (the instant profile, decision mode `two-step`). */
     fun firstSettle(execution: ExecutionKey): FinanceInput.Settle =
         FinanceInput.Settle(ActionKey(NAMESPACE, "settle", "${execution.executionId}/1"), Authority.OPERATOR, execution, 1)
 
@@ -61,7 +67,7 @@ internal object CapacityCaptureMapping {
 
 /**
  * The capacity processor's decoder. CAPTURE records are [FiniteLifecycleCaptureV1] envelopes (schema, binding and content digest checked; a record that fails is
- * [CapacityItem.Bad]); each ready member becomes a Capture and, when the plan auto-settles, the first Settle of that execution. CONTROL records are [FinanceInputV1]
+ * [CapacityItem.Bad]); each ready member becomes a Capture and, when the plan auto-settles, the first Settle of that execution (decision mode `two-step`), or one CaptureSettle (`capture-settle-v1`). CONTROL records are [FinanceInputV1]
  * Fund or Settle; a Capture on the control topic or an unparseable body is [CapacityItem.Bad]. The record's partition is its lane.
  *
  * [verifyContentDigest] can be turned off to skip the per-envelope content digest (about 16 microseconds per capture record, see the sharding note section 2); the
@@ -80,10 +86,12 @@ internal class CapacityInputDecoders(private val plan: CapacityPlan, private val
         if (mapped.isEmpty()) return listOf(CapacityItem.Skip)
         val out = ArrayList<CapacityItem>(mapped.size * 2)
         for (m in mapped) when (m) {
-            is FinanceCaptureMapping.Mapped.Ready -> {
-                out += CapacityItem.Run(m.input)
-                if (plan.autoSettle) out += CapacityItem.Run(CapacityCaptureMapping.firstSettle(m.input.execution))
-            }
+            is FinanceCaptureMapping.Mapped.Ready ->
+                if (plan.decisionMode == DecisionMode.CAPTURE_SETTLE) out += CapacityItem.Run(CapacityCaptureMapping.captureSettle(m.input))
+                else {
+                    out += CapacityItem.Run(m.input)
+                    if (plan.autoSettle) out += CapacityItem.Run(CapacityCaptureMapping.firstSettle(m.input.execution))
+                }
             is FinanceCaptureMapping.Mapped.Invalid -> out += CapacityItem.Bad(m.memberDigest)
         }
         return out
@@ -92,10 +100,10 @@ internal class CapacityInputDecoders(private val plan: CapacityPlan, private val
     private fun control(raw: ByteArray): List<CapacityItem> = controlItems(raw)
 
     companion object {
-        /** A CONTROL record: Fund or Settle only; a Capture body or an unparseable one is Bad. */
+        /** A CONTROL record: Fund or Settle only; a Capture or CaptureSettle body or an unparseable one is Bad. */
         fun controlItems(raw: ByteArray): List<CapacityItem> {
             val input = try { FinanceWire.fromProto(FinanceInputV1.parseFrom(raw)) } catch (e: Exception) { return listOf(CapacityItem.Bad(FiniteLifecycleContract.sha(raw))) }
-            return if (input is FinanceInput.Capture) listOf(CapacityItem.Bad(FiniteLifecycleContract.sha(raw))) else listOf(CapacityItem.Run(input))
+            return if (input is FinanceInput.Capture || input is FinanceInput.CaptureSettle) listOf(CapacityItem.Bad(FiniteLifecycleContract.sha(raw))) else listOf(CapacityItem.Run(input))
         }
     }
 }

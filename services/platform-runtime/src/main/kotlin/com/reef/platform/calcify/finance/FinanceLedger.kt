@@ -33,6 +33,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
             is FinanceInput.Capture -> state.executions.size >= config.maxCaptures || state.obligations.size >= config.maxObligations
             is FinanceInput.Fund -> state.controls >= config.maxControls
             is FinanceInput.Settle -> state.attempts.size >= config.maxSettleAttempts
+            is FinanceInput.CaptureSettle -> false      // never reached: evaluate refuses it
         }
         if (exceeded) return Outcome(state, Disposition.BUDGET_EXCEEDED, null)
         val sequence = state.sequence + 1
@@ -62,6 +63,7 @@ internal class FinanceLedger(val config: FinanceConfig) {
         is FinanceInput.Capture -> capture(d, input)
         is FinanceInput.Fund -> fund(d, input)
         is FinanceInput.Settle -> settle(d, input)
+        is FinanceInput.CaptureSettle -> Eval(Disposition.INVALID_INPUT)      // capacity profile only: the finite profile refuses it, unrecorded
     }
 
     private fun capture(d: Draft, i: FinanceInput.Capture): Eval {

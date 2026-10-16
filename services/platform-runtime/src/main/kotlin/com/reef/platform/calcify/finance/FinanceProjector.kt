@@ -165,6 +165,17 @@ internal class FinanceProjector(private val chain: DecisionChain, private val da
                     oQty += input.quantity; oPx += input.priceNanos; oCash += Math.multiplyExact(input.quantity, input.priceNanos); oShares += input.quantity; oStatus += "PENDING"
                     inBatch[e] = oEx.size - 1
                 }
+                // One decision books the capture and the first settlement attempt: the rows are those the two decisions would have produced (the obligation as the settle left it,
+                // the attempt row of attempt 1 with the settle outcome), so a read model cannot tell the modes apart except by the number of decision rows.
+                is FinanceInput.CaptureSettle -> {
+                    check(d.disposition in settleDispositions) { "a capture-settle decision carries ${d.disposition}, not a settle outcome" }
+                    val e = input.execution; val settled = d.disposition == Disposition.SETTLED
+                    oRun += e.runId; oVen += e.venueSessionId; oIns += e.instrumentId; oEx += e.executionId; oBuy += input.buyer.value; oSell += input.seller.value
+                    oQty += input.quantity; oPx += input.priceNanos
+                    oCash += if (settled) 0L else Math.multiplyExact(input.quantity, input.priceNanos); oShares += if (settled) 0L else input.quantity; oStatus += if (settled) "SETTLED" else "PENDING"
+                    inBatch[e] = oEx.size - 1
+                    aRun += e.runId; aVen += e.venueSessionId; aIns += e.instrumentId; aEx += e.executionId; aNo += 1; aDisp += d.disposition.name
+                }
                 is FinanceInput.Settle -> if (d.disposition in settleDispositions) {
                     val e = input.execution
                     aRun += e.runId; aVen += e.venueSessionId; aIns += e.instrumentId; aEx += e.executionId; aNo += input.attempt; aDisp += d.disposition.name

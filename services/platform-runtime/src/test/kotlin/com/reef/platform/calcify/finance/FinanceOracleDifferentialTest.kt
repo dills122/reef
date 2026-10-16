@@ -35,14 +35,16 @@ class FinanceOracleDifferentialTest {
                 is FinanceInput.Capture -> listOf("C", i.execution, i.buyer.value, i.seller.value, i.quantity, i.priceNanos)
                 is FinanceInput.Fund -> listOf("F", i.authority, i.account.value, i.asset.value, i.amount)
                 is FinanceInput.Settle -> listOf("S", i.authority, i.execution, i.attempt)
+                is FinanceInput.CaptureSettle -> throw IllegalStateException("capture-settle is not part of this test")
             }
             actions[ak]?.let { (n, _) -> return (if (n == norm) "PRIOR_RESULT" else "ACTION_CONFLICT") to null }
-            val plan = when (i) { is FinanceInput.Capture -> capture(i); is FinanceInput.Fund -> fund(i); is FinanceInput.Settle -> settle(i) }
+            val plan = when (i) { is FinanceInput.Capture -> capture(i); is FinanceInput.Fund -> fund(i); is FinanceInput.Settle -> settle(i); is FinanceInput.CaptureSettle -> throw IllegalStateException("capture-settle is not part of this test") }
             if (!plan.recorded) return plan.disposition to null
             val over = when (i) {
                 is FinanceInput.Capture -> execs.size >= maxCaptures || obl.size >= maxObligations
                 is FinanceInput.Fund -> controls >= maxControls
                 is FinanceInput.Settle -> attempts.size >= maxSettle
+                is FinanceInput.CaptureSettle -> throw IllegalStateException("capture-settle is not part of this test")
             }
             if (over) return "BUDGET_EXCEEDED" to null
             plan.apply(); seq++; actions[ak] = norm to plan.disposition; if (i is FinanceInput.Fund) controls++
@@ -141,6 +143,7 @@ class FinanceOracleDifferentialTest {
                     is FinanceInput.Capture -> h.copy(quantity = h.quantity + 1)
                     is FinanceInput.Fund -> h.copy(amount = h.amount + 1)
                     is FinanceInput.Settle -> h.copy(attempt = h.attempt + 1)
+                    is FinanceInput.CaptureSettle -> throw IllegalStateException("capture-settle is not part of this test")
                 }
                 else -> fresh()
             }

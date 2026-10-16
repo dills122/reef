@@ -26,6 +26,7 @@ class FinanceWireTest {
     private val act = ActionKey("p3", "control", "open-1")
     private val ek = ExecutionKey("p3-run", "p3-session", "AAPL", "e1")
     private val capture = FinanceInput.Capture(act, ek, AccountId("buyer-account"), AccountId("seller-account"), 3, 100_000_000_000L)
+    private val captureSettle = FinanceInput.CaptureSettle(act, ek, AccountId("buyer-account"), AccountId("seller-account"), 3, 100_000_000_000L)
     private val fund = FinanceInput.Fund(act, Authority.OPERATOR, AccountId("buyer-account"), AssetId("USD"), 6)
     private val settle = FinanceInput.Settle(act, Authority.OPERATOR, ek, 1)
     private val decision = Decision(7, act, "a".repeat(64), Disposition.SETTLED,
@@ -33,6 +34,8 @@ class FinanceWireTest {
 
     // Goldens produced by a separate Python varint encoder; they pin field numbers and wire types.
     private val goldenCapture = "0a150a0270331207636f6e74726f6c1a066f70656e2d3112480a1e0a0670332d72756e120a70332d73657373696f6e1a044141504c22026531120d62757965722d6163636f756e741a0e73656c6c65722d6163636f756e7420032880d0dbc3f402"
+    // The capture-settle body is the capture body under field 5 (tag 0x2a): the same bytes as goldenCapture with that tag.
+    private val goldenCaptureSettle = "0a150a0270331207636f6e74726f6c1a066f70656e2d312a480a1e0a0670332d72756e120a70332d73657373696f6e1a044141504c22026531120d62757965722d6163636f756e741a0e73656c6c65722d6163636f756e7420032880d0dbc3f402"
     private val goldenFund = "0a150a0270331207636f6e74726f6c1a066f70656e2d311a180801120d62757965722d6163636f756e741a035553442006"
     private val goldenSettle = "0a150a0270331207636f6e74726f6c1a066f70656e2d3122240a1e0a0670332d72756e120a70332d73657373696f6e1a044141504c2202653110011801"
     private val goldenDecision = "080712150a0270331207636f6e74726f6c1a066f70656e2d311a40" + "61".repeat(64) +
@@ -40,7 +43,7 @@ class FinanceWireTest {
         "62".repeat(64) + "3a40" + "63".repeat(64) + "4240" + "64".repeat(64)
 
     @Test fun inputsMatchTheGoldenBytesAndRoundTrip() {
-        for ((input, golden) in listOf(capture to goldenCapture, fund to goldenFund, settle to goldenSettle)) {
+        for ((input, golden) in listOf(capture to goldenCapture, captureSettle to goldenCaptureSettle, fund to goldenFund, settle to goldenSettle)) {
             val bytes = FinanceWire.toProto(input).toByteArray()
             assertEquals(golden, hex(bytes), "golden for ${input::class.simpleName}")
             assertEquals(input, FinanceWire.fromProto(FinanceInputV1.parseFrom(bytes)))
@@ -62,6 +65,20 @@ class FinanceWireTest {
             }
         }
         assertEquals(hex(FinanceWire.toProto(capture).toByteArray()), hex(bytes))
+    }
+
+    @Test fun independentEncoderAgreesWithGeneratedCodeForTheCaptureSettle() {
+        val bytes = enc {
+            msg(1) { str(1, "p3"); str(2, "control"); str(3, "open-1") }
+            msg(5) {
+                msg(1) { str(1, "p3-run"); str(2, "p3-session"); str(3, "AAPL"); str(4, "e1") }
+                str(2, "buyer-account"); str(3, "seller-account"); num(4, 3); num(5, 100_000_000_000L)
+            }
+        }
+        assertEquals(hex(FinanceWire.toProto(captureSettle).toByteArray()), hex(bytes))
+        assertEquals(hex(bytes), hex(FinanceWire.encode(captureSettle)), "the direct encoder writes the same bytes")
+        assertEquals(captureSettle, FinanceWire.fromProto(FinanceInputV1.parseFrom(bytes)))
+        assertTrue(captureSettle.digest() != capture.digest(), "the tag is part of the canonical input")
     }
 
     @Test fun everyDispositionMapsBothWays() {

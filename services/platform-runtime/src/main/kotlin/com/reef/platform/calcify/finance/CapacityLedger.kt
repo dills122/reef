@@ -3,6 +3,19 @@ package com.reef.platform.calcify.finance
 import java.math.BigInteger
 
 /**
+ * How the capacity profile books an executed trade (docs/work/CALCIFY_CAPACITY_PROFILE.md, decision 7). The mode is part of the lane's configuration digest, hence of its
+ * genesis chain, state commitment binding and lane binding, so a store, log or projection built under one mode is refused by the other and a live lane is never switched in place.
+ */
+internal enum class DecisionMode(val wire: String) {
+    /** Today's shape, the default: a trade is a `Capture` and, when the plan auto-settles, a `Settle` of attempt 1: two inputs, two decisions. */
+    TWO_STEP("two-step"),
+    /** A trade is one `CaptureSettle` input: capture and the first (operator, attempt 1) settlement decided together, one decision per booked trade. */
+    CAPTURE_SETTLE("capture-settle-v1");
+
+    companion object { fun ofWire(text: String): DecisionMode = entries.firstOrNull { it.wire == text } ?: throw IllegalArgumentException("unknown decisionMode") }
+}
+
+/**
  * Configuration of the capacity profile's ledger (docs/work/CALCIFY_CAPACITY_PROFILE.md). Same fields as the finite [FinanceConfig] but without its pinned
  * ceilings (16 accounts, 128 captures, 256 obligations, 160 attempts, 8 controls): the budgets are the profile's own, per slice. The instantiation label of the
  * state commitment is bound into the digest, so a chain built under one commitment can never verify as another's.
@@ -12,6 +25,8 @@ internal data class CapacityConfig(
     /** The fixed account set (as in the finite profile), or null: accounts are then admitted by the first recorded Fund and exist as state, so a configuration never lists thousands of them. */
     val accounts: Set<AccountId>?, val cashAsset: AssetId, val securities: Set<AssetId>, val openingAccount: AccountId,
     val maxObligations: Int, val maxCaptures: Int, val maxSettleAttempts: Int, val maxControls: Int,
+    /** Bound into [digest] only when it is not the default, so every two-step digest, genesis and golden is unchanged. */
+    val decisionMode: DecisionMode = DecisionMode.TWO_STEP,
 ) {
     init {
         require(accounts == null || accounts.size >= 2) { "at least two accounts" }
@@ -28,6 +43,7 @@ internal data class CapacityConfig(
         }
         str(cashAsset.value); val secs = securities.map { it.value }.sortedWith(Canon.utf8Order<String>({ it })); int(secs.size); secs.forEach { str(it) }; str(openingAccount.value)
         int(maxObligations); int(maxCaptures); int(maxSettleAttempts); int(maxControls)
+        if (decisionMode != DecisionMode.TWO_STEP) { str("decision-mode"); str(decisionMode.wire) }
     })
 }
 
@@ -116,6 +132,7 @@ internal class CapacityLedger(val config: CapacityConfig) {
         actions[input.action]?.let { prior -> return refused(if (prior.digest == digest) Disposition.PRIOR_RESULT else Disposition.ACTION_CONFLICT) }
         return when (input) {
             is FinanceInput.Capture -> capture(input, digest)
+            is FinanceInput.CaptureSettle -> captureSettle(input, digest)
             is FinanceInput.Fund -> fund(input, digest)
             is FinanceInput.Settle -> settle(input, digest)
         }
@@ -134,18 +151,72 @@ internal class CapacityLedger(val config: CapacityConfig) {
         return CapacityOutcome(disposition, Decision(sequence, input.action, digest, disposition, legs, priorChain, stateDigest, chain))
     }
 
+    /**
+     * The capture checks, in their order, shared by [capture] and [captureSettle]: the refusal, or null when the execution may be booked (its amount then fits in `Long`).
+     * Nothing is written. A redelivered execution with the same economics is `EXECUTION_ALREADY_CAPTURED`, with other economics `EXECUTION_CONFLICT`.
+     */
+    private fun captureRefusal(execution: ExecutionKey, buyer: AccountId, seller: AccountId, quantity: Long, priceNanos: Long): Disposition? {
+        if (!known(buyer) || !known(seller)) return Disposition.UNKNOWN_ACCOUNT
+        if (AssetId(execution.instrumentId) !in config.securities) return Disposition.INVALID_INPUT
+        if (buyer == seller || quantity <= 0 || priceNanos < 0) return Disposition.INVALID_INPUT
+        try { Math.multiplyExact(quantity, priceNanos) } catch (_: ArithmeticException) { return Disposition.AMOUNT_OVERFLOW }
+        executions[execution]?.let { old ->
+            return if (old.buyer == buyer && old.seller == seller && old.quantity == quantity && old.priceNanos == priceNanos) Disposition.EXECUTION_ALREADY_CAPTURED else Disposition.EXECUTION_CONFLICT
+        }
+        return null
+    }
+
     private fun capture(i: FinanceInput.Capture, digest: String): CapacityOutcome {
-        if (!known(i.buyer) || !known(i.seller)) return refused(Disposition.UNKNOWN_ACCOUNT)
-        if (AssetId(i.execution.instrumentId) !in config.securities) return refused(Disposition.INVALID_INPUT)
-        if (i.buyer == i.seller || i.quantity <= 0 || i.priceNanos < 0) return refused(Disposition.INVALID_INPUT)
-        val amount = try { Math.multiplyExact(i.quantity, i.priceNanos) } catch (_: ArithmeticException) { return refused(Disposition.AMOUNT_OVERFLOW) }
-        val captured = Captured(i.buyer, i.seller, i.quantity, i.priceNanos)
-        executions[i.execution]?.let { old -> return refused(if (old == captured) Disposition.EXECUTION_ALREADY_CAPTURED else Disposition.EXECUTION_CONFLICT) }
+        captureRefusal(i.execution, i.buyer, i.seller, i.quantity, i.priceNanos)?.let { return refused(it) }
         if (executions.size >= config.maxCaptures || obligations.size >= config.maxObligations) return refused(Disposition.BUDGET_EXCEEDED)
-        val obligation = Obligation(ObligationStatus.PENDING, amount, i.quantity)
+        val captured = Captured(i.buyer, i.seller, i.quantity, i.priceNanos)
+        val obligation = Obligation(ObligationStatus.PENDING, Math.multiplyExact(i.quantity, i.priceNanos), i.quantity)
         executions[i.execution] = captured; obligations[i.execution] = obligation
         commitExecution(i.execution, captured); commitObligation(i.execution, obligation)
         return record(i, digest, Disposition.CAPTURED, emptyList())
+    }
+
+    /**
+     * Mode `capture-settle-v1`: [capture] and the first settlement attempt (operator, attempt 1) as ONE decision (docs/work/CALCIFY_CAPACITY_PROFILE.md, decision 7).
+     *  - A capture failure (unknown account, invalid input, overflow, redelivery, conflict) or an exhausted capture or obligation budget refuses the whole trade: nothing is recorded.
+     *  - The recorded disposition is the settle outcome: SETTLED (four legs), or INSUFFICIENT_CASH, INSUFFICIENT_SHARES, BALANCE_OVERFLOW (no legs) with the obligation left PENDING
+     *    and the attempt leaf (execution, 1) written, so a later `Settle(execution, 2)` works exactly as after the two-step flow and a repeat of attempt 1 is `PRIOR_ATTEMPT`.
+     *  - A trade that settles at once writes no attempt leaf: it is never consulted, because a later Settle is refused `ALREADY_SETTLED` before the attempt check. The attempt
+     *    budget therefore counts attempt leaves only and is checked only for a trade that would write one. The projection still gets its attempt row (see [FinanceProjector]).
+     *  - One K leaf under the action key given by the input; the entity classes and encodings, the checksum layout and the chain link are the ones every other decision uses.
+     */
+    private fun captureSettle(i: FinanceInput.CaptureSettle, digest: String): CapacityOutcome {
+        if (config.decisionMode != DecisionMode.CAPTURE_SETTLE) return refused(Disposition.INVALID_INPUT)      // a lane in another mode never sees this input; refuse it, never half-handle it
+        captureRefusal(i.execution, i.buyer, i.seller, i.quantity, i.priceNanos)?.let { return refused(it) }
+        if (executions.size >= config.maxCaptures || obligations.size >= config.maxObligations) return refused(Disposition.BUDGET_EXCEEDED)
+        val amount = Math.multiplyExact(i.quantity, i.priceNanos)
+        val security = AssetId(i.execution.instrumentId)
+        // the settle checks run against the state a capture would leave: a capture touches no position
+        var why: Disposition? = when {
+            position(i.buyer, config.cashAsset) < amount -> Disposition.INSUFFICIENT_CASH
+            position(i.seller, security) < i.quantity -> Disposition.INSUFFICIENT_SHARES
+            else -> null
+        }
+        var plan: Plan? = null
+        if (why == null) {
+            val cash = config.cashAsset
+            plan = planLegs(listOf(Leg(i.buyer, cash, -amount), Leg(i.seller, cash, amount), Leg(i.seller, security, -i.quantity), Leg(i.buyer, security, i.quantity)))
+            if (plan == null) why = Disposition.BALANCE_OVERFLOW
+        }
+        // everything that can refuse has now been checked, before anything is written: the trade is booked whole or not at all
+        if (why != null && attempts.size >= config.maxSettleAttempts) return refused(Disposition.BUDGET_EXCEEDED)
+        val captured = Captured(i.buyer, i.seller, i.quantity, i.priceNanos)
+        executions[i.execution] = captured
+        if (why != null) {
+            val pending = Obligation(ObligationStatus.PENDING, amount, i.quantity); obligations[i.execution] = pending
+            attempts[i.execution to 1] = why
+            commitExecution(i.execution, captured); commitObligation(i.execution, pending); commitAttempt(i.execution, 1, why)
+            return record(i, digest, why, emptyList())
+        }
+        val applied = apply(plan!!)
+        val settled = Obligation(ObligationStatus.SETTLED, 0, 0); obligations[i.execution] = settled
+        commitExecution(i.execution, captured); commitObligation(i.execution, settled)
+        return record(i, digest, Disposition.SETTLED, applied)
     }
 
     private fun fund(i: FinanceInput.Fund, digest: String): CapacityOutcome {

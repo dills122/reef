@@ -25,6 +25,7 @@ class FinanceWireSchemaGuardTest {
             "reef.contracts.calcify.finance.v1.FinanceExecutionKeyV1",
             "reef.contracts.calcify.finance.v1.FinanceLegV1",
             "reef.contracts.calcify.finance.v1.FinanceCaptureV1",
+            "reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1",
             "reef.contracts.calcify.finance.v1.FinanceFundV1",
             "reef.contracts.calcify.finance.v1.FinanceSettleV1",
         )

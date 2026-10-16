@@ -4,6 +4,7 @@ import com.google.protobuf.CodedOutputStream
 import com.google.protobuf.WireFormat
 import reef.contracts.calcify.finance.v1.FinanceActionKeyV1
 import reef.contracts.calcify.finance.v1.FinanceAuthorityV1
+import reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1
 import reef.contracts.calcify.finance.v1.FinanceCaptureV1
 import reef.contracts.calcify.finance.v1.FinanceDecisionV1
 import reef.contracts.calcify.finance.v1.FinanceDispositionV1
@@ -24,6 +25,8 @@ internal object FinanceWire {
         when (i) {
             is FinanceInput.Capture -> b.setCapture(FinanceCaptureV1.newBuilder().setExecution(toProto(i.execution))
                 .setBuyerAccountId(i.buyer.value).setSellerAccountId(i.seller.value).setQuantity(i.quantity).setPriceNanos(i.priceNanos))
+            is FinanceInput.CaptureSettle -> b.setCaptureSettle(FinanceCaptureSettleV1.newBuilder().setExecution(toProto(i.execution))
+                .setBuyerAccountId(i.buyer.value).setSellerAccountId(i.seller.value).setQuantity(i.quantity).setPriceNanos(i.priceNanos))
             is FinanceInput.Fund -> b.setFund(FinanceFundV1.newBuilder().setAuthority(toProto(i.authority))
                 .setAccountId(i.account.value).setAssetId(i.asset.value).setAmount(i.amount))
             is FinanceInput.Settle -> b.setSettle(FinanceSettleV1.newBuilder().setAuthority(toProto(i.authority)).setExecution(toProto(i.execution)).setAttempt(i.attempt))
@@ -40,6 +43,7 @@ internal object FinanceWire {
         require(p.unknownFields.isEmpty && p.action.unknownFields.isEmpty) { "unknown protobuf fields" }
         val ok = when (p.bodyCase) {
             FinanceInputV1.BodyCase.CAPTURE -> p.capture.let { it.unknownFields.isEmpty && it.execution.unknownFields.isEmpty }
+            FinanceInputV1.BodyCase.CAPTURE_SETTLE -> p.captureSettle.let { it.unknownFields.isEmpty && it.execution.unknownFields.isEmpty }
             FinanceInputV1.BodyCase.FUND -> p.fund.unknownFields.isEmpty
             FinanceInputV1.BodyCase.SETTLE -> p.settle.let { it.unknownFields.isEmpty && it.execution.unknownFields.isEmpty }
             else -> true
@@ -68,6 +72,10 @@ internal object FinanceWire {
             FinanceInputV1.BodyCase.CAPTURE -> p.capture.let {
                 require(it.hasExecution()) { "missing execution" }
                 FinanceInput.Capture(action, fromProto(it.execution), AccountId(it.buyerAccountId), AccountId(it.sellerAccountId), it.quantity, it.priceNanos)
+            }
+            FinanceInputV1.BodyCase.CAPTURE_SETTLE -> p.captureSettle.let {
+                require(it.hasExecution()) { "missing execution" }
+                FinanceInput.CaptureSettle(action, fromProto(it.execution), AccountId(it.buyerAccountId), AccountId(it.sellerAccountId), it.quantity, it.priceNanos)
             }
             FinanceInputV1.BodyCase.FUND -> p.fund.let { FinanceInput.Fund(action, fromProto(it.authority), AccountId(it.accountId), AssetId(it.assetId), it.amount) }
             FinanceInputV1.BodyCase.SETTLE -> p.settle.let {
@@ -147,6 +155,7 @@ internal object FinanceWire {
         writeAction(out, 1, i.action)
         when (i) {
             is FinanceInput.Capture -> { val at = out.begin(2); writeExecution(out, 1, i.execution); out.string(2, i.buyer.value); out.string(3, i.seller.value); out.int64(4, i.quantity); out.int64(5, i.priceNanos); out.end(at) }
+            is FinanceInput.CaptureSettle -> { val at = out.begin(5); writeExecution(out, 1, i.execution); out.string(2, i.buyer.value); out.string(3, i.seller.value); out.int64(4, i.quantity); out.int64(5, i.priceNanos); out.end(at) }
             is FinanceInput.Fund -> { val at = out.begin(3); out.int32(1, authorityNumber(i.authority)); out.string(2, i.account.value); out.string(3, i.asset.value); out.int64(4, i.amount); out.end(at) }
             is FinanceInput.Settle -> { val at = out.begin(4); writeExecution(out, 1, i.execution); out.int32(2, i.attempt); out.int32(3, authorityNumber(i.authority)); out.end(at) }
         }

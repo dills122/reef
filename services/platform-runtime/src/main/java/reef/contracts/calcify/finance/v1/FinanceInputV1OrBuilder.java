@@ -70,5 +70,20 @@ public interface FinanceInputV1OrBuilder extends
    */
   reef.contracts.calcify.finance.v1.FinanceSettleV1OrBuilder getSettleOrBuilder();
 
+  /**
+   * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+   * @return Whether the captureSettle field is set.
+   */
+  boolean hasCaptureSettle();
+  /**
+   * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+   * @return The captureSettle.
+   */
+  reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 getCaptureSettle();
+  /**
+   * <code>.reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1 capture_settle = 5;</code>
+   */
+  reef.contracts.calcify.finance.v1.FinanceCaptureSettleV1OrBuilder getCaptureSettleOrBuilder();
+
   reef.contracts.calcify.finance.v1.FinanceInputV1.BodyCase getBodyCase();
 }

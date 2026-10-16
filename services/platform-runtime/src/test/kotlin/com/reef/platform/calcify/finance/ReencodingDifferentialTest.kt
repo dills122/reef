@@ -78,8 +78,9 @@ class ReencodingDifferentialTest {
     private fun action(rnd: Random) = ActionKey(text(rnd), text(rnd), text(rnd))
     private fun execution(rnd: Random) = ExecutionKey(text(rnd), text(rnd), text(rnd), text(rnd))
     private fun amount(rnd: Random): Long = when (rnd.nextInt(6)) { 0 -> 0L; 1 -> Long.MAX_VALUE; 2 -> Long.MIN_VALUE; 3 -> -rnd.nextInt(1000).toLong(); else -> rnd.nextLong() }
-    private fun input(rnd: Random): FinanceInput = when (rnd.nextInt(3)) {
+    private fun input(rnd: Random): FinanceInput = when (rnd.nextInt(4)) {
         0 -> FinanceInput.Capture(action(rnd), execution(rnd), account(rnd), account(rnd), amount(rnd), amount(rnd))
+        3 -> FinanceInput.CaptureSettle(action(rnd), execution(rnd), account(rnd), account(rnd), amount(rnd), amount(rnd))
         1 -> FinanceInput.Fund(action(rnd), Authority.entries[rnd.nextInt(2)], account(rnd), asset(rnd), amount(rnd))
         else -> FinanceInput.Settle(action(rnd), Authority.entries[rnd.nextInt(2)], execution(rnd), listOf(0, 1, -1, Int.MAX_VALUE, Int.MIN_VALUE, rnd.nextInt())[rnd.nextInt(6)])
     }
@@ -215,7 +216,7 @@ class ReencodingDifferentialTest {
             assertContentEquals(FinanceWire.toProto(d).toByteArray(), FinanceWire.encode(d), disposition.name)
         }
         for (authority in Authority.entries) {
-            val inputs = listOf(FinanceInput.Fund(a, authority, AccountId("u"), AssetId("USD"), 0), FinanceInput.Settle(a, authority, e, 0), FinanceInput.Capture(a, e, AccountId("b"), AccountId("s"), 0, 0))
+            val inputs = listOf(FinanceInput.Fund(a, authority, AccountId("u"), AssetId("USD"), 0), FinanceInput.Settle(a, authority, e, 0), FinanceInput.Capture(a, e, AccountId("b"), AccountId("s"), 0, 0), FinanceInput.CaptureSettle(a, e, AccountId("b"), AccountId("s"), 0, 0))
             for (i in inputs) assertContentEquals(FinanceWire.toProto(i).toByteArray(), FinanceWire.encode(i), "$authority $i")
         }
         val empty = Decision(0, a, "", Disposition.CAPTURED, emptyList(), "", "", ""); assertContentEquals(FinanceWire.toProto(empty).toByteArray(), FinanceWire.encode(empty))
@@ -250,6 +251,7 @@ class ReencodingDifferentialTest {
                 is FinanceInput.Capture -> i.copy(quantity = i.quantity + 1)
                 is FinanceInput.Fund -> i.copy(amount = i.amount + 1)
                 is FinanceInput.Settle -> i.copy(attempt = i.attempt + 1)
+                is FinanceInput.CaptureSettle -> i.copy(quantity = i.quantity + 1)
             }
             assertEquals(hex.formatHex(sha(changed.canonical())), changed.digest()); assertTrue(first != changed.digest())
         }
@@ -272,6 +274,7 @@ class ReencodingDifferentialTest {
                     is FinanceInput.Capture -> p.toBuilder().apply { if (rnd.nextBoolean()) captureBuilder.setUnknownFields(unknown) else captureBuilder.executionBuilder.setUnknownFields(unknown) }.build()
                     is FinanceInput.Fund -> p.toBuilder().apply { fundBuilder.setUnknownFields(unknown) }.build()
                     is FinanceInput.Settle -> p.toBuilder().apply { if (rnd.nextBoolean()) settleBuilder.setUnknownFields(unknown) else settleBuilder.executionBuilder.setUnknownFields(unknown) }.build()
+                    is FinanceInput.CaptureSettle -> p.toBuilder().apply { if (rnd.nextBoolean()) captureSettleBuilder.setUnknownFields(unknown) else captureSettleBuilder.executionBuilder.setUnknownFields(unknown) }.build()
                 }
             }
             refusedBoth(edited) { FinanceWire.fromProto(edited) }

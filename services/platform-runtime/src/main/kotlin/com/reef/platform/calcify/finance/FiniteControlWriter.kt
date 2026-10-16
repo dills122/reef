@@ -58,7 +58,7 @@ internal class ControlLogState private constructor(
             val state = ControlLogState()
             for ((offset, value) in records) {
                 val input = try { FinanceWire.fromProto(FinanceInputV1.parseFrom(value)) } catch (e: Exception) { throw IllegalStateException("CONTROL log holds an undecodable record at $offset", e) }
-                check(input !is FinanceInput.Capture) { "CONTROL log holds a Capture at $offset" }
+                check(input !is FinanceInput.Capture && input !is FinanceInput.CaptureSettle) { "CONTROL log holds a ${input::class.simpleName} (a captured trade belongs on the CAPTURE topic) at $offset" }
                 check(input.action !in state.byKey) { "CONTROL log repeats action key at $offset" }
                 state.record(input, offset)
             }

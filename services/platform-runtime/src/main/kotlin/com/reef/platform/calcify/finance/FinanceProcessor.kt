@@ -137,7 +137,7 @@ internal class FinanceProcessor(private val config: FinanceProcessorConfig) : Pr
     private fun control(raw: ByteArray): List<Item> {
         val bad = listOf(Item.Bad(0, FiniteLifecycleContract.sha(raw)))
         val input = try { FinanceWire.fromProto(FinanceInputV1.parseFrom(raw)) } catch (e: Exception) { return bad }
-        if (input is FinanceInput.Capture) return bad
+        if (input is FinanceInput.Capture || input is FinanceInput.CaptureSettle) return bad
         return listOf(Item.Run(0, input))
     }
 }
