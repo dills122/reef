@@ -848,10 +848,10 @@ Record facts, observations, inference and unknowns separately. No framework surv
 
 Reuse existing probe orchestration/fixtures, adapting assertion and record model:
 [broker probe](../../services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/CalcifyResolverBrokerProbe.kt),
-[broker runner](../../scripts/dev/calcify-resolver/broker-check.mjs),
-[capacity runner](../../scripts/dev/calcify-resolver/capacity-check.mjs),
-[recovery runner](../../scripts/dev/calcify-resolver/recovery-check.mjs),
-[paced runner](../../scripts/dev/calcify-resolver/sustained-check.mjs) and
+[broker runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/broker-check.mjs),
+[capacity runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/capacity-check.mjs),
+[recovery runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/recovery-check.mjs),
+[paced runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/sustained-check.mjs) and
 [RF3 Compose](../../scripts/dev/calcify-resolver/broker.compose.yml).
 Existing probe/oracle is resolver-specific and shares resolver calculation; new
 financial oracle must independently implement accounting expectations. Use test-only

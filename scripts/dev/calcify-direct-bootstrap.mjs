@@ -2,8 +2,9 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
-const root=resolve(import.meta.dirname,'../..');
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const id=process.env.CALCIFY_DIRECT_SMOKE_ID;
 if(!id || !/^[A-Za-z0-9_-]+$/.test(id)) throw Error('CALCIFY_DIRECT_SMOKE_ID required');
 const mode=process.env.CALCIFY_DIRECT_WORKLOAD_MODE ?? 'paired';if(!['paired','aggressor'].includes(mode))throw Error('invalid workload mode');

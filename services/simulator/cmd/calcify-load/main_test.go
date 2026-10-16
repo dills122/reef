@@ -298,6 +298,38 @@ func TestWorkloadModeValidatesAndGateCountsOrdersPerTrade(t *testing.T) {
 	}
 }
 
+func TestQuantityFlagSetsTheOrderQuantityAndDefaultsToOneHundred(t *testing.T) {
+	var seen atomic.Value
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		seen.Store(body["quantityUnits"])
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer server.Close()
+	deadline := time.Now().Add(time.Second)
+	counts := counters{loadDeadline: deadline, now: func() time.Time { return deadline.Add(-time.Nanosecond) }}
+	cfg := config{WorkloadMode: "aggressor", BaseURL: server.URL, SmokeID: "qty-test", InstrumentIDs: []string{"lane-a"}}
+	if err := submitPair(server.Client(), cfg, 1, &counts); err != nil || seen.Load() != "100" {
+		t.Fatalf("default quantity=%v err=%v", seen.Load(), err)
+	}
+	cfg.Quantity = "1"
+	if err := submitPair(server.Client(), cfg, 2, &counts); err != nil || seen.Load() != "1" {
+		t.Fatalf("quantity flag=%v err=%v", seen.Load(), err)
+	}
+	for _, bad := range []string{"0", "-3", "1.5", "abc", "9999999999999999999"} {
+		if validQuantity(bad) {
+			t.Fatalf("quantity %q accepted", bad)
+		}
+	}
+	if !validQuantity("100") || !validQuantity("1") {
+		t.Fatal("valid quantity refused")
+	}
+}
+
 func TestAggressorPostsOnlySellerAndClassifiesSingleAcknowledgement(t *testing.T) {
 	var count atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

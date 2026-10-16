@@ -1,0 +1,16 @@
+# Data volumes of the stack on tmpfs, for the full-chain paced runs (scripts/dev/calcify-fullchain-soak.mjs, FC_TMPFS=true): not durable, so no recovery claim
+# follows from a run on it; it takes the disk out of the question when the stages' own limits are what is being measured. Sizes are limits, not allocations
+# (FC_TMPFS_BOUNDARY_GB for the boundary database that holds the intake and the capacity projection, FC_TMPFS_BROKER_GB, FC_TMPFS_OTHER_GB).
+volumes:
+  reef-redpanda-data:
+    driver: local
+    driver_opts: { type: tmpfs, device: tmpfs, o: "size=${FC_TMPFS_BROKER_GB:-24}g,mode=1777" }
+  reef-boundary-postgres-data:
+    driver: local
+    driver_opts: { type: tmpfs, device: tmpfs, o: "size=${FC_TMPFS_BOUNDARY_GB:-40}g,mode=1777" }
+  reef-postgres-data:
+    driver: local
+    driver_opts: { type: tmpfs, device: tmpfs, o: "size=${FC_TMPFS_OTHER_GB:-6}g,mode=1777" }
+  reef-projection-postgres-data:
+    driver: local
+    driver_opts: { type: tmpfs, device: tmpfs, o: "size=${FC_TMPFS_OTHER_GB:-6}g,mode=1777" }

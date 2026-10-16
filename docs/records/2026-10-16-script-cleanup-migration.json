@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "migration_date": "2026-10-16",
+  "source_repository": "https://github.com/dills122/reef",
+  "source_commit": "df8695dc29354f5b8d0e1924864797bbd2f3445e",
+  "selection_policy": "Superseded Calcify throughput harnesses and research spikes: the generic full-path smoke (wrong ingress profile for 10k), the October 2 joined-capacity driver and its accounting helper, the October 1 resolver proof runners, and 12 Kotlin research spikes that are not run by CI. The supported path stays in Reef: calcify-direct-bootstrap.mjs, calcify-direct-capacity.mjs, calcify-fullchain-soak.mjs, the capacity-path tests and the droplet runner. Exact tracked bytes at master; no ignored files, no live state, no evidence directories.",
+  "files": [
+    {
+      "source_path": "scripts/dev/calcify-full-path-smoke.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-full-path-smoke.mjs",
+      "bytes": 24191,
+      "sha256": "2a9a5eb3c24516a0f758bcc37e315b925d48036bbe53512c04d11336ec90f751",
+      "source_blob_oid": "9c354bab5b540b06ecad72fcf292de4cf81836d0",
+      "reason": "Superseded stack bring-up: the generic Phase 1/2 smoke builds the per-order PostgreSQL intake profile, not the validated 10k direct profile (the October 2 campaign and the first October 16 full-chain attempt both ran on it by mistake). Replaced by calcify-direct-bootstrap.mjs and calcify-fullchain-soak.mjs."
+    },
+    {
+      "source_path": "scripts/dev/calcify-joined-capacity.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-joined-capacity.mjs",
+      "bytes": 9849,
+      "sha256": "a262a7c785222a4163f345930065618eec5e5db95450de89e0fde7aa1b86cacf",
+      "source_blob_oid": "95e0f59c8878a7f321d7dccd2c22ce33f0d3a54f",
+      "reason": "Joined Phase 1/2 capacity driver of the October 2 campaign; evidence-only, superseded by calcify-direct-capacity.mjs and the full-chain harness."
+    },
+    {
+      "source_path": "scripts/dev/calcify-verify-existing.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-verify-existing.mjs",
+      "bytes": 5459,
+      "sha256": "4ebcf966529188fef698083c8447203ff262aab86c07139211f45d315ff097d3",
+      "source_blob_oid": "c330ec496483d926f23f8cceec6988baaf6feb11",
+      "reason": "Phase 1 accounting helper used only by calcify-joined-capacity.mjs and a Make target."
+    },
+    {
+      "source_path": "scripts/dev/calcify-resolver/broker-check.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-resolver/broker-check.mjs",
+      "bytes": 9007,
+      "sha256": "211c75cb3446144c28bd0a53deb5d233e999cf566336223b893766e9a558f483",
+      "source_blob_oid": "bc827fbfda8603bb7a830320381dddd78717a6b5",
+      "reason": "Resolver proof runners of October 1 cited by the system RFC as evidence of that date; superseded by the managed resolver in the direct profile."
+    },
+    {
+      "source_path": "scripts/dev/calcify-resolver/capacity-check.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-resolver/capacity-check.mjs",
+      "bytes": 3285,
+      "sha256": "e5050da2cb1d90a8e8fd9d354c87482267caec256c2bbbf3d3cf16e2eadb5a00",
+      "source_blob_oid": "d45d34db3ac4cf983454e135057f00f4236618a2",
+      "reason": "Resolver proof runners of October 1 cited by the system RFC as evidence of that date; superseded by the managed resolver in the direct profile."
+    },
+    {
+      "source_path": "scripts/dev/calcify-resolver/recovery-check.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-resolver/recovery-check.mjs",
+      "bytes": 4657,
+      "sha256": "7f1c0a89dead4426837aa1da95d6dbba8c72fc39031bfb006a64fc19b8f18ac0",
+      "source_blob_oid": "40849819144bea28d607730e81e66e7d6f0735b9",
+      "reason": "Resolver proof runners of October 1 cited by the system RFC as evidence of that date; superseded by the managed resolver in the direct profile."
+    },
+    {
+      "source_path": "scripts/dev/calcify-resolver/sustained-check.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-resolver/sustained-check.mjs",
+      "bytes": 8090,
+      "sha256": "d4b0d840e17c0c1af4f96798613e034ff7f9280c7cf5ea528197e90a80123535",
+      "source_blob_oid": "6415b2710bed67572c3dd2c045c099df5e4558c2",
+      "reason": "Resolver proof runners of October 1 cited by the system RFC as evidence of that date; superseded by the managed resolver in the direct profile."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityLedgerScaleSpikeTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityLedgerScaleSpikeTest.kt",
+      "bytes": 2778,
+      "sha256": "a930b408c928e0e05d76dc6a27536dc960abed98cc3c717453d40af71a87d213",
+      "source_blob_oid": "27c7474dbadb2760e22162f9d3538756a476de56",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceProjectorThroughputSpikeTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/FinanceProjectorThroughputSpikeTest.kt",
+      "bytes": 7843,
+      "sha256": "b43307b4001ad9b6fe127a7f5f128f847c96eafcbc2a491713aa82c84a6166d7",
+      "source_blob_oid": "01976f3ecf3b55bba2dae9ac87bc0c50729ea690",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/IncrementalCommitmentSpikeTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/IncrementalCommitmentSpikeTest.kt",
+      "bytes": 6013,
+      "sha256": "cef061ba95fb2f681fd9df8af07e6d5c410a507dc301d4a41631da0d9c736834",
+      "source_blob_oid": "e7877ceab1c0ce21ac053c96b54661184042f333",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0StreamsLaneTuningSpikeTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0StreamsLaneTuningSpikeTest.kt",
+      "bytes": 9643,
+      "sha256": "d40f7d1165e2827fd373fb8c34b3b7fb75e56ca719140e2e8e7d2410e5d04557",
+      "source_blob_oid": "6c371f6cd9560c3bb778c8a539a712a7303c55ba",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0ProjectorCapacitySpikeTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S0ProjectorCapacitySpikeTest.kt",
+      "bytes": 19093,
+      "sha256": "373b716a52b125c79c876a0cec1c92c5b198ac1fac4fb3d86e5acc4767677fa2",
+      "source_blob_oid": "71463384d36e0be38318393703fe1123a8eeb394",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S3cLedgerScaleSpikeTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S3cLedgerScaleSpikeTest.kt",
+      "bytes": 13364,
+      "sha256": "8e9fb80451d7ac90b7d7bcc1600ff9131b26b624b28134653f622a1897a59898",
+      "source_blob_oid": "fd785a04a377ffa3c3fadee95305b954fe64758f",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S3dLaneWithLedgerSpikeTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S3dLaneWithLedgerSpikeTest.kt",
+      "bytes": 11985,
+      "sha256": "4712a68c058922147293f585eb549443abdc8d6af2e87124a50532ae37148626",
+      "source_blob_oid": "7b5236b7b82fe19229f82cda17c8d8dfceab6148",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S5ShardingCashSimulationTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/S5ShardingCashSimulationTest.kt",
+      "bytes": 5699,
+      "sha256": "06d65342ddaa7f6f6b3a8a9d8d329008ef7ef8db2dfa87ea14d4deff77651dcf",
+      "source_blob_oid": "0fb7e9eac5f7f1dbe2cfcfc09b17b7f606ef732e",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/StateCommitmentCostSpikeTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/StateCommitmentCostSpikeTest.kt",
+      "bytes": 12724,
+      "sha256": "f140df0f6f50bef8a85848d5d7d1a783c69a8bacc72cd6e3537190db35f7a4c6",
+      "source_blob_oid": "51a641dafdbc729acf4137e95704efa9213a925b",
+      "reason": "Research spike that produced CAL-FIN ledger numbers (CAL-FIN-P1 to P21 era); superseded by the capacity path tests (CapacityLaneCostTest, CapacityLaneThroughputTest, CapacitySoakTest) and the full-chain harness; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CommitmentOptionsBenchTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CommitmentOptionsBenchTest.kt",
+      "bytes": 34424,
+      "sha256": "d88ac9235944f7932ba91c76ba50d984c26f0084934e26c71bc6a44d14c69e53",
+      "source_blob_oid": "6310aef210fc1a93a241d30abbb0fc1e90eaf792",
+      "reason": "Research benchmark behind the state commitment investigation; its conclusions live in docs/work/CALCIFY_STATE_COMMITMENT_INVESTIGATION.md; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/ReencodingMicroCostTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/ReencodingMicroCostTest.kt",
+      "bytes": 13163,
+      "sha256": "81cb2fd4b59c616c5545688a6f8b0fe64d015ee8978462062cb164a7c2ee0889",
+      "source_blob_oid": "74195f8103b2f9f1ecf012cceba2ffab9c40fc64",
+      "reason": "Research measurement behind the re-encoding investigation; its conclusions live in docs/work/CALCIFY_REENCODING_INVESTIGATION.md; the changes it found are in the lane code; not run by CI."
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityReencodingCostTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/CapacityReencodingCostTest.kt",
+      "bytes": 13628,
+      "sha256": "f3051be26919b6517b5f6c0a1ff222dd3a707a9f6eb759c94070dce013489126",
+      "source_blob_oid": "546d8d49163c617da509b7a5df2172d33f300282",
+      "reason": "Research measurement behind the re-encoding investigation; its conclusions live in docs/work/CALCIFY_REENCODING_INVESTIGATION.md; the changes it found are in the lane code; not run by CI."
+    }
+  ],
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "fc291fce3931fe644101da534c4d17b0d677d722",
+  "archive_manifest": "manifests/2026-10-16-reef-script-cleanup.json",
+  "redirect_paths": []
+}
