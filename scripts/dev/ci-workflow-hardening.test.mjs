@@ -166,7 +166,7 @@ for (const workflowName of workflowNames) {
 
 const ocrPilot = await readWorkflow("open-code-review-pilot.yml");
 const ocrRule = JSON.parse(await readFile(new URL("../../.opencodereview/rule.json", import.meta.url), "utf8"));
-assert.match(ocrPilot, /on:\n  pull_request_target:\n    branches: \[master\]\n    types: \[labeled, synchronize, reopened, ready_for_review\]/);
+assert.match(ocrPilot, /on:\n  pull_request_target:\n    branches: \[master\]\n    types: \[labeled, reopened, ready_for_review\]/);
 assert.match(ocrPilot, /^permissions: \{\}$/m);
 assert.match(ocrPilot, /if: \$\{\{ !github\.event\.pull_request\.draft && contains\(github\.event\.pull_request\.labels\.\*\.name, 'ocr-pilot'\) && \(github\.event\.action != 'labeled' \|\| github\.event\.label\.name == 'ocr-pilot'\) \}\}/);
 assert.match(ocrPilot, /    permissions:\n      contents: read\n      pull-requests: write/);
