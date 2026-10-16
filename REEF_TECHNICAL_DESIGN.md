@@ -669,6 +669,10 @@ Split a module into its own service only when one or more are true:
 - team ownership requires independent deploy cadence
 - async transport provides measurable operational value
 
+## 14.1a Calcify: opt-in capture, booking and projection after matching
+
+Since October 2026 an opt-in Calcify path can sit after the matching engine's durable event batches: a resolver turns matched executions into capture facts on engine-aligned partitions, a finance lane per instrument group decides each trade against a per-lane ledger (a hash-chained decision log with a state commitment per decision, RocksDB state with a changelog), and a tailing projector writes the decisions into `boundary.calcify_finance_*`. The lane count, routing (`StreamCommandEnvelopeBuilder.partition`), decision mode (`two-step` default, opt-in `capture-settle-v1`) and memory policy (settled trades evicted by default) are part of its binding or configuration. It is separate from the legacy post-match runner and does not change the venue core's contracts. Design and evidence: [program status](docs/work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md), [capacity profile](docs/work/CALCIFY_CAPACITY_PROFILE.md), D-058 and D-059 in [DECISIONS](docs/DECISIONS.md).
+
 ## 14.2 Environment model: production-shaped and simulation modes
 
 Reef should support two modes without changing core domain behavior:

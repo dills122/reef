@@ -23,7 +23,7 @@ have separate runbooks under [`infra/`](../infra/README.md).
 ### Calcify map
 
 Start with the [program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md): where Calcify
-stands, whether the path is sound, decisions, and the next sprints. The [work board](WORK_PLAN.md#calcify-program--current-state-and-next-actions-october-11-2026)
+stands, whether the path is sound, decisions, and the next sprints. The [work board](WORK_PLAN.md#calcify-program--current-state-and-next-actions-october-16-2026)
 carries the short execution view; dated checkpoint essays live in the [history log](work/CALCIFY_HISTORY_LOG.md). No document here
 adopts financial authority: relational authority (D009) stays accepted until a separate decision.
 
@@ -32,6 +32,8 @@ adopts financial authority: relational authority (D009) stays accepted until a s
 | Direction | [System RFC](work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#101-first-experiment-sprint) | **Proposed** architecture, proof plan and owner decisions; status snapshot at the top |
 | Direction | [Single-server pressure test](research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md), [aged contention](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md), [matched control](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md) | Research: keyed state, recovery as the 10k blocker (8.1k/s with cold restart, 10.3k/s without); component results do not qualify the API-visible goal |
 | Goalpost | [Arena throughput contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md), [arena credit policy](work/CALCIFY_ARENA_CREDIT_POLICY.md) | **Proposed**: 10k/s through the trading API, settlement lags; receivable credit with reference proofs; numbers await calibration and owner adoption |
+| Capacity path (10k goal) | [Capacity profile](work/CALCIFY_CAPACITY_PROFILE.md), [capacity runtime](work/CALCIFY_CAPACITY_RUNTIME.md), [finance state commitment design](work/CALCIFY_FINANCE_STATE_COMMITMENT_DESIGN.md), [hot instrument design](work/CALCIFY_HOT_INSTRUMENT_DESIGN.md), [throughput budget](work/CALCIFY_THROUGHPUT_BUDGET.md) | **Built and merged, opt-in**: what the process role, lanes, commitment and decision modes are, how to run it, per-stage budgets and what each stage last measured; the budget page indexes the throughput ledger and does not replace it |
+| Capacity measurements | [Lane cost](work/CALCIFY_LANE_COST.md), [engine lane cost](work/CALCIFY_ENGINE_LANE_COST.md), [re-encoding](work/CALCIFY_REENCODING_INVESTIGATION.md), [state commitment](work/CALCIFY_STATE_COMMITMENT_INVESTIGATION.md), [processor path and sharding options](work/CALCIFY_PROCESSOR_PATH_AND_SHARDING_OPTIONS_2026-10-14.md), [commitment practice research](work/CALCIFY_COMMITMENT_PRACTICE_RESEARCH_2026-10-14.md), [dedicated hosts (EPYC and Xeon)](work/CALCIFY_DEDICATED_HOST_P26.md) | Dated measurement and research notes that explain the numbers in the ledger (CAL-FIN-P1 onward); none is a capacity claim |
 | Build contract | [Finite P3 source contract](work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md), [contracts README](../contracts/calcify/README.md) | Normative for O1/O2: lifecycle facts, budgets, ingress, binding |
 | Build design | [O3 packet](work/CALCIFY_FINITE_P3_O3_PACKET.md), [DB role definition](work/CALCIFY_FINITE_P3_DB_ROLES.md) | Decisions D1-D7 recorded; [role split signed October 13, 2026](work/CALCIFY_FINITE_P3_ROLE_SIGNOFF.md) |
 | Implemented flow | [Phase 1/2 overview](CALCIFY_PHASES_OVERVIEW.md) | Production opt-in flow, source map, finite O1/O2/O3a status |

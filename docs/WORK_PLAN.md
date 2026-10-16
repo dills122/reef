@@ -12,240 +12,29 @@ snapshot and scoped performance claims. Use newer source and evidence for curren
 
 Last aligned: 2026-09-04 against `master` at `cebbffc1`; hosted release gates
 were not re-run during this documentation check.
-Calcify entries were re-aligned on 2026-10-11 against `master` at `778ae5da8` (see the
-Calcify program section); the finite P3 financial-path section was refreshed on 2026-10-13 against `fd8f3ef6a`; non-Calcify sections remain as of 2026-09-04.
+The Calcify program section was re-aligned on 2026-10-16 against `master` at `b289c8186` plus #574; non-Calcify sections remain as of 2026-09-04 and need the owner's pass.
 
 Source/test/artifact reconciliation:
 [`IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md`](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/archive/IMPLEMENTATION_STATUS_AUDIT_2026-09-04.md).
 Items below distinguish missing implementation from evidence not found in the
 audited checkout; missing local reports do not prove a run never happened.
 
-## Calcify program — current state and next actions (October 11, 2026)
+## Calcify program — current state and next actions (October 16, 2026)
 
-Single living status and plan: [program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md).
-Dated checkpoint history moved to [Calcify history log](work/CALCIFY_HISTORY_LOG.md). Keep entries here short; put evidence
-in `docs/evidence/` and analysis in the plan.
+Single living status and plan: [program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md)
+(section 0 is the October 16 update). Dated checkpoint history, including the October 11 to 13 sections that used to sit here,
+is in the [Calcify history log](work/CALCIFY_HISTORY_LOG.md). Keep entries here short; put evidence in `docs/evidence/` and
+analysis in the plan. Delivery goal (owner): **10,000 booked trades/s sustained for 15 to 30 minutes**; 15 to 20k/s is later work.
 
 | Track | State | Next bounded action |
 | --- | --- | --- |
+| Capacity path (finance lanes, projection; the 10k goal) | Built end to end and merged (#553 to #573); bounded lane memory on by default (#574). One hot lane projects 9.9 to 10.0k trades/s on an EPYC 9555P (16.5k with the opt-in `capture-settle-v1` mode); a 15 minute soak at 10k trades/s (9M trades) passes with integrity ok on a laptop and on the EPYC droplet. Finance lane and projection only | Full-chain 15 minute run on target hardware (owner go and cost); wire the trie snapshot into clean restarts; kill-mid-transaction broker test |
 | Capture path (Phase 1/2) | Merged, opt-in. D7 10,425/s fresh-state; aged no-restart control 10.3k full contexts/s passes; resolver cold restart 8.1k/s fails the 10k gate | Warm-restart proof, then incremental keyed capture reducer |
-| Finite P3 O1/O2 | Merged after independent review; O2 live evidence for G1-G8/G10 is inherited, not replayed | One approved O2 live replay on master; Records PR11/PR12; role split signed October 13, 2026 |
-| Finite P3 O3 | Packet decided (D1-D7); O3a hardened and merged (PR493/494), wire contract merged, binding v2 spec merged as an unaccepted draft (PR495), option-B ordering spike go (PR496) | Final O3a review (3 of 3) and v2 spec review (4 of 4); fix findings; then O3b design and adapter |
-| Arena goalpost and credit | Research and proposals only (10k/s through the API, settlement lags; receivable credit) | Calibrate and adopt by owner decision; no reservation code before |
+| Finite P3 O1/O2/O3 | O1 and O2 merged after independent review (O2 live evidence for G1-G8/G10 inherited, not replayed); O3a ledger, wire contract, finance runtime and role split merged; binding v2 spec an unaccepted draft | One approved O2 live replay on master; O3b design and adapter; binding v3 |
+| Arena goalpost and credit | Proposals only (10k/s through the API, settlement lags; session lengths now 15 to 30 minutes; receivable credit with reference proofs) | Calibrate and adopt by owner decision; no reservation code before |
 
 Authority: relational financial authority (D009) stays accepted; no Calcify financial authority, credit or capacity claim
 exists. Hosted CI is Linux/Node 22/Bun 1.3.14; the finite O2 harness is macOS-local (`make test-finite-o2-harness`).
-
-## Calcify single-server pressure test — October 11, 2026
-
-Research baseline `b9a8756e8d0efc5e8b665a5c62da1ab064d01539` includes merged
-O1/PR485; earlier delivery statements below describe their dated checkpoint.
-O2 was excluded from measured baseline; PR488 subsequently merged at `85115ac80`
-on October11 19:45UTC and was integrated for research publication. Earlier proof
-results do not qualify or review that newer finite path.
-Owner initially confirmed one server, larger size allowed with evidence, and
-hard10k/s capture/context gate with settlement allowed to lag. Later clarification
-extends headline boundary through user-facing trading API; see goalpost update below.
-
-[Architecture pressure test](research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md)
-retains deterministic owner/log candidate and recommends incremental keyed state,
-separate correctness/capacity proofs, explicit identity/retention/backlog budgets
-and co-resident qualification. Five offline kernel runs and isolated encoder
-comparison pass scoped correctness/parity checks; arithmetic model checks5239
-cases. [Verification](evidence/calcify-architecture-pressure-test/verification.json)
-records all attempts and limits. No new broker/SQL/capture qualification, production
-change, authority adoption or O1 review-counter reset.
-
-Follow-up [aged contention proof](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md)
-completed300s on local10CPU/~15.6GiB Docker VM. Capture verified10,172.16/s lower
-bound; full contexts8,106.99–8,145.11/s: **10k gate fails**. Final3,063,383 exact
-contexts and independent366,625-trade synthetic financial/SQL replay audit pass.
-Financial total includes post-load work; capture-to-financial integration remains
-open. Cold resolver recovery, retained identities and co-resident resource cost
-now constrain candidate. [Compact receipt](evidence/calcify-aged-contention/verification.json)
-and [retention](records/2026-10-11-calcify-aged-contention-retention.json) preserve
-failed first attempt, correction and completed target miss; owned services stopped,
-volumes retained. No production behavior or authority change.
-
-Matched [no-cold-restart control](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
-now passes300s capture gate:10,321.21–10,349.52 full contexts/s; aged60–300s lower
-10,295.95/s. Final3,131,951 exact contexts and361,075 independent synthetic
-financial/SQL trades pass audits; latter includes post-load work. Same runtime
-images/resources and normalized workload settings; financial crash/replay remains.
-First-minute ranges overlap, but control already leads before180s; no exact causal
-attribution. Post180 resolved bounds10,411.41–10,571.55/s versus treatment
-5,538.68–5,705.76/s support prioritizing recovery. Resolver container never restarts.
-Control did more timed financial work; matched policy is not identical achieved
-activity. [Comparison](evidence/calcify-matched-control/comparison.json) owns bounds.
-
-Next proof: finite O2 remains separate; test restart with compatible retained
-resolver state directory at same age and financial/SQL workload. Freeze recovery
-interruption/freshness/drain allowance; instrument restoration, GC/compilation,
-disk latency and all process resources. If warm restart fails, isolate one reserve,
-parallelism or standby change before hardware decision. Current host demonstrates
-steady aged capture, not cold recovery or production financial integration.
-Matching sampled4.71GiB; identity lifetime budget remains open. Further full runs
-need disk headroom above8GB reserve; no retained proof state deleted. Larger single
-server allowed with measured justification. Historical originals unchanged.
-
-Goalpost research follow-up: owner defines10k as real user/bot orders matched,
-processed through Calcify and visible as completed trades awaiting settlement.
-[Proposed arena contract](work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md) defines booked
-trading state, settlement clocks, API visibility, session cuts and stage diagnosis.
-Recommended initial p99 visibility1s, eligible settlement5s, close30s; numeric
-targets await adoption. Owner selected immediate reuse of booked unsettled proceeds
-under explicit risk/credit limits for first arena profile. [Credit proposal](work/CALCIFY_ARENA_CREDIT_POLICY.md) now defines account25%/pool10%
-limits, eligibility and failure rules; calibration and runtime implementation remain open. Booking and
-credit accounting belong inside10k gate; existing no-credit fixture is insufficient.
-Arithmetic shows9k/s
-settlement behind10k/s arrivals needs400s cleanup after60m if service stays9k/s.
-Long sessions therefore require near-arrival-rate settlement plus catch-up reserve.
-Primary sources and current API/code checked; no new throughput run or runtime
-change. Capture-only pass remains scoped; integrated product gate unqualified.
-Next integrated work: calibrate proposed caps and freeze bundle/policy, instrument real order-to-API slice,
-then paired-order rate/duration ladder and recovery. Retained-state capture
-control remains useful component proof; it cannot qualify enlarged API boundary.
-Retention no-op: active proposal adds goalposts; prior scoped reports remain evidence.
-
-Credit follow-up:34/34 reference tests pass, including676 ordered competing-order
-schedules and20 actual SIGKILL cutpoints. Drawn plus undrawn exposure reserves a
-prefunded pool; failure freezes new admission while preserving matched commitments.
-Review tightened original-age retention and committed-head binding; hash chain
-alone cannot detect a removed tail. Single-owner model only, no production credit,
-distributed race, host-loss or10k API qualification. [Verification](evidence/calcify-arena-credit/verification.json)
-and [policy](work/CALCIFY_ARENA_CREDIT_POLICY.md) retain current decisions; full proof
-joins RecordsPR12. Session delivery bundles initial review, kernel/queue probes,
-aged treatment/control, arena goalpost and credit proof on existing feature branch.
-
-## Calcify finite P3 O3 — October 11, 2026
-
-O2 is merged (PR488). O3 (financial admission) has a [packet](work/CALCIFY_FINITE_P3_O3_PACKET.md) with owner decisions D1-D7 recorded
-(D4: operator control actions; D7: option B, order established in the financial processor's own history, which needs a new
-binding schema version before O3b) and a merged first module, **O3a** (PR491): a pure, typed, unreserved gross DvP ledger under
-`com.reef.platform.calcify.finance` with 14 tests. O3a was merged before review. Review 1 returned **Ready with non-blocking follow-ups**; review 2 returned **Not ready** because `restore`
-could adopt a forged but consistent state. Both are closed in PR493/494: per-class budgets (refusals neither recorded nor counted), every
-decision commits to the state it produced (`restore(checkpoint, trustedHead)` refuses anything else), settle requires operator
-authority, an independent-encoder golden set, a protobuf wire contract (`calcify_finance.proto`), a 5,000-schedule differential oracle and a
-72-mutant check with every mutant killed. Review 3 of 3 returned follow-ups that PR499 closed, and the binding v2 spec was implemented in PR502-506 (see the next section).
-O3a on its own implies no financial authority and no capacity. The O2 follow-up role definition is a
-[draft](work/CALCIFY_FINITE_P3_DB_ROLES.md); the consolidated sign-off packet is [below](#calcify-finite-p3-financial-path--october-13-2026).
-
-## Calcify finite P3 financial path — October 13, 2026
-
-Refreshed against `master` at `fd8f3ef6a` (PR519). The finite P3 financial path is **built, tested on real infrastructure, independently reviewed, and recorded once on local Docker (S3-A2 live part, attempt `live-s3a2-1`, 2026-10-13, pass; [evidence](evidence/calcify-finite-p3/2026-10-13-s3a2-live/README.md))**; it implies
-no capacity claim (the 50,000 decisions/s gate is waived for the bounded finite profile, owner decision 2026-10-12).
-
-- **Delivered (PR numbers):** O4 projection schema and projector (501); binding v2 openings, registration and startup witnesses (502, 504, 505); finance processor, per-entity store, restore cut
-  and real-broker tests (506); S2 close-out: aborted-tail offset rule, ACL isolation test, evidence reader, broker CI step (507, 508, 511); operator control writer and CLI (509); finance read routes
-  (510); O5 end-to-end fixture and projection runner (512); launcher hardening from integration review 2 (513); launcher leaves the consumer group on a clean stop (516); projector-role refusal test
-  (518); the opt-in **finance process role** that gives the launcher a production caller, with the consumer session timeout pinned at 6,000 ms (519). PR520 (launcher and projector under SIGKILL with
-  data flowing, closing F8) is open.
-- **Reviews:** three independent integration reviews; the third (on the PR516/518/519 set) returned **Ready with non-blocking follow-ups**, no P0 or P1, and its fixes are in PR519.
-- **Owner decisions in force:** no processor "auto attempt 1" (every settle attempt is an operator Settle input); operator CLI holds the control credential; one binding digest per v2 run; session timeout 6,000 ms.
-- **Operator documents:** [role sign-off packet](work/CALCIFY_FINITE_P3_ROLE_SIGNOFF.md) (owner signed October 13, 2026), [finance runtime runbook](work/CALCIFY_FINITE_P3_FINANCE_RUNTIME.md),
-  [binding v2 spec](work/CALCIFY_FINITE_P3_BINDING_V2_SPEC.md), [S2 close-out research](work/CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md).
-- **Open, recorded limits:** the owner epoch is claimed by the finance process at start (a newer instance fences the older one loudly; not derived from the ingress owner claim); the decision log and `stateDigest` are unkeyed integrity digests, not authenticity;
-  F6 (each projection pass opens fresh evidence consumers); TLS and credential delivery are deployment decisions; the operator read routes rely on the internal-HTTP exposure mode; the live recording was a single local-Docker attempt on a closed network.
-- **Owner-gated:** warm-restart proof approval, the O2 replay, and Decision 0 for any capacity profile.
-- **Throughput:** stage targets and last measurements are indexed in [Calcify throughput budget](work/CALCIFY_THROUGHPUT_BUDGET.md); every measurement belongs in the append-only
-  [throughput ledger](THROUGHPUT_BASELINES.md) (entry CAL-FIN-S0). A scalable-commitment design exists but is **not accepted** and is gated on Decision 0:
-  [state commitment design](work/CALCIFY_FINANCE_STATE_COMMITMENT_DESIGN.md).
-
-## Calcify finite P3 O2 — October 11, 2026
-
-Publication update: [O2 PR488](https://github.com/dills122/reef/pull/488) merged
-October11 19:45UTC at `85115ac80`. Following verification and open follow-ups
-retain their pre-merge evidence scope; this research session did not rerun O2.
-
-O1 is merged (PR485, `b9a8756e8`). O2 (durable finite ingress, binding, stop/drain,
-same-binding restore) was implemented on `claude/calcify-o2-finish`; it is
-Codex's October 10 work, preserved unmodified at `wip/calcify-o2-codex-snapshot-2026-10-11`, plus
-corrections below. Defaults stay off and live activation requires the explicit O2 opening; no
-financial authority, production adoption or capacity claim follows.
-
-- Independent review 1 of 3: **Not ready**. F2 (finite matcher inherited ambient compression):
-  fixed with a finite-only `CompressionNone` pin and tests; ordinary mode unchanged. F1 (G9, full
-  managed-state transport): `FiniteG9BrokerTransportTest` writes the declared 6,307,840-byte
-  state through the production managed store and `liveProperties`, reads it back from the
-  changelog, and restores it after local-state loss on a disposable Redpanda. Transport only —
-  synthetic bytes, unauthenticated RF1 broker, one run.
-- Re-verified October 11: Go build/vet/test/race, Kotlin `Finite*` including the 10 Postgres-backed
-  binding-store and 11 ingress tests, proto regeneration, retention, and local replay of the CI
-  steps O2 touches (CI breakers fixed: migration-list test, harness-test wiring as a local make target, Go coverage gate exclusion for the fixture-only probe).
-  Results, commands and limits: [O2 verification record](evidence/calcify-finite-p3/2026-10-11-o2-verification.md).
-- Independent reviews: instance 2 and 3 of 3 both **Ready with non-blocking follow-ups** (no P0-P2; review budget exhausted).
-  Instance 2's P2-1 (NUL in payload fenced the run uncharged) is fixed with unit and Postgres-backed tests.
-- Open: G1–G8 and G10 live
-  evidence is still Codex's recorded claims (ledger under the snapshot's
-  `.planning/calcify-p3-o2-2026-10-10/`); Postgres role grants used in tests were inferred and
-  need an operator-reviewed definition; hosted CI run. O3b/O4/O5 components and fixtures are built and tested ahead of O2 acceptance (see `docs/work/CALCIFY_FINITE_P3_S2A_RESULT.md`); their *acceptance* stays gated on accepted O2.
-- Retention: the earlier hour-by-hour O2 checkpoints formerly in this section are preserved in git
-  history (snapshot commit `4c5a1f6011dadf2e1bdcd29e67a626e742d781d6`). Records archive
-  publication of O2 evidence has **not** been done; retention is incomplete.
-- Test infrastructure: per [delivery policy](ENGINEERING_DELIVERY_POLICY.md#test-infrastructure-must-serve-delivery),
-  leave the usable harness alone. G9 transport is proven without further harness work; the G9 matrix
-  sub-clauses on pinned images, fresh build hashes and resource observations within the lease remain
-  Codex-recorded, not re-evidenced here.
-
-## CI dependency throttling recovery (2026-10-02)
-
-Master `2af704d7` CI recovered on [failed-job rerun](https://github.com/dills122/reef/actions/runs/37090920609/attempts/2).
-Initial stock-data Docker build failed on Maven Central HTTP 429 after green
-PR CI; required gate correctly failed. `codex/ci-maven-rate-limit` adds
-three-attempt bounded Docker retries for this exact dependency failure, with
-regressions wired into CI and local tooling. [CI Operations](CI_OPERATIONS.md#workflow-maintenance-rules)
-owns cause, source runs, protection check and retry limits.
-
-Local verification: exact Node CI suite passes 104 tests, zero failures/skips;
-local dev-tooling target, observed-failure classifier check, actionlint,
-script-surface check, offline Records retention and diff whitespace pass.
-Sandbox blocked localhost test listener on first full-suite attempt; same
-suite passed with localhost access. Hosted Docker builds remain PR CI checks.
-
-Completion pass: CI owner docs and board updated; aggregate gate and delivery
-invariants preserved. No runtime/API/event/storage/scenario changes, so contracts,
-architecture overviews and boundary steering remain applicable. No standalone
-record or retained evidence bundle superseded; archive pass is a no-op.
-
-## Idempotency renewal and run-detail fixes (2026-10-02 branch)
-
-`codex/idempotency-renewal-run-detail`, based on `76872e9d`, addresses #442
-and #456. Expired boundary result rows renew atomically without cleanup;
-live results and TTLs remain immutable under concurrent writers. In-memory
-expiry/renewal follows the same rule, including stale-reader safety. Capture
-and command-log reservation lifecycles remain separate. Arena run detail now
-publishes only the current request and invalidates pending work on navigation,
-empty selection and unmount. Both focused regressions are wired into CI.
-
-Local verification: Java 21 focused `ExternalApiBoundaryTest`,
-`InMemoryIdempotencyStoreTest` and `PostgresIdempotencyStoreIntegrationTest`
-pass **38 tests, zero skipped/failures**, using isolated PostgreSQL 16 on
-localhost:55442 with `RUNTIME_DB_*_TEST` configured. Deferred UI race/lifecycle
-checks, Svelte check (zero errors/warnings), guarded static build, CI workflow
-guard, actionlint, Node script-surface check, diff whitespace and offline
-Records retention pass. Browser-render and full-stack qualification not run.
-
-Completion pass: boundary storage and Arena owner docs updated; D-016, API
-steering and overview invariants reviewed. No route/schema/event changes or
-new architecture decision; general guidance remains applicable. No standalone
-topic record/evidence replaced, so archive pass is a no-op; maintained doc
-versions remain in Git history.
-
-Independent review instance 1 of 3: **Ready**, no actionable findings. Reviewer
-verified frozen file hashes, reran UI/CI/build/retention checks and inspected
-prior zero-skipped 38-test Kotlin XML; no fresh DB or mounted-browser rerun.
-
-## Records separation (2026-10-02)
-
-Reef Records bootstrap and archive import landed in [Records PR #2](https://github.com/dills122/reef-records/pull/2). 386 historical files (39.36 MiB) preserved byte-for-byte at pinned archive commit; Reef cleanup on `codex/extract-historical-records` retains 89 current evidence files plus active code/docs and required fixtures. [Retention policy](RECORDS_RETENTION.md) and relocation inventory own selection and lookup. Local archive hashes, retained checksums, active links and five retention failure-path tests pass; no new runtime or performance qualification claimed.
-
-## Records CI follow-up (2026-10-02)
-
-PR #467 script-surface gate flagged retained `scripts/dev/projection-dirty-crash-test.mjs` after its only research-doc reference moved to Records. Current migration runbook now documents executable harness, prerequisites, isolation and limits, with archived F02 evidence link. Script-surface check passes; exact Node dev-tooling CI suite passes 87 tests. Retention pass: current runbook updated; no evidence bundle replaced or additional historical import needed. Later master merge `9b2a4861` conflicted only at work-board insertion; both current Calcify checkpoint and Records sections preserved. One new upstream link repaired to pinned Records; 228 newly merged evidence companions added to retained completeness inventory. Retention check, script-surface and exact 98-test Node CI suite pass after merge.
-
-## Ongoing records guidance (2026-10-02)
-
-Feature/fix/refactor completion now requires implementation/tests/contracts/docs/latest relevant evidence, affected guidance/overview review, then supersession/archive pass. AGENTS, contributor/PR guidance, delivery policy and AI reading path point to [required completion pass](RECORDS_RETENTION.md#required-completion-pass). Local context serves current planning, session/ramp-up and system/design; historical lookup uses Records originals/corrections with source/commit/scope citations. Retention pass for this guidance-only update: touched docs remain current normative owners; no new run evidence, completed plan or replaced bundle, so no additional archive import. Existing archived bytes and retained evidence pass unchanged.
 
 ## Source Of Truth
 

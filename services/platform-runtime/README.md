@@ -63,7 +63,7 @@ Opt-in Calcify finite O2 runtime:
 - Supply private DB, ingress-Kafka, capture-Kafka, service and client credential files using `CALCIFY_FINITE_*_PASSWORD_FILE`, `CALCIFY_FINITE_SERVICE_TOKEN_FILE` and `CALCIFY_FINITE_CLIENT_TOKEN_FILE`. Ingress and capture use separate broker principals; client file pins actor/participant/account scopes.
 - Pin `CALCIFY_FINITE_OWNER_INSTANCE_ID`, `CALCIFY_FINITE_STATE_DIRECTORY`, authenticated Kafka protocol and canonical binding. Initial start and same-binding restart remain STOPPED until fresh trusted release. Unresolved publication blocks release; stopped capture may drain already known source.
 - `202` follows actual typed broker ACK plus durable PUBLISHED/receipt write. Timeout records uncertainty and stops admission; late positive ACK repairs original charge without reopening or resending.
-- [Finite contract](../../contracts/calcify/README.md), [source scope](../../docs/work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) and [current O2 status](../../docs/WORK_PLAN.md#calcify-finite-p3-o2--october-11-2026) own exact configuration and acceptance. O2 merged (PR488) after independent reviews 2 and 3 ("Ready with non-blocking follow-ups"); G1-G8/G10 live replay remains open. Financial adoption and throughput qualification remain later gates.
+- [Finite contract](../../contracts/calcify/README.md), [source scope](../../docs/work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) and [current O2 status](../../docs/work/CALCIFY_HISTORY_LOG.md#calcify-finite-p3-o2--october-11-2026) own exact configuration and acceptance. O2 merged (PR488) after independent reviews 2 and 3 ("Ready with non-blocking follow-ups"); G1-G8/G10 live replay remains open. Financial adoption and throughput qualification remain later gates.
 
 Transport config:
 
