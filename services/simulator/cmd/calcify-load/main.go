@@ -28,6 +28,7 @@ type config struct {
 	PairsPerSecond    int
 	Workers           int
 	StartIndex        int64
+	Quantity          string // order quantity in units; empty means 100
 	ReceiptGeneration int
 	ReportOut         string
 }
@@ -112,10 +113,15 @@ func main() {
 	flag.Int64Var(&cfg.StartIndex, "start-index", 0, "first pair index; use nonoverlapping range on reused session")
 	flag.IntVar(&cfg.ReceiptGeneration, "receipt-generation", 0, "fresh Calcify generation to sample and reconcile")
 	flag.StringVar(&cfg.ReportOut, "report-out", "", "JSON report path")
+	flag.StringVar(&cfg.Quantity, "quantity", "100", "order quantity in units; a long run needs a small one, because cash and shares are int64 (100 units at the load price is 1.5e13 per trade, so 600k trades exhaust int64 cash)")
 	flag.Parse()
 	if cfg.SmokeID == "" || cfg.Duration <= 0 || cfg.Duration%time.Second != 0 ||
 		cfg.PairsPerSecond <= 0 || cfg.Workers <= 0 || cfg.StartIndex < 0 || cfg.ReportOut == "" {
 		fmt.Fprintln(os.Stderr, "smoke-id, whole-second duration, pairs-per-second, workers, and report-out required")
+		os.Exit(2)
+	}
+	if !validQuantity(cfg.Quantity) {
+		fmt.Fprintln(os.Stderr, "quantity must be a positive integer below 1e12")
 		os.Exit(2)
 	}
 	var err error
@@ -415,7 +421,7 @@ func submit(client *http.Client, cfg config, index int64, party, side string, co
 		"instrumentId":  instrumentForPair(cfg, index),
 		"participantId": party + "-" + cfg.SmokeID,
 		"accountId":     party + "-account-" + cfg.SmokeID,
-		"side":          side, "orderType": "LIMIT", "quantityUnits": "100",
+		"side":          side, "orderType": "LIMIT", "quantityUnits": quantityOf(cfg),
 		"limitPrice": "150250000000", "currency": "USD", "timeInForce": "DAY",
 	})
 	if err != nil {
@@ -489,6 +495,18 @@ func parseInstrumentIDs(raw, smokeID string) ([]string, error) {
 		ids[i] = id
 	}
 	return ids, nil
+}
+
+func quantityOf(cfg config) string {
+	if cfg.Quantity == "" {
+		return "100"
+	}
+	return cfg.Quantity
+}
+
+func validQuantity(q string) bool {
+	n, err := strconv.ParseInt(q, 10, 64)
+	return err == nil && n >= 1 && n < 1_000_000_000_000
 }
 
 func instrumentForPair(cfg config, index int64) string {
