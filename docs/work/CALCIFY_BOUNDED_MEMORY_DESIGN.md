@@ -93,6 +93,20 @@ Measured on the laptop with the real RocksDB store (combined mode, `CapacityRest
 
 The evicting slope is about 350 B per trade, which is the trie (3.1 entities x 112 B); everything else is fixed. Throughput is unchanged: through the real store 2M trades took 106.3 s plain and 106.9 s evicting, and the no-broker lane harness (in-memory store, 600k trades, run twice each, alternating) gave 25.4k and 26.0k trades/s plain against 24.9k and 26.5k evicting, which is inside the run-to-run noise. Extrapolated, not measured: 36M combined trades is about 12.6 GB of heap against about 46 GB plain. Restore without a snapshot still rebuilds the trie by hashing every entity, so it is still linear in history (about 11 s per million trades); the snapshot that removes this is built but not wired (owner chose snapshot-on-clean-shutdown, full scan after a crash).
 
+### Soaks (combined mode, one lane, 10,000 trades/s for 15 minutes = 9M trades, real Redpanda and Postgres)
+
+| | Laptop, plain | Laptop, evicting | EPYC 9555P droplet, evicting |
+|---|---|---|---|
+| End-to-end rate | 9,983/s | 9,985/s | 9,996/s |
+| Heap still reachable after drain | 10.2 GB (1,191 B/trade) | 4.6 GB (541 B/trade) | not printed (heap at the end 4.1-4.4 GB) |
+| Peak heap sampled | 15.2 GB | 6.3 GB | 4.4 GB |
+| Total GC time | 8.3 s (G1) | 2.6 s (G1) | 8.1 s (ParallelGC), worst 10 s interval 242 ms |
+| Max sent-to-booked lag / booked-to-projected | 0.40 s / 1.70 s | 1.37 s / 2.95 s | 0.11 s / 0.43 s |
+| Lane thread CPU (mean / max of one core) | 73% | 73% | 73% / 90% |
+| Integrity | ok | ok | ok |
+
+The laptop evicting run had one 1.4 s booking-lag spike near 8.8M trades with no GC to explain it (unexplained, not seen on the droplet). Owner set the booking-lag cap for these runs to 1.6 s (2026-10-15); all three runs are inside it. The droplet run (`g5-8vcpu-64gb-50gb`, atl1, 20.8 minutes of rental, about $0.43; a first attempt failed in the test compile with a Kotlin daemon OutOfMemoryError, fixed by giving the host's daemons 4 GB) shows the lane using about 73% of one core on average at 10k/s, so one lane's headroom on this hardware is roughly 1.3x; 15-20k/s needs more than one lane or a cheaper lane.
+
 Independent review (instance 1 of 3, verdict Ready with non-blocking follow-ups, no P0/P1): fixed in this branch: the evicting restore now refuses unknown or stray `e/` keys and unpaired resident pending obligations, and rejects a source that returns the wrong class for a scan; attempt keys are no longer added to the filter (never probed); the `readFrom` documentation no longer suggests that comparing the root proves the snapshot intact (P2, latent until the snapshot is wired; a checksum trailer bound to sequence and digest, or a full re-hash, plus tree-shape validation and tamper tests are required before wiring); a budget-refusal check and a multi-input processor test were added. Deferred: the filter allocates a new layer in one piece (a one-off pause, about 300 MB at 70M keys); the 4096-byte text limit of `DecodedFields` now also applies to live read-backs of evicted entities (the writer has no such limit, so account and action ids must stay short).
 
 ## Open decisions for the owner
