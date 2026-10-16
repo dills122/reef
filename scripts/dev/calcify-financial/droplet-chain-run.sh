@@ -8,7 +8,7 @@
 #   `fullchain` / `fullchainsmoke` (docs/work/CALCIFY_CAPACITY_RUNTIME.md, "Full-chain paced run") run the whole path on the host on the validated 10k ingress profile
 #   (calcify-direct-bootstrap.mjs: Netty, in-memory intake with a durable Redpanda ack, 16 lanes, standing makers) with the data volumes on tmpfs, as a ladder of paced rates
 #   (REEF_FC_RATES, default "2500 5000 7500 10000" booked trades/s, REEF_FC_SECONDS each, default 60) and optionally one long hold (REEF_FC_LONG_RATE, REEF_FC_LONG_SECONDS, default 900);
-#   the smoke is 20 s at 500/s. Needs RAM for the tmpfs limits (REEF_FC_TMPFS_BOUNDARY_GB 40, REEF_FC_TMPFS_BROKER_GB 24). Knobs: REEF_FC_MODE, REEF_FC_INSTRUMENTS, REEF_FC_EVICT, REEF_FC_QUANTITY.
+#   the smoke is 20 s at 500/s. Needs RAM for the tmpfs limits (REEF_FC_TMPFS_BOUNDARY_GB 40, REEF_FC_TMPFS_BROKER_GB 24). Knobs: REEF_FC_MODE, REEF_FC_EVICT, REEF_FC_QUANTITY (64 instruments over 16 lanes, fixed by the bootstrap).
 #   `soak` / `soaksmoke` (docs/work/CALCIFY_SOAK_HARNESS.md) hold 10,000 trades/s for 15 and 30 minutes on the finance lane and projection only, in capture-settle-v1 mode.
 #   `lane` (CAL-FIN-P23) measures the engine lane's drain rate by batch size against a tmpfs Redpanda, then the finance lane cases; `enginesmoke` is a few seconds of the engine drain.
 #
@@ -141,7 +141,7 @@ run_fullchain() {
   local id="fc${label//[^A-Za-z0-9]/}"
   local timeout_s=$(( seconds + ${REEF_FC_DRAIN_SECONDS:-600} + 1500 ))
   log "case $label (${rate} trades/s for ${seconds}s, id $id: $*)"
-  remote "cd $REMOTE_DIR && (test -f .env || cp .env.example .env) && rm -rf /tmp/fcout/$label && mkdir -p /tmp/fcout/$label && env FC_ID=$id FC_RATE=$rate FC_SECONDS=$seconds FC_OUT_DIR=/tmp/fcout/$label FC_TMPFS=true FC_MODE=${REEF_FC_MODE:-capture-settle-v1} FC_INSTRUMENTS=${REEF_FC_INSTRUMENTS:-64} FC_EVICT=${REEF_FC_EVICT:-true} FC_QUANTITY=${REEF_FC_QUANTITY:-1} FC_TMPFS_BOUNDARY_GB=${REEF_FC_TMPFS_BOUNDARY_GB:-40} FC_TMPFS_BROKER_GB=${REEF_FC_TMPFS_BROKER_GB:-24} $* timeout $timeout_s node scripts/dev/calcify-fullchain-soak.mjs 2>&1 | tee /tmp/fcout/$label/run.log | grep -E 'FULLCHAIN-RESULT|FAILED|fullchain .* t=' | tail -n 200; echo \"leftover containers: \$(docker ps -aq | wc -l)\"" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
+  remote "cd $REMOTE_DIR && (test -f .env || cp .env.example .env) && rm -rf /tmp/fcout/$label && mkdir -p /tmp/fcout/$label && env FC_ID=$id FC_RATE=$rate FC_SECONDS=$seconds FC_OUT_DIR=/tmp/fcout/$label FC_TMPFS=true FC_MODE=${REEF_FC_MODE:-capture-settle-v1} FC_EVICT=${REEF_FC_EVICT:-true} FC_QUANTITY=${REEF_FC_QUANTITY:-1} FC_TMPFS_BOUNDARY_GB=${REEF_FC_TMPFS_BOUNDARY_GB:-40} FC_TMPFS_BROKER_GB=${REEF_FC_TMPFS_BROKER_GB:-24} $* timeout $timeout_s node scripts/dev/calcify-fullchain-soak.mjs 2>&1 | tee /tmp/fcout/$label/run.log | grep -E 'FULLCHAIN-RESULT|FAILED|fullchain .* t=' | tail -n 200; echo \"leftover containers: \$(docker ps -aq | wc -l)\"" | sed "s/^/$label: /" | tee -a "$OUT_DIR/matrix.txt" || log "case $label failed"
   mkdir -p "$OUT_DIR/fullchain"
   remote "tar -C /tmp/fcout -czf - $label" | tar -C "$OUT_DIR/fullchain" -xzf - || log "could not fetch the full-chain output of $label"
   log "fetched $OUT_DIR/fullchain/$label: $(ls "$OUT_DIR/fullchain/$label" 2>/dev/null | tr '\n' ' ')"
@@ -220,7 +220,7 @@ case "$MATRIX" in
     ;;
   fullchainsmoke)
     remote "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null && node --version" | tee -a "$OUT_DIR/matrix.txt"
-    REEF_FC_INSTRUMENTS=8 REEF_FC_TMPFS_BOUNDARY_GB=4 REEF_FC_TMPFS_BROKER_GB=3 run_fullchain "smoke500" 500 20
+    REEF_FC_TMPFS_BOUNDARY_GB=4 REEF_FC_TMPFS_BROKER_GB=3 run_fullchain "smoke500" 500 20
     ;;
   enginesmoke)
     run_engine_drain "engine-smoke" 5000 500,2000
