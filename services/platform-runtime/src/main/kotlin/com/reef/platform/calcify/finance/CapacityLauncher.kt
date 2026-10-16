@@ -98,7 +98,12 @@ internal class CapacityLauncher(
             streams = KafkaStreams(CapacityTopology.build(config, decoder, persistent), properties)
         } catch (e: Throwable) { logs.forEach { runCatching { it.close() } }; throw e }
         val streamsFailed = AtomicBoolean(false); val closing = AtomicBoolean(false); val failure = AtomicReference<Throwable?>(null)
-        streams.setUncaughtExceptionHandler { streamsFailed.set(true); org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT }
+        streams.setUncaughtExceptionHandler { e ->
+            streamsFailed.set(true)
+            // the process has no logging backend: without this line the supervisor can only say that the lanes died, not why
+            System.err.println("capacity streams thread failed: $e"); e.printStackTrace()
+            org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT
+        }
         streams.setStateListener { newState, _ -> if (newState == KafkaStreams.State.ERROR && !closing.get()) streamsFailed.set(true) }
         try {
             streams.start()
