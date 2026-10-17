@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatDateTime } from '$lib/format';
 	import {
 		displayRoles,
 		fetchSession,
@@ -469,12 +470,12 @@
 							<dl class="grid gap-3 text-xs text-muted lg:text-right">
 								<div>
 									<dt class="font-bold uppercase tracking-normal">created</dt>
-									<dd class="mt-1 text-ink">{new Date(bot.createdAt).toLocaleString()}</dd>
+									<dd class="mt-1 text-ink">{formatDateTime(bot.createdAt)}</dd>
 								</div>
 								{#if configStatus?.updatedAt}
 									<div>
 										<dt class="font-bold uppercase tracking-normal">config updated</dt>
-										<dd class="mt-1 text-ink">{new Date(configStatus.updatedAt).toLocaleString()}</dd>
+										<dd class="mt-1 text-ink">{formatDateTime(configStatus.updatedAt)}</dd>
 									</div>
 								{/if}
 							</dl>

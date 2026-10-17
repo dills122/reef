@@ -13,10 +13,20 @@ Reusable scenario packs for deterministic lifecycle simulation.
 
 ```text
 scenarios/
-  v1/
-    P1_GOLDEN_HIDDEN_CROSS_T1.yaml
-    P2_SETTLEMENT_BREAK_REPAIR.yaml
+  v1/                                  lifecycle scenario specs (P1, P2, ...)
+arena/
+  actor-profiles.v1.json               Bot Arena actor profiles
+  bot-catalog.v1.json                  Bot Arena bot catalog
+  equity-multi-local.v1.json           game-mode definitions
+  equity-sprint.v1.json
+  economics/                           fee and liquidity-subsidy presets
+  scoring/                             score-v0.json, score-v1.json
+persona-session.example.yaml           example persona session
+stream-ack-submit-stress.yaml          stream-ack submit stress workload
 ```
+
+The `scenarios/v1` specs follow the template below. The `arena/` JSON and the
+root-level YAML files are consumed by `scripts/dev` tooling and use their own shapes.
 
 ## Spec template
 

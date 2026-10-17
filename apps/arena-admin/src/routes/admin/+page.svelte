@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatDateTime, signed } from '$lib/format';
 	import {
 		ARENA_API_BASE_URL,
 		fetchAdminRunEnforcementEvents,
@@ -98,10 +99,6 @@
 	function runDetailHref(runId: string) {
 		const params = new URLSearchParams({ runId });
 		return `/admin/run?${params}`;
-	}
-
-	function signed(n: number) {
-		return `${n > 0 ? '+' : ''}${n.toLocaleString()}`;
 	}
 </script>
 
@@ -208,7 +205,7 @@
 							<dl class="grid gap-3 text-xs text-muted">
 								<div>
 									<dt class="font-bold uppercase tracking-normal">created</dt>
-									<dd class="mt-1 text-ink">{new Date(run.createdAt).toLocaleString()}</dd>
+									<dd class="mt-1 text-ink">{formatDateTime(run.createdAt)}</dd>
 								</div>
 							</dl>
 						</div>
