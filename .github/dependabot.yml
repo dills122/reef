@@ -133,7 +133,9 @@ updates:
     multi-ecosystem-group: "infrastructure"
 
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/setup-toolchain"
     schedule:
       interval: "weekly"
       day: "friday"
