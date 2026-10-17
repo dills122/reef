@@ -5,7 +5,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import org.apache.kafka.streams.processor.api.MockProcessorContext
 
 /** The Streams store orders keys by their UTF-8 bytes, like RocksDB; a prefix scan must cover every key with the prefix however its next character sorts. */

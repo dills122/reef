@@ -3,7 +3,6 @@ package com.reef.platform.api
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class StreamIngressSubmitHandlerTest {

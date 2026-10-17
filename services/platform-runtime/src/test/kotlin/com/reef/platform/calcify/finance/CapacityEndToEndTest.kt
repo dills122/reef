@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.jupiter.api.Tag
 import org.postgresql.ds.PGSimpleDataSource
 import reef.contracts.calcify.finance.v1.FinanceDecisionV1
-import reef.contracts.calcify.v1.FiniteLifecycleCaptureV1
 
 /**
  * The capacity path end to end on a real broker and a real Postgres (design stage S4c): three lanes over six instruments and twelve participants, operator funding,
