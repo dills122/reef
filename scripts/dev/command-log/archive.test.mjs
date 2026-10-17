@@ -4,7 +4,7 @@ import {
   buildArchiveBatchSql,
   buildArchiveEligibleCountSql,
   buildArchiveVacuumSql,
-} from "./command-log-archive.mjs";
+} from "./archive.mjs";
 
 test("builds archive eligible count SQL", () => {
   const sql = buildArchiveEligibleCountSql({ olderThanSeconds: 86400 });

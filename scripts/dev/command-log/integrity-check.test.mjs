@@ -4,7 +4,7 @@ import {
   buildCommandLogIntegritySummarySql,
   integrityViolations,
   parseIntegritySummaryRows,
-} from "./command-log-integrity-check.mjs";
+} from "./integrity-check.mjs";
 
 test("builds command-log integrity summary SQL", () => {
   const sql = buildCommandLogIntegritySummarySql();

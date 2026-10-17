@@ -6,7 +6,7 @@ import {
   buildExportArchivePartitionSql,
   buildListArchivePartitionsSql,
   parseArchivePartitionMonth,
-} from "./command-log-archive-partitions.mjs";
+} from "./archive-partitions.mjs";
 
 test("parses archive partition month bounds", () => {
   assert.deepEqual(parseArchivePartitionMonth("2026-07"), {

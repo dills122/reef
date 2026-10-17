@@ -491,23 +491,23 @@ dev-intake-bench:
 
 dev-command-log-integrity-check:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/command-log-integrity-check.mjs
+	$(JS_RUNTIME) scripts/dev/command-log/integrity-check.mjs
 
 dev-command-log-prune:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/command-log-prune.mjs
+	$(JS_RUNTIME) scripts/dev/command-log/prune.mjs
 
 dev-command-log-archive:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/command-log-archive.mjs
+	$(JS_RUNTIME) scripts/dev/command-log/archive.mjs
 
 dev-command-log-archive-partitions:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/command-log-archive-partitions.mjs
+	$(JS_RUNTIME) scripts/dev/command-log/archive-partitions.mjs
 
 dev-command-log-pin:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/command-log-pin.mjs
+	$(JS_RUNTIME) scripts/dev/command-log/pin.mjs
 
 dev-admin:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { parseEqualsFlags } from "./lib/cli-args.mjs";
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseEqualsFlags(process.argv.slice(2));
 const reportPaths = [
   ...csv(args.reports),
   ...csv(args.report),
@@ -253,18 +254,4 @@ function escapeHtml(value) {
 function csv(value) {
   if (value === undefined || value === true) return [];
   return String(value).split(",").map((item) => item.trim()).filter(Boolean);
-}
-
-function parseArgs(values) {
-  const parsed = {};
-  for (const value of values) {
-    if (!value.startsWith("--")) continue;
-    const index = value.indexOf("=");
-    if (index === -1) {
-      parsed[value.slice(2)] = true;
-    } else {
-      parsed[value.slice(2, index)] = value.slice(index + 1);
-    }
-  }
-  return parsed;
 }
