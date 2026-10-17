@@ -34,7 +34,6 @@ import reef.contracts.orderexecution.v1.CancelOrder
 import reef.contracts.orderexecution.v1.CommandMetadata
 import reef.contracts.orderexecution.v1.ModifyOrder
 import reef.contracts.orderexecution.v1.OrderAccepted
-import reef.contracts.orderexecution.v1.OrderExecution
 import reef.contracts.orderexecution.v1.OrderQuantity
 import reef.contracts.orderexecution.v1.OrderRejected
 import reef.contracts.orderexecution.v1.OrderSide

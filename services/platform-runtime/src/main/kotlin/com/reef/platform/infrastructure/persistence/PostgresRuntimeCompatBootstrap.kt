@@ -1,6 +1,5 @@
 package com.reef.platform.infrastructure.persistence
 
-import com.reef.platform.domain.validQuoteCurrency
 import java.sql.Connection
 import javax.sql.DataSource
 

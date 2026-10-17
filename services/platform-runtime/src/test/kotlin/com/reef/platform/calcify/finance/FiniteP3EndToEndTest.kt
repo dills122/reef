@@ -15,10 +15,8 @@ import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import java.net.HttpURLConnection
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.Duration
 import java.util.Properties
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.apache.kafka.clients.admin.AdminClient
