@@ -358,3 +358,11 @@ func TestPrintReport(t *testing.T) {
 	})
 	printReport(report2)
 }
+
+func buildReport(sessionID string, cfg config, started, finished time.Time, results []requestResult) report {
+	accumulator := newResultAccumulator()
+	for _, result := range results {
+		accumulator.add(result)
+	}
+	return accumulator.build(sessionID, cfg, started, finished)
+}

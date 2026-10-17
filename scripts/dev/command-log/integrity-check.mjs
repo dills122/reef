@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 

@@ -357,11 +357,11 @@ jobs:
             scripts/ci/build-container.test.mjs \
             scripts/dev/db/migrate.test.mjs \
             scripts/ci/tests/container-images-workflow.test.mjs \
-            scripts/dev/command-log-integrity-check.test.mjs \
-            scripts/dev/command-log-pin.test.mjs \
-            scripts/dev/command-log-archive.test.mjs \
-            scripts/dev/command-log-archive-partitions.test.mjs \
-            scripts/dev/command-log-prune.test.mjs \
+            scripts/dev/command-log/integrity-check.test.mjs \
+            scripts/dev/command-log/pin.test.mjs \
+            scripts/dev/command-log/archive.test.mjs \
+            scripts/dev/command-log/archive-partitions.test.mjs \
+            scripts/dev/command-log/prune.test.mjs \
             scripts/dev/bot-submission/register-merged.test.mjs \
             scripts/dev/export-simulation-run.test.mjs \
             scripts/ci/tests/deploy-receiver.test.mjs \

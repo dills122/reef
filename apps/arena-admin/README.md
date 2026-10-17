@@ -30,6 +30,7 @@ only and must not appear in production output.
 ```bash
 bun run arena-admin:check
 bun scripts/dev/arena-admin-run-detail.test.mjs
+bun run arena-admin:test:access-normalize
 bun run arena-admin:build:guarded
 bun run arena-admin:ui-audit
 ```

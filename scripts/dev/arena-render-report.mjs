@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { parseEqualsFlags } from "./lib/cli-args.mjs";
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseEqualsFlags(process.argv.slice(2));
 
 if (!args.report || !args.out) {
   console.error("usage: node scripts/dev/arena-render-report.mjs --report=<arena-report.json> --out=<arena-report.html>");
@@ -513,18 +514,4 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
-}
-
-function parseArgs(values) {
-  const parsed = {};
-  for (const value of values) {
-    if (!value.startsWith("--")) continue;
-    const index = value.indexOf("=");
-    if (index === -1) {
-      parsed[value.slice(2)] = true;
-    } else {
-      parsed[value.slice(2, index)] = value.slice(index + 1);
-    }
-  }
-  return parsed;
 }
