@@ -735,12 +735,6 @@ func applyKafkaTransaction(config *sarama.Config, transactionalID string) {
 	config.Producer.Transaction.Timeout = time.Duration(envInt("MATCHING_ENGINE_KAFKA_TRANSACTION_TIMEOUT_MS", 60000)) * time.Millisecond
 }
 
-func newKafkaTransactionalClientConfig(clientID string, transactionalID string) *sarama.Config {
-	config := newKafkaClientConfig(clientID)
-	applyKafkaTransaction(config, transactionalID)
-	return config
-}
-
 func kafkaTransactionalID(durableName string) string {
 	return strings.TrimSpace(durableName) + "-venue-events-v1"
 }
