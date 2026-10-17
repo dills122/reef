@@ -28,7 +28,8 @@ server Compose bundle.
 To select a **recorded best-run configuration**, start with the
 [measured run selector](../../docs/LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need).
 The generic c-8/384-worker defaults below do not reproduce the 10k/s
-venue-core baseline. The named gate wrappers later in this runbook set the
+venue-core baseline (the gate uses 1,024 workers; see
+[Look-alike settings](../../docs/LOCAL_RUN_PROFILES.md#look-alike-settings-which-variant-is-which)). The named gate wrappers later in this runbook set the
 relevant c-16 shape; projection has separate historical and current checks.
 
 For budget-safe simulation runs that should fetch artifacts, optionally push
@@ -107,6 +108,8 @@ Use `run` while iterating; it provisions or reuses the stack, syncs the checkout
 
 `run-destroy` provisions the stack, syncs the checkout, runs the benchmark, fetches artifacts, validates reports, and destroys resources in one command. Keep it for final lifecycle confirmation, not for every debugging iteration.
 
+**What runs on the droplet.** `sync` here rsyncs the whole working tree, including uncommitted and untracked files (it excludes only `.env`, `.env.local` and build directories), so a dirty checkout benchmarks the dirty code. `scripts/dev/calcify-financial/droplet-chain-run.sh` does the opposite: it refuses a dirty tracked tree and ships `git archive HEAD`, so uncommitted work is not run. Commit first in either case and record the head SHA with the result.
+
 ## Named Materializer 10k Gate
 
 Named gates share `bun scripts/dev/do-gate.mjs <profile> <command>`:
@@ -132,9 +135,24 @@ Gate tiers:
 
 | Tier | Command | Duration | Samples | Use |
 |---|---|---:|---:|---|
-| `short` | `make do-materializer-10k-gate ARGS=run-destroy` | `60s` | `3` | Default promotion confirmation. |
-| `soak-5m` | `REEF_DO_MATERIALIZER_10K_GATE_TIER=soak-5m make do-materializer-10k-gate ARGS=run-destroy` | `5m` | `2` | First longer remote soak. |
+| `short` | `make do-materializer-10k-gate ARGS=run-destroy` | `60s` | `3` | The wrapper's default tier: a quick confirmation that the shape still works. Not the current 10k evidence. |
+| `soak-5m` | `REEF_DO_MATERIALIZER_10K_GATE_TIER=soak-5m make do-materializer-10k-gate ARGS=run-destroy` | `5m` | `2` | The tier [Local Run Profiles](../../docs/LOCAL_RUN_PROFILES.md#measured-configurations-choose-by-the-stage-you-need) names for current 10k venue-core work. |
 | `soak-15m` | `REEF_DO_MATERIALIZER_10K_GATE_TIER=soak-15m make do-materializer-10k-gate ARGS=run-destroy` | `15m` | `1` | Only after `soak-5m` is clean. |
+
+The scheduled workflow (`.github/workflows/materializer-10k-gate.yml`, weekly cron) only
+runs `plan`: with no `command` input it prints the host plan and never
+provisions a droplet. A real gate run needs a manual dispatch with
+`command=run-destroy` (and the `DIGITALOCEAN_TOKEN` secret), so a green
+scheduled run is not evidence for any tier.
+
+**Host class.** The gate pins `c-16` (Intel Xeon Platinum 8168, no SHA
+instructions), the shape behind C5 and the venue-core evidence. Finance-lane
+(Calcify) claims need an AMD EPYC host (`g5-16vcpu-64gb-50gb`; the Xeon is about
+2.6x slower single-thread on SHA-256), and the tmpfs limits of the full-chain
+matrices (24 + 40 + 6 GB) do not fit a `c-16`. `make calcify-droplet-run`
+still defaults to `c-16`: set `REEF_DO_SIZE` explicitly, and get the owner's
+approval of size and cost first
+([How to benchmark correctly](../../docs/PERFORMANCE_LEARNINGS.md#how-to-benchmark-correctly)).
 
 Default pass gates:
 
