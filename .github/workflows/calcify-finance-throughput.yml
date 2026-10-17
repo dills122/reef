@@ -36,7 +36,7 @@ jobs:
         with:
           node: 'true'
           java: 'true'
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
       - name: Start from an empty results directory
         run: rm -rf "$S0_OUT_DIR"
       - name: Run the S0 finance-lane spikes (disposable Redpanda and Postgres containers)
@@ -53,7 +53,7 @@ jobs:
         run: node scripts/dev/calcify-throughput-check.mjs "$S0_OUT_DIR/s0-metrics.properties"
       - name: Upload throughput results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: calcify-finance-throughput
           path: s0-results
