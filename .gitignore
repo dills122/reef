@@ -9,6 +9,7 @@ out/
 bin/
 coverage/
 dist/
+*.test
 .astro/
 reports/do-benchmark/
 reports/simulations/
