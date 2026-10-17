@@ -47,6 +47,14 @@ updates:
     directory: "/services/matching-engine"
     patterns:
       - "*"
+    ignore:
+      # The Go toolchain is bumped manually in one coordinated change:
+      # services/*/go.mod (x2), .github/workflows/ci.yml (govulncheck go-version),
+      # and services/*/Dockerfile (x2). Enforced by scripts/ci/check-dependency-alignment.mjs.
+      - dependency-name: "golang"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
     multi-ecosystem-group: "matching-engine"
 
   - package-ecosystem: "gomod"
@@ -59,6 +67,14 @@ updates:
     directory: "/services/simulator"
     patterns:
       - "*"
+    ignore:
+      # The Go toolchain is bumped manually in one coordinated change:
+      # services/*/go.mod (x2), .github/workflows/ci.yml (govulncheck go-version),
+      # and services/*/Dockerfile (x2). Enforced by scripts/ci/check-dependency-alignment.mjs.
+      - dependency-name: "golang"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
     multi-ecosystem-group: "simulator"
 
   - package-ecosystem: "gradle"
