@@ -91,6 +91,13 @@ checks, shared test helpers and supported profile runners remain. The
 [decision log](REPOSITORY_RETENTION_AUDIT.md#additional-cleanup-passes-october-16)
 records retained families and why file age alone was not used to delete them.
 
+Five July 7 Arena runner prototype files (41,184 bytes) from Reef source
+`5272fdb68` were published in
+[Records PR #19](https://github.com/dills122/reef-records/pull/19). The
+[Arena relocation inventory](records/2026-10-16-arena-runner-prototype-migration.json)
+pins exact source and destination bytes. The production runner and current
+pool, tick and local hardening checks remain; see the same decision log for scope.
+
 ## October 3 Calcify E0 split
 
 User-directed evidence split:97 original E0 files preserved at [Records08a4347](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md),

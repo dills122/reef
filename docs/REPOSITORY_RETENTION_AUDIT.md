@@ -149,11 +149,19 @@ Rechecked three more surfaces against `origin/master` at
 3. **Large files and owner docs:** kept referenced README logo, executable
    fixtures, generated protocol bindings, ordered migrations and current
    Calcify/throughput owner docs. Size or age alone does not make them dead.
+4. **Arena runner prototypes:** retired the July 7 synthetic Deno/Node runner
+   benchmark, its two child workers, real-world prototype benchmark and the
+   Bun 1.1.38 container wrapper (five files, 41,184 bytes). Only package
+   aliases called the entrypoints;
+   no current runbook or active plan owns them. Current CI uses Bun 1.3.14.
+   Runner-pool/tick and local hardening checks plus production runner stay.
+   Exact source is in [Records PR #19](https://github.com/dills122/reef-records/pull/19)
+   and the [relocation inventory](records/2026-10-16-arena-runner-prototype-migration.json).
 
 Exact originals and reasons are pinned in the
 [follow-up relocation inventory](records/2026-10-16-cleanup-followup-passes-migration.json)
 and [Records PR #18](https://github.com/dills122/reef-records/pull/18).
-Total across passes: 120 removed originals, 1,160,809 bytes. Current script
-surface after follow-up: 425 tracked `scripts/` paths, 88 runnable JavaScript,
+Total across passes: 125 removed originals, 1,201,993 bytes. Current script
+surface after follow-up: 420 tracked `scripts/` paths, 85 runnable JavaScript,
 TypeScript or shell commands. No current profile or financial-authority claim
 follows from these removals.
