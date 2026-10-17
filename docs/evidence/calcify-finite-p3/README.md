@@ -7,8 +7,8 @@ Exact56-path implementation commit `0a7df6f85c1f8636fdb74177afc49fa3eb14d8bd`.
 Defaults off; Go runner/recovery and Kotlin live entry
 refuse activation pending O2. Production financial authority unchanged.
 
-[Current work](../../WORK_PLAN.md#calcify-eight-hour-p3-session--october-910-2026)
-owns resumed delivery/PR/OCR-pilot; [handoff](https://github.com/dills122/reef-records/blob/282d302db3adcff9bb38cd88a2b31447511c09b/records/reef/docs/work/handoffs/2026-10-10-calcify-finite-p3-overnight.md)
+[Historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-eight-hour-p3-session--october-910-2026)
+records resumed delivery/PR/OCR-pilot; [handoff](https://github.com/dills122/reef-records/blob/282d302db3adcff9bb38cd88a2b31447511c09b/records/reef/docs/work/handoffs/2026-10-10-calcify-finite-p3-overnight.md)
 preserves eight-hour deadline outcome. Runtime baseline `51cd90eee`; accepted
 source/budget contract `45211653`, documentation reconciliation `7aba4d0a`.
 Branch `codex/calcify-p3-overnight-2026-10-09`. Full P3 target not achieved at deadline.

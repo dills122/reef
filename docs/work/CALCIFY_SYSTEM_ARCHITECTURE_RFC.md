@@ -846,13 +846,16 @@ SQL read snapshots. Prefer repository source and official maintainer documentati
 stop when documented behavior plus remaining experiment question is explicit.
 Record facts, observations, inference and unknowns separately. No framework survey.
 
-Reuse existing probe orchestration/fixtures, adapting assertion and record model:
+Use retained probe and historical orchestration/fixtures as design references,
+adapting assertion and record model:
 [broker probe](../../services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/CalcifyResolverBrokerProbe.kt),
 [broker runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/broker-check.mjs),
 [capacity runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/capacity-check.mjs),
 [recovery runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/recovery-check.mjs),
 [paced runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/sustained-check.mjs) and
-[RF3 Compose](../../scripts/dev/calcify-resolver/broker.compose.yml).
+[historical RF3 Compose](https://github.com/dills122/reef/blob/02246d545424820c789204a2130acc653ff7020c/scripts/dev/calcify-resolver/broker.compose.yml).
+Archived runners and Compose are no longer supported entry points; use the
+[current Calcify run profile](../LOCAL_CONFIGURATION.md#calcify-phase-1-sidecars) for new measurements.
 Existing probe/oracle is resolver-specific and shares resolver calculation; new
 financial oracle must independently implement accounting expectations. Use test-only
 Kotlin package for kernel/adapter fixtures and small Bun runner/model scripts; freeze

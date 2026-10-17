@@ -61,9 +61,9 @@ to current system/design. Use Records for historical questions, reading only
 relevant originals and corrections. [September 4 status snapshot](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/CURRENT_STATUS.md)
 is historical comparison evidence, not default current-system orientation.
 
-[Reef Records index](https://github.com/dills122/reef-records/blob/6b838e5287c5428c914f6577ff176c1cd03c44ec/INDEX.md) contains completed plans, dated audits,
-benchmark evidence, and older research. [Research](research/) holds recent
-investigations; its results remain scoped to their run and date. Use history
+[Reef Records index](https://github.com/dills122/reef-records/blob/main/INDEX.md) contains completed plans, dated audits,
+benchmark evidence, and research, including recent investigations. Results remain
+scoped to their run and date. Use history
 when a current claim cites it or a decision needs rechecking. Do not treat old
 checklists as open work.
 

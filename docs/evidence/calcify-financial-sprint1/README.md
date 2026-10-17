@@ -8,8 +8,8 @@ Test-only experiments. [Focused results](https://github.com/dills122/reef-record
 
 ## Latest empirical checkpoint — October6 UTC
 
-[Current work](../../WORK_PLAN.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
-owns sprint status; [focused verification](e4-verification-2026-10-06.json) separates
+[Historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
+records sprint status; [focused verification](e4-verification-2026-10-06.json) separates
 source-count upper bounds from unmeasured deadline settlement rates. Two fresh
 4GiB attempts aborted at disk then heap limits; original failure journals retained.
 Explicit 8GiB profile passed review4of4 after user extension. Full 150000 settlements,
@@ -30,7 +30,7 @@ raw output topics. No tracked Reef originals removed.
 
 ### Current source continuation — October9, 2026
 
-[Current finite P0 checkpoint](../../WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026)
+[Historical finite P0 checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-finite-p0-source-gate--october-7-2026)
 and [source contract](../../../contracts/calcify/README.md#finite-p0-matching-source-profile-2026-10-07)
 route next work after merged PR479: lifecycle/coverage membership, durable finite
 command/history/closure budgets and restore. Matching profile/snapshot identity
@@ -67,8 +67,8 @@ because shared digest calculation preserves existing v1 bytes and runtime behavi
 
 October5 branch `codex/calcify-e4-readiness`, base `29a8926d`.
 [Focused verification](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/calcify-financial-sprint1/e4-verification-2026-10-05.json) and
-[current work](../../WORK_PLAN.md#calcify-e4-continuation--october-5-2026)
-own bounded diagnostic status. Financial97/97 and NodeCI274/274 passed on
+[historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-e4-continuation--october-5-2026)
+record bounded diagnostic status. Financial97/97 and NodeCI274/274 passed on
 Attempt1 frozen source; independent whole-code cycle3 Ready. Same-candidate49 E3 arms
 pass with complete oracle/history checks,1073.813s correctness timing. Original
 raw proof preserved; bounded lossless export independently verified, Attempt1
@@ -109,8 +109,8 @@ Earlier scopes below unchanged.
 
 October5, 2026 UTC; branch `codex/calcify-heap-protection`, base `3ce2bdf2`.
 [Focused verification](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json) and
-[current work plan](../../WORK_PLAN.md#calcify-heap-protection-component--october-5-2026)
-own new test-harness component scope. Financial64/64, exact NodeCI230/230;
+[historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-heap-protection-component--october-5-2026)
+record test-harness component scope. Financial64/64, exact NodeCI230/230;
 independent Attempt1 cycle3 Ready. Actual Java21 capability and final-build child
 refusal controls pass without broker/client setup. Sticky sampled protection
 continues through replay/publication; emitted peak scope ends at result assembly.
@@ -123,8 +123,8 @@ Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared 
 ## Historical October5 E3 continuation
 
 October5 session on `codex/calcify-planning-readiness`, base `a6ddafbb`.
-[Current work plan](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
-owns candidate status. New test-only external faults and partition-cut verifier
+[Historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-e3-continuation--october-5-2026)
+records candidate status. New test-only external faults and partition-cut verifier
 have bounded acceptance complete; product merge pending. Kotlin45/45 and exact Node CI216/216 pass.
 Reviewed recovery guard passes real parent-observed `starting`/measured-disk/
 healthy recovery smoke; no financial workload in that smoke. Candidate external4/4, quartet, core24/24 and golden20/20 pass;

@@ -189,3 +189,11 @@ Focused current summaries, execution fixtures, contracts and default tests stay
 in Reef. Historical links now point to immutable imports. This changes no
 runtime, schema, API, scenario or throughput qualification.
 
+## October 16 documentation navigation correction
+
+The retained financial-sprint1 and finite-P3 checkpoint READMEs now link dated
+work sections in [pinned Calcify history](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md)
+instead of removed `WORK_PLAN.md` anchors. Their refreshed bytes and SHA-256 values
+are in [current retained inventory](records/retained-evidence.json); older retention
+receipts and archived proof remain unchanged. No new records superseded or moved.
+
