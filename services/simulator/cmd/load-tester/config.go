@@ -9,6 +9,7 @@ import (
 	"time"
 
 	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
+	"github.com/dills122/reef/services/simulator/internal/envutil"
 	"github.com/dills122/reef/services/simulator/internal/strategy"
 )
 
@@ -153,7 +154,7 @@ func parseConfig() (Config, error) {
 	defaults := defaultConfigFromEnv()
 	cfg := defaults
 
-	flag.StringVar(&cfg.SessionConfigPath, "session-config", envOr("REEF_SESSION_CONFIG", ""), "path to persona session config (yaml/json)")
+	flag.StringVar(&cfg.SessionConfigPath, "session-config", envutil.Or("REEF_SESSION_CONFIG", ""), "path to persona session config (yaml/json)")
 	flag.StringVar(&cfg.BaseURL, "base-url", cfg.BaseURL, "platform runtime base url")
 	flag.StringVar(&cfg.Transport, "transport", cfg.Transport, "command submit transport: http or stream")
 	flag.StringVar(&cfg.StreamAddress, "stream-address", cfg.StreamAddress, "stream ingress host:port when transport=stream")
@@ -296,54 +297,54 @@ func parseConfig() (Config, error) {
 
 func defaultConfigFromEnv() Config {
 	return Config{
-		BaseURL:             envOr("REEF_BASE_URL", "http://localhost:8080"),
-		Transport:           envOr("REEF_TRANSPORT", transportHTTP),
-		StreamAddress:       envOr("REEF_STREAM_ADDRESS", "127.0.0.1:8090"),
-		Duration:            envDuration("REEF_DURATION", 30*time.Second),
-		Workers:             envInt("REEF_WORKERS", 8),
-		Seed:                envInt64("REEF_SEED", 0),
-		RatePerSecond:       envInt("REEF_RATE", 0),
-		RateSchedule:        envOr("REEF_RATE_SCHEDULE", rateScheduleDrop),
-		RateQueueDepth:      envInt("REEF_RATE_QUEUE_DEPTH", 0),
-		RequestTimeout:      envDuration("REEF_TIMEOUT", 5*time.Second),
-		SubmitPct:           envInt("REEF_SUBMIT_PCT", 60),
-		ModifyPct:           envInt("REEF_MODIFY_PCT", 25),
-		CancelPct:           envInt("REEF_CANCEL_PCT", 15),
-		InstrumentID:        envOr("REEF_INSTRUMENT_ID", "AAPL"),
-		InstrumentSymbol:    envOr("REEF_INSTRUMENT_SYMBOL", "AAPL"),
-		ParticipantID:       envOr("REEF_PARTICIPANT_ID", "participant-1"),
-		ParticipantName:     envOr("REEF_PARTICIPANT_NAME", "Participant 1"),
-		AccountID:           envOr("REEF_ACCOUNT_ID", "account-1"),
-		QuantityMin:         envInt("REEF_QTY_MIN", 10),
-		QuantityMax:         envInt("REEF_QTY_MAX", 1000),
-		PriceMin:            envInt64("REEF_PRICE_MIN", 149_000_000_000),
-		PriceMax:            envInt64("REEF_PRICE_MAX", 151_000_000_000),
-		TraceCheckLimit:     envInt("REEF_TRACE_CHECK_LIMIT", 50),
-		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 4),
-		ReportOut:           envOr("REEF_REPORT_OUT", ""),
-		Mode:                envOr("REEF_MODE", "chaos"),
-		RunID:               envOr("REEF_RUN_ID", ""),
-		RunKind:             envOr("REEF_RUN_KIND", "stress"),
-		ScenarioID:          envOr("REEF_SCENARIO_ID", ""),
-		Tail:                envBool("REEF_TAIL", false),
-		TailInterval:        envDuration("REEF_TAIL_INTERVAL", 2*time.Second),
-		TailLines:           envInt("REEF_TAIL_LINES", 5),
-		ProfileMixMM:        envInt("REEF_PROFILE_MM_PCT", 35),
-		ProfileMixInst:      envInt("REEF_PROFILE_INST_PCT", 30),
-		ProfileMixRetail:    envInt("REEF_PROFILE_RETAIL_PCT", 25),
-		ProfileMixNoise:     envInt("REEF_PROFILE_NOISE_PCT", 10),
-		PrettySummary:       envBool("REEF_PRETTY_SUMMARY", false),
-		HTTPMaxIdleConns:    envInt("REEF_HTTP_MAX_IDLE_CONNS", 4096),
-		HTTPIdleConnsHost:   envInt("REEF_HTTP_MAX_IDLE_CONNS_PER_HOST", 2048),
-		HTTPMaxConnsHost:    envInt("REEF_HTTP_MAX_CONNS_PER_HOST", 0),
-		HTTPIdleConnTimeout: envDuration("REEF_HTTP_IDLE_CONN_TIMEOUT", 90*time.Second),
-		UseApiV1:            envBool("REEF_USE_API_V1", true),
-		LegacyInternalRoute: envBool("REEF_LEGACY_INTERNAL_ROUTE", false),
-		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "sim-client"),
-		APIBearerToken:      envOr("REEF_API_BEARER_TOKEN", ""),
-		AdminAPIBearerToken: envOr("REEF_ADMIN_API_BEARER_TOKEN", envOr("ADMIN_API_TOKEN", "")),
-		CommandClockStart:   envOr("REEF_COMMAND_CLOCK_START", ""),
-		CommandClockStep:    envDuration("REEF_COMMAND_CLOCK_STEP", time.Second),
+		BaseURL:             envutil.Or("REEF_BASE_URL", "http://localhost:8080"),
+		Transport:           envutil.Or("REEF_TRANSPORT", transportHTTP),
+		StreamAddress:       envutil.Or("REEF_STREAM_ADDRESS", "127.0.0.1:8090"),
+		Duration:            envutil.Duration("REEF_DURATION", 30*time.Second),
+		Workers:             envutil.Int("REEF_WORKERS", 8),
+		Seed:                envutil.Int64("REEF_SEED", 0),
+		RatePerSecond:       envutil.Int("REEF_RATE", 0),
+		RateSchedule:        envutil.Or("REEF_RATE_SCHEDULE", rateScheduleDrop),
+		RateQueueDepth:      envutil.Int("REEF_RATE_QUEUE_DEPTH", 0),
+		RequestTimeout:      envutil.Duration("REEF_TIMEOUT", 5*time.Second),
+		SubmitPct:           envutil.Int("REEF_SUBMIT_PCT", 60),
+		ModifyPct:           envutil.Int("REEF_MODIFY_PCT", 25),
+		CancelPct:           envutil.Int("REEF_CANCEL_PCT", 15),
+		InstrumentID:        envutil.Or("REEF_INSTRUMENT_ID", "AAPL"),
+		InstrumentSymbol:    envutil.Or("REEF_INSTRUMENT_SYMBOL", "AAPL"),
+		ParticipantID:       envutil.Or("REEF_PARTICIPANT_ID", "participant-1"),
+		ParticipantName:     envutil.Or("REEF_PARTICIPANT_NAME", "Participant 1"),
+		AccountID:           envutil.Or("REEF_ACCOUNT_ID", "account-1"),
+		QuantityMin:         envutil.Int("REEF_QTY_MIN", 10),
+		QuantityMax:         envutil.Int("REEF_QTY_MAX", 1000),
+		PriceMin:            envutil.Int64("REEF_PRICE_MIN", 149_000_000_000),
+		PriceMax:            envutil.Int64("REEF_PRICE_MAX", 151_000_000_000),
+		TraceCheckLimit:     envutil.Int("REEF_TRACE_CHECK_LIMIT", 50),
+		StrictMinLiveOrders: envutil.Int("REEF_STRICT_MIN_LIVE_ORDERS", 4),
+		ReportOut:           envutil.Or("REEF_REPORT_OUT", ""),
+		Mode:                envutil.Or("REEF_MODE", "chaos"),
+		RunID:               envutil.Or("REEF_RUN_ID", ""),
+		RunKind:             envutil.Or("REEF_RUN_KIND", "stress"),
+		ScenarioID:          envutil.Or("REEF_SCENARIO_ID", ""),
+		Tail:                envutil.Bool("REEF_TAIL", false),
+		TailInterval:        envutil.Duration("REEF_TAIL_INTERVAL", 2*time.Second),
+		TailLines:           envutil.Int("REEF_TAIL_LINES", 5),
+		ProfileMixMM:        envutil.Int("REEF_PROFILE_MM_PCT", 35),
+		ProfileMixInst:      envutil.Int("REEF_PROFILE_INST_PCT", 30),
+		ProfileMixRetail:    envutil.Int("REEF_PROFILE_RETAIL_PCT", 25),
+		ProfileMixNoise:     envutil.Int("REEF_PROFILE_NOISE_PCT", 10),
+		PrettySummary:       envutil.Bool("REEF_PRETTY_SUMMARY", false),
+		HTTPMaxIdleConns:    envutil.Int("REEF_HTTP_MAX_IDLE_CONNS", 4096),
+		HTTPIdleConnsHost:   envutil.Int("REEF_HTTP_MAX_IDLE_CONNS_PER_HOST", 2048),
+		HTTPMaxConnsHost:    envutil.Int("REEF_HTTP_MAX_CONNS_PER_HOST", 0),
+		HTTPIdleConnTimeout: envutil.Duration("REEF_HTTP_IDLE_CONN_TIMEOUT", 90*time.Second),
+		UseApiV1:            envutil.Bool("REEF_USE_API_V1", true),
+		LegacyInternalRoute: envutil.Bool("REEF_LEGACY_INTERNAL_ROUTE", false),
+		ClientIDPrefix:      envutil.Or("REEF_CLIENT_ID_PREFIX", "sim-client"),
+		APIBearerToken:      envutil.Or("REEF_API_BEARER_TOKEN", ""),
+		AdminAPIBearerToken: envutil.Or("REEF_ADMIN_API_BEARER_TOKEN", envutil.Or("ADMIN_API_TOKEN", "")),
+		CommandClockStart:   envutil.Or("REEF_COMMAND_CLOCK_START", ""),
+		CommandClockStep:    envutil.Duration("REEF_COMMAND_CLOCK_STEP", time.Second),
 	}
 }
 
