@@ -1,7 +1,6 @@
 package com.reef.platform.calcify.finance
 
 import com.reef.platform.calcify.FiniteLifecycleContract
-import com.reef.platform.calcify.MemoryLifecycleKv
 import com.reef.platform.calcify.StreamsLifecycleKv
 import java.util.Properties
 import kotlin.random.Random

@@ -8,7 +8,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.jupiter.api.Tag
 

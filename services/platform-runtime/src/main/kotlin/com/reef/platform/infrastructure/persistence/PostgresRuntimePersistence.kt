@@ -9,7 +9,6 @@ import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.IntradayBar
-import com.reef.platform.domain.NonLifecycleRejectCodes
 import com.reef.platform.domain.OwnExecutionView
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
@@ -26,7 +25,6 @@ import com.reef.platform.domain.VenueSessionPostTradeProfile
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import java.sql.Connection
-import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
 import java.sql.Timestamp
@@ -2846,20 +2844,6 @@ class PostgresRuntimePersistence(
             ps.executeBatch()
         }
     }
-
-    private fun RuntimeEvent.modifyFacts(): RuntimeEventModifyFacts {
-        if (eventType != "OrderModified") return RuntimeEventModifyFacts()
-        val payload = JsonCodec.parseLegacyObjectOrEmpty(payloadJson)
-        return RuntimeEventModifyFacts(
-            quantityUnits = payload.string("quantityUnits"),
-            limitPrice = payload.string("limitPrice")
-        )
-    }
-
-    private data class RuntimeEventModifyFacts(
-        val quantityUnits: String = "",
-        val limitPrice: String = ""
-    )
 
     override fun acceptedOrder(identity: RuntimeOrderIdentity): PersistedOrder? = projectionQueryList(
         "SELECT $OrderSelectColumns FROM ${names.orders} WHERE run_id = ? AND order_id = ?",

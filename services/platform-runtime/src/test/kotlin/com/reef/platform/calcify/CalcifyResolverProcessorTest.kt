@@ -1,9 +1,7 @@
 package com.reef.platform.calcify
 
-import java.nio.file.Path
 import java.time.Duration
 import java.util.Properties
-import kotlin.io.path.readLines
 import kotlin.test.*
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.serialization.ByteArrayDeserializer

@@ -5,7 +5,6 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.time.Duration
 import java.util.Properties
-import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
