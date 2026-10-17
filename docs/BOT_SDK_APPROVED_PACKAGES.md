@@ -11,7 +11,7 @@ These packages are the first exact-version strategy-helper allowlist. Bot source
 | Package | Version | Status | Reason |
 | --- | --- | --- | --- |
 | `trading-signals` | `7.4.3` | approved | TypeScript-oriented technical indicators with a focused package surface. |
-| `simple-statistics` | `7.9.3` | approved | Pure JavaScript statistics helpers for mean, deviation, regression, and z-score style strategies. |
+| `simple-statistics` | `7.12.1` | approved | Pure JavaScript statistics helpers for mean, deviation, regression, and z-score style strategies. |
 | `decimal.js` | `10.6.0` | approved | Mature deterministic decimal arithmetic helper. |
 | `lodash-es` | `4.18.1` | approved | Utility helpers; should be bundled/tree-shaken and kept out of runtime import resolution. |
 

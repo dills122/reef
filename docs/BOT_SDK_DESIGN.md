@@ -287,7 +287,7 @@ SES compartments are a good JavaScript-level confinement layer, but hosted safet
 V1.5 keeps runtime dependency access closed, but bot source may import exact packages from the approved allowlist:
 
 - `trading-signals@7.4.3`
-- `simple-statistics@7.9.3`
+- `simple-statistics@7.12.1`
 - `decimal.js@10.6.0`
 - `lodash-es@4.18.1`
 

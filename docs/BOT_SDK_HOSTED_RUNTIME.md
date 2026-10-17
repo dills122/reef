@@ -190,7 +190,7 @@ The sidecar policy is represented by `reefBotHostedSandboxPolicyV1` and checked 
 V1.5 allows exact approved package imports in bot source, then bundles them into the hosted artifact before SES execution. The current allowlist is:
 
 - `trading-signals@7.4.3`
-- `simple-statistics@7.9.3`
+- `simple-statistics@7.12.1`
 - `decimal.js@10.6.0`
 - `lodash-es@4.18.1`
 
