@@ -19,6 +19,36 @@ Capture practical speed and impact lessons so performance stays a design constra
    - `strict-lifecycle` mode to stress correctness and state-machine behavior
 8. Always compare clean-reset and aged-state runs. Short tests can look healthy while persistence pressure is building.
 
+## How to benchmark correctly
+
+Wrong-configuration runs have repeatedly produced false limits (per-order Postgres intake blamed on "the platform", the JDK HTTP server, unbounded intake). Start here.
+
+**Pick the class, then use its profile.** The single source of truth for each class's configuration is [`scripts/bench/README.md`](../scripts/bench/README.md) and the profile files under [`scripts/bench/profiles/`](../scripts/bench/profiles/); this page does not repeat their values.
+
+| Class | What it is | Profile |
+| --- | --- | --- |
+| A. CI guardrails and micro-benchmarks | `make bench-matching-engine-check`, `make bench-platform-runtime-check`, the 1000/2500 rps runtime stress sanity | `class-a-ci-guardrails.env` |
+| B. Calcify full chain | `make calcify-fullchain-soak` and the droplet matrices | `class-b-calcify-fullchain.env` |
+| C. Ingestion at 10k/s (venue core, no Calcify) | materializer stress and `make do-materializer-10k-gate` | `class-c-ingestion-10k.env` |
+
+**Always run the preflight first:**
+
+```bash
+make bench-preflight CLASS=a   # or b, or c
+```
+
+**Rules that apply to every class** (each stated here once; other docs link here):
+
+- **Laptop numbers are diagnostic only.** They overstate the target hardware 2 to 2.7x for single-thread-bound stages (SHA-256 of 64 bytes: 80 ns on the M1 versus 454 to 462 ns on the Xeon 8168). A claim needs a run on the dedicated host, with the owner's approval of size and cost before any droplet is created. Never run `make calcify-droplet-run` or a `run-destroy` gate on your own initiative.
+- **Host class matters.** The venue-core gate runs on `c-16` (Xeon 8168). Finance-lane (Calcify) hot-lane claims need an AMD EPYC host (`g5-16vcpu-64gb-50gb`, EPYC 9555P); a Xeon `c-16`/`c-32` is about 2.6x slower on SHA-256 and also too small for the full-chain tmpfs limits. Details: [DigitalOcean runbook](../infra/do-benchmark/README.md).
+- **Quiet host.** No other Reef stack, worktree stack or heavy application may run during a measurement (CPU contention is not detected; the fixed container names and ports of the soak will also collide). Wall-clock rates move 15 to 20% between identical runs; compare CPU-time and allocation metrics for A/B work.
+- **Fresh run identity.** A new `FC_ID` (and so a new compose project, topics and state directory) for every Calcify run; never reuse one.
+- **Clean and aged state.** Report a clean-reset run and an aged-state run (and a restart/recovery proof where relevant) separately; see Core Learning 8. A cold-restarted resolver cut 10.3k to 8.1k/s.
+- **Verify the actual configuration, not the requested one**: inspect the running stack's resolved environment and `rpk topic describe -c <topic>` (`write.caching`, `max.message.bytes`) before trusting a result.
+- **The booking-lag cap for Calcify soak acceptance is 1.6 s** ([D-059](DECISIONS.md#d-059-bounded-capacity-lane-memory)).
+- **CI guardrail thresholds only catch crashes.** The Class A limits (for example `LIMIT_MODIFY_NS=300000`, `REEF_RUNTIME_SUBMIT_NS_PER_OP_BUDGET=20000000`) sit two to three orders of magnitude above measured values, so a green CI run proves nothing about a performance regression smaller than that. No CI workflow reproduces a 10k number; the weekly materializer-10k-gate job only prints a plan.
+- Host sizing, Docker VM and Redpanda assumptions behind recorded laptop numbers: [Local Configuration](LOCAL_CONFIGURATION.md#host-assumptions-behind-recorded-laptop-numbers). Variant settings that look alike (queue capacity, worker counts, gate tiers, retention, compression): [Local Run Profiles](LOCAL_RUN_PROFILES.md#look-alike-settings-which-variant-is-which).
+
 ## Current Projection Evidence Alignment (September 4, 2026)
 
 The recorded sustained projection baseline is `2.5k/5m`; August `5k/5m`
@@ -377,6 +407,8 @@ Immediate implications:
    as the implementation ladder before raising projection gates above `2.5k`.
 
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
+
+> 2026-10-17 note: the "failed 10k/15m" run below is the unbounded-retention configuration (`STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=0`). It is not a limit of the profile: the bounded setting (`100000`) passed the same shape; see the results later in this section. The stream profile guard rejects `0` unless `DEV_ALLOW_UNBOUNDED_STREAM_INTAKE=1`.
 
 Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.
 
@@ -861,7 +893,10 @@ Baseline benchmarks (Apple M1 Max, `go test -benchmem`):
 
 - `BenchmarkSubmitOrderResting`: `1309 ns/op`, `592 B/op`, `14 allocs/op`
 - `BenchmarkSubmitOrderMatchAgainstResting`: `2703 ns/op`, `1524 B/op`, `32 allocs/op`
-- `BenchmarkModifyOrder`: `109443 ns/op`, `199 B/op`, `7 allocs/op` — **stale, see the July 11, 2026 checkpoint below.** This number predates the July 4, 2026 Hot Book Sharding Checkpoint's price-level btree/FIFO book; it reflects the earlier slice-based book's O(n) reinsertion cost, not current behavior.
+- `BenchmarkModifyOrder`: `109443 ns/op`, `199 B/op`, `7 allocs/op` — **stale (2026-10-17 note: do not quote), see the July 11, 2026 checkpoint below.** This number predates the July 4, 2026 Hot Book Sharding Checkpoint's price-level btree/FIFO book; it reflects the earlier slice-based book's O(n) reinsertion cost, not current behavior.
+
+
+Re-measured 2026-10-17 on the same class of host (Apple M1 Max, `make bench-matching-engine`, one run, laptop, diagnostic only): `BenchmarkSubmitOrderResting` 1691 ns/op, 758 B/op, 12 allocs/op; `BenchmarkSubmitOrderMatchAgainstResting` 2462 ns/op, 1828 B/op, 27 allocs/op; `BenchmarkModifyOrder` 1105 ns/op, 302 B/op, 8 allocs/op. The 1309/2703 ns figures above are the 2026-05-23 baseline and the ModifyOrder `109443 ns/op` is superseded; wall-clock moves 15 to 20% between identical runs, so use these as order-of-magnitude only.
 
 Deferred high-impact candidates:
 
