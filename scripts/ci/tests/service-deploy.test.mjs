@@ -208,7 +208,7 @@ count=0
 if [[ -f "$FAKE_TIMEOUT_STATE" ]]; then count="$(cat "$FAKE_TIMEOUT_STATE")"; fi
 count=$((count + 1))
 printf '%s\\n' "$count" > "$FAKE_TIMEOUT_STATE"
-if (( count <= \${FAKE_TIMEOUT_FAIL_ATTEMPTS:-0} )); then exit 124; fi
+if (( count <= \${FAKE_TIMEOUT_FAIL_ATTEMPTS:-0} )); then exit "\${FAKE_TIMEOUT_FAILURE_STATUS:-124}"; fi
 shift 3
 exec "$@"
 `,
@@ -329,6 +329,26 @@ try {
   assert.equal((await readFile(join(exhaustedTimeoutFixture.root, "timeout.log"), "utf8")).split("\n").filter(Boolean).length, 3);
 } finally {
   await rm(exhaustedTimeoutFixture.root, { recursive: true, force: true });
+}
+
+const killedPullFixture = await createFixture();
+try {
+  const before = await readFile(join(killedPullFixture.root, ".env"), "utf8");
+  const result = runDeploy(
+    killedPullFixture.root,
+    killedPullFixture.archive,
+    killedPullFixture.bin,
+    { FAKE_TIMEOUT_FAIL_ATTEMPTS: "10", FAKE_TIMEOUT_FAILURE_STATUS: "137" },
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /exit 137\); refusing retry/);
+  assert.equal(await readFile(join(killedPullFixture.root, ".env"), "utf8"), before);
+  assert.equal((await readFile(join(killedPullFixture.root, "timeout.log"), "utf8")).split("\n").filter(Boolean).length, 1);
+  const dockerLog = await readFile(join(killedPullFixture.root, "docker.log"), "utf8");
+  assert.doesNotMatch(dockerLog, /compose exec -T .* psql|compose up /);
+  await assert.rejects(() => readFile(join(killedPullFixture.root, "sleep.log")), /ENOENT/);
+} finally {
+  await rm(killedPullFixture.root, { recursive: true, force: true });
 }
 
 const latePullFixture = await createFixture();
@@ -559,6 +579,68 @@ assert.match(
   imageWorkflow,
   /\\\.github\/workflows\/\(container-images\|service-deploy\)\\\.yml\$/,
 );
+
+const runbook = await readFile(join(repoRoot, "infra/hetzner-core/OPERATIONS_RUNBOOK.md"), "utf8");
+const rolloutBlock = runbook.match(/```bash\n(bash -euo pipefail <<'REEF_DEPLOY_SCRIPT_SYNC'\n[\s\S]*?\nREEF_DEPLOY_SCRIPT_SYNC)\n```/)?.[1];
+assert.ok(rolloutBlock, "host-script rollout command block must remain executable");
+const rolloutFixture = await mkdtemp(join(tmpdir(), "reef-deploy-rollout-test-"));
+try {
+  const bin = join(rolloutFixture, "bin");
+  const log = join(rolloutFixture, "rollout.log");
+  const publicKey = join(rolloutFixture, ".ssh", "reef-github-deploy.pub");
+  const digest = "b".repeat(64);
+  await mkdir(bin, { recursive: true });
+  await writeFile(join(bin, "make"), `#!/usr/bin/env bash
+printf 'make %s\\n' "$*" >> "$ROLLOUT_LOG"
+`);
+  await writeFile(join(bin, "shasum"), `#!/usr/bin/env bash
+printf '%s  script\\n' "$FAKE_LOCAL_DIGEST"
+`);
+  await writeFile(join(bin, "ssh"), `#!/usr/bin/env bash
+printf 'ssh %s\\n' "$2" >> "$ROLLOUT_LOG"
+if [[ "$2" == *sha256sum* ]]; then
+  printf '%s  script\\n' "$FAKE_REMOTE_DIGEST"
+else
+  printf 'timeout (GNU coreutils) 9.0\\n'
+fi
+`);
+  for (const command of ["make", "shasum", "ssh"]) {
+    await chmod(join(bin, command), 0o755);
+  }
+  const rolloutEnv = {
+    ...process.env,
+    HOME: rolloutFixture,
+    PATH: `${bin}:${process.env.PATH}`,
+    REEF_HETZNER_HOST: "reef-test-host",
+    ROLLOUT_LOG: log,
+    FAKE_LOCAL_DIGEST: digest,
+    FAKE_REMOTE_DIGEST: "c".repeat(64),
+  };
+  const missingKey = spawnSync("bash", ["-c", rolloutBlock], {
+    cwd: repoRoot, encoding: "utf8", env: rolloutEnv,
+  });
+  assert.notEqual(missingKey.status, 0);
+  assert.match(missingKey.stderr, /dedicated GitHub deploy public key is missing/);
+  await assert.rejects(() => readFile(log), /ENOENT/);
+
+  await mkdir(dirname(publicKey), { recursive: true });
+  await writeFile(publicKey, "ssh-ed25519 test-key reef-test\n");
+  const mismatch = spawnSync("bash", ["-c", rolloutBlock], {
+    cwd: repoRoot, encoding: "utf8", env: rolloutEnv,
+  });
+  assert.notEqual(mismatch.status, 0);
+  assert.match(mismatch.stderr, /host deploy script digest mismatch/);
+  assert.doesNotMatch(await readFile(log, "utf8"), /timeout --version/);
+
+  await writeFile(log, "");
+  const matched = spawnSync("bash", ["-c", rolloutBlock], {
+    cwd: repoRoot, encoding: "utf8", env: { ...rolloutEnv, FAKE_REMOTE_DIGEST: digest },
+  });
+  assert.equal(matched.status, 0, `${matched.stdout}\n${matched.stderr}`);
+  assert.match(await readFile(log, "utf8"), /timeout --version/);
+} finally {
+  await rm(rolloutFixture, { recursive: true, force: true });
+}
 
 const keyFixture = await mkdtemp(join(tmpdir(), "reef-deploy-key-test-"));
 try {

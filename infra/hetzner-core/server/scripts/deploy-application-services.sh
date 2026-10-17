@@ -83,6 +83,10 @@ pull_image() {
       pull_status=$?
     fi
     printf '%s\n' "$output" >&2
+    if (( pull_status == 137 )); then
+      fail "image pull process was killed (exit 137); refusing retry: $image (attempt $attempt/$PULL_ATTEMPTS)"
+      return 1
+    fi
     if grep -Eiq 'unauthorized|authentication required|access denied|manifest unknown|not found|invalid reference format' <<<"$output" ||
       { (( pull_status != 124 )) &&
         ! grep -Eiq 'TLS handshake timeout|context deadline exceeded|i/o timeout|timed out|connection reset by peer|connection refused|network is unreachable|no route to host|temporary failure in name resolution|unexpected EOF|Client.Timeout exceeded|toomanyrequests|Too Many Requests|status[^0-9]*429|status[^0-9]*5[0-9]{2}|(^|[^0-9])(429|5[0-9]{2})([[:space:]]|$)' <<<"$output"; }; then

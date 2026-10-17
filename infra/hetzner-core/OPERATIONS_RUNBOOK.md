@@ -192,14 +192,22 @@ start from a checkout containing the merged change, confirm that the dedicated
 GitHub deploy public key is available, then sync and verify the exact script:
 
 ```bash
+bash -euo pipefail <<'REEF_DEPLOY_SCRIPT_SYNC'
 deploy_key_pub="$HOME/.ssh/reef-github-deploy.pub"
-test -s "$deploy_key_pub"
+if [[ ! -s "$deploy_key_pub" ]]; then
+  echo "dedicated GitHub deploy public key is missing; stop before host sync" >&2
+  exit 1
+fi
 REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH="$deploy_key_pub" \
   make hetzner-core ARGS=deploy-automation-up
 local_digest="$(shasum -a 256 infra/hetzner-core/server/scripts/deploy-application-services.sh | cut -d ' ' -f 1)"
 remote_digest="$(ssh "ops@$REEF_HETZNER_HOST" 'sha256sum /opt/reef/scripts/deploy-application-services.sh' | cut -d ' ' -f 1)"
-test "$local_digest" = "$remote_digest"
+if [[ "$local_digest" != "$remote_digest" ]]; then
+  echo "host deploy script digest mismatch; stop before application deploy" >&2
+  exit 1
+fi
 ssh "ops@$REEF_HETZNER_HOST" 'timeout --version | grep -q "GNU coreutils"'
+REEF_DEPLOY_SCRIPT_SYNC
 ```
 
 `deploy-automation-up` also installs or updates the restricted forced-command
@@ -298,6 +306,9 @@ stops before migrations or image-pin changes. A successful retry still requires
 the full OCI revision-label check for all three immutable images. Inspect the
 failed Actions job's SSH output before manually dispatching the same published
 SHA; do not switch to a mutable tag to bypass this gate.
+If GNU `timeout` reports exit 137, the host stops immediately: that status can
+also indicate a killed Docker client, so it is not safe to treat as a transient
+registry response.
 
 On a post-pin failure, the host restores the previous `.env` and recreates the
 previous matching/runtime images. Inspect:
