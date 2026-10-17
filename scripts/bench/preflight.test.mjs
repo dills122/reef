@@ -122,9 +122,9 @@ test("class C: raw compose defaults (nothing set, no launcher) trip every hot-pa
     "env:STREAM_ACK_PARTITION_COUNT", "env:STREAM_ACK_PUBLISH_PIPELINE_ENABLED", "env:MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES"]) assert.ok(failed.includes(id), id);
 });
 
-test("class C: STREAM_ACK_LOG_PROVIDER is required even under the nodb launcher (it does not force redpanda)", () => {
+test("class C: STREAM_ACK_LOG_PROVIDER is forced to redpanda by the nodb launcher", () => {
   const results = evalC({ STREAM_ACK_LOG_PROVIDER: null }, "nodb");
-  assert.equal(byId(results, "env:STREAM_ACK_LOG_PROVIDER").status, checks.FAIL);
+  assert.equal(byId(results, "env:STREAM_ACK_LOG_PROVIDER").status, checks.PASS);
   assert.equal(byId(evalC({ STREAM_ACK_LOG_PROVIDER: null }, "materializer"), "env:STREAM_ACK_LOG_PROVIDER").status, checks.PASS);
 });
 

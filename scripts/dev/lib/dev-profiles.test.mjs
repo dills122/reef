@@ -64,6 +64,15 @@ try {
     });
   });
 
+  runTest("stream-direct no-db stack profile forces redpanda over the jetstream default", () => {
+    withQuietConsole(() => {
+      delete process.env.STREAM_ACK_LOG_PROVIDER;
+      applyStackProfile("stream-direct-nodb");
+      assert.equal(process.env.STREAM_ACK_LOG_PROVIDER, "redpanda");
+      assert.equal(process.env.STREAM_ACK_PARTITION_COUNT, "16");
+    });
+  });
+
   runTest("stream-ack stress profile writes generated spread session config", () => {
     withQuietConsole(() => {
       const artifactDir = mkdtempSync(join(tmpdir(), "reef-stream-ack-profile-"));

@@ -387,7 +387,7 @@ quote the variant you ran. For the checklist of what to verify before a run, see
 | `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY` | **8192**: `materializer-soak` (gate and local materializer stress) and the Calcify bootstrap used by the full-chain soak | 1024: `stream-direct-nodb` ceiling profile (diagnostic, not the gate). 4096: stream-ack stack profile and the compose default |
 | Load workers (`DEV_STRESS_SWEEP_WORKERS` / `REEF_DO_*`) | **1,024**: the official remote gate and C5; also the full-chain soak (`FC_WORKERS`) | 384: local `make dev-stress-venue-event-materializer` default and the generic DO `materializer` profile default (do **not** reproduce the 10k/s baseline; fewer workers makes the load generator the limit). 256: `stream-direct-nodb`, runtime no-DB sanity, C22/C28 diagnostics |
 | Materializer-10k gate tier | **`soak-5m`** is the current 10k venue-core evidence (two 5m samples) | `short` (60s x3) is the wrapper's default tier and a smoke-level confirmation; `soak-15m` only after `soak-5m` is clean |
-| `STREAM_ACK_LOG_PROVIDER` for `make dev-stress-stream-direct-nodb` | `redpanda` (**you must set it**; the make target does not force it) | default `jetstream`: runs NATS, 64 partitions by default and a different ceiling. The 16-partition defaults apply only under `redpanda` |
+| `STREAM_ACK_LOG_PROVIDER` for `make dev-stress-stream-direct-nodb` | `redpanda` (forced by the stack profile; an explicit other value is overridden with a warning) | formerly the default `jetstream` ran NATS with 64 partitions and a different ceiling |
 
 ### Terminal order retention: two regimes
 
