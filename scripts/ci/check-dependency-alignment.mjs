@@ -67,6 +67,46 @@ const rootPackage = JSON.parse(await read("package.json"));
 const expectedBun = rootPackage.packageManager.match(/^bun@(.+)$/)?.[1];
 assert.ok(expectedBun, "root packageManager must pin Bun");
 
+// Any npm package declared in more than one package.json must use an identical range.
+const packageJsonPaths = [
+  "package.json",
+  "apps/arena-admin/package.json",
+  "apps/docs-site/package.json",
+  "packages/bot-sdk/package.json",
+];
+const declaredRanges = new Map();
+for (const path of packageJsonPaths) {
+  const manifest = JSON.parse(await read(path));
+  for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+    for (const [name, range] of Object.entries(manifest[section] ?? {})) {
+      declaredRanges.set(name, [...(declaredRanges.get(name) ?? []), [path, range]]);
+    }
+  }
+}
+for (const [name, declarations] of declaredRanges) {
+  const distinct = new Set(declarations.map(([, range]) => range));
+  assert.equal(
+    distinct.size,
+    1,
+    `${name} must use the same range in every package.json: ${declarations.map(([path, range]) => `${path}=${range}`).join(", ")}`,
+  );
+}
+
+// The bot SDK approved-package list pins exact versions that hosted artifacts bundle from the root install.
+const approvedPackages = JSON.parse(await read("packages/bot-sdk/approved-packages.v1.json")).packages;
+const approvedPolicySource = await read("packages/bot-sdk/src/sandbox-policy.ts");
+for (const { name, version } of approvedPackages) {
+  assert.equal(
+    rootPackage.devDependencies?.[name],
+    version,
+    `approved bot package ${name}@${version} must match the root package.json devDependency`,
+  );
+  assert.ok(
+    new RegExp(`name: "${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}",\\s+version: "${version.replace(/\./g, "\\.")}"`).test(approvedPolicySource),
+    `sandbox-policy.ts approved package ${name} must be ${version} (same as approved-packages.v1.json)`,
+  );
+}
+
 const workflowDirectory = new URL(".github/workflows/", root);
 const workflowNames = (await readdir(workflowDirectory)).filter((name) => name.endsWith(".yml"));
 const workflowEntries = await Promise.all(
