@@ -2130,7 +2130,7 @@ class PlatformHttpServer(
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
             System.err.println(
-                "command_capture_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+                "command_capture_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonCodec.escapeString(errorMessage)}"
             )
             adminSessionAuth.writeJson(
                 exchange,
@@ -2231,7 +2231,7 @@ class PlatformHttpServer(
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
             System.err.println(
-                "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+                "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonCodec.escapeString(errorMessage)}"
             )
             HotPathMetrics.time("api.commandCapture.markFailed") {
                 commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
@@ -2320,7 +2320,7 @@ class PlatformHttpServer(
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
             System.err.println(
-                "command_capture_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+                "command_capture_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonCodec.escapeString(errorMessage)}"
             )
             return PlatformHotPathResponse(503, simpleErrorJson("command capture unavailable", errorMessage))
         }
@@ -2411,7 +2411,7 @@ class PlatformHttpServer(
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
             System.err.println(
-                "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+                "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonCodec.escapeString(errorMessage)}"
             )
             HotPathMetrics.time("api.commandCapture.markFailed") {
                 commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
@@ -2638,7 +2638,7 @@ class PlatformHttpServer(
         } catch (ex: Exception) {
             val errorMessage = ex.message ?: "unknown"
             System.err.println(
-                "stream_command_intake_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId message=${JsonFields.escape(errorMessage)}"
+                "stream_command_intake_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId message=${JsonCodec.escapeString(errorMessage)}"
             )
             return completedStreamAckResponse(
                 started,
@@ -2742,7 +2742,7 @@ class PlatformHttpServer(
             (now - previous >= 1_000L && streamPublishFailureLastLogMs.compareAndSet(previous, now))
         if (!shouldLog) return
         System.err.println(
-            "stream_command_publish_failed count=$count route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId subject=$subject message=${JsonFields.escape(errorMessage)}"
+            "stream_command_publish_failed count=$count route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId subject=$subject message=${JsonCodec.escapeString(errorMessage)}"
         )
     }
 
@@ -2818,7 +2818,7 @@ class PlatformHttpServer(
             )
         } catch (ex: Exception) {
             System.err.println(
-                "boundary_rejection_audit_failed guardrailType=$guardrailType route=${request.route} clientId=${request.clientId} commandId=${JsonFields.escape(request.commandId)} message=${JsonFields.escape(ex.message ?: "unknown")}"
+                "boundary_rejection_audit_failed guardrailType=$guardrailType route=${request.route} clientId=${request.clientId} commandId=${JsonCodec.escapeString(request.commandId)} message=${JsonCodec.escapeString(ex.message ?: "unknown")}"
             )
         }
     }
@@ -2953,7 +2953,7 @@ class PlatformHttpServer(
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
             System.err.println(
-                "accepted_async_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+                "accepted_async_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonCodec.escapeString(errorMessage)}"
             )
             adminSessionAuth.writeJson(exchange, 503, simpleErrorJson("accepted async unavailable", errorMessage))
             return
@@ -3038,7 +3038,7 @@ class PlatformHttpServer(
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
             System.err.println(
-                "accepted_async_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+                "accepted_async_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonCodec.escapeString(errorMessage)}"
             )
             return PlatformHotPathResponse(503, simpleErrorJson("accepted async unavailable", errorMessage))
         }

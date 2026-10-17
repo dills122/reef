@@ -323,7 +323,7 @@ internal class RiskGuardrailGateway(
             api.recordAdminEvent(actorId, correlationId, eventType, targetId, payload)
         } catch (ex: Exception) {
             System.err.println(
-                "protective_control_audit_failed eventType=$eventType targetId=$targetId message=${JsonFields.escape(ex.message ?: "unknown")}"
+                "protective_control_audit_failed eventType=$eventType targetId=$targetId message=${JsonCodec.escapeString(ex.message ?: "unknown")}"
             )
         }
     }

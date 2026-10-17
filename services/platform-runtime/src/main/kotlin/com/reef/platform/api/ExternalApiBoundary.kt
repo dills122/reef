@@ -709,7 +709,7 @@ class PostgresAccountRiskCheck(
         } catch (ex: Exception) {
             val message = ex.message ?: "unknown"
             System.err.println(
-                "account_risk_audit_failed clientId=${request.clientId} route=${request.route} commandId=${request.commandId} decision=${result.decision} message=${JsonFields.escape(message)}"
+                "account_risk_audit_failed clientId=${request.clientId} route=${request.route} commandId=${request.commandId} decision=${result.decision} message=${JsonCodec.escapeString(message)}"
             )
         }
     }
@@ -1753,9 +1753,9 @@ class ExternalApiBoundary(
     fun toErrorJson(error: BoundaryError, correlationId: String): String {
         return """
             {
-              "code":"${JsonFields.escape(error.code)}",
-              "message":"${JsonFields.escape(error.message)}",
-              "correlationId":"${JsonFields.escape(correlationId)}"
+              "code":"${JsonCodec.escapeString(error.code)}",
+              "message":"${JsonCodec.escapeString(error.message)}",
+              "correlationId":"${JsonCodec.escapeString(correlationId)}"
             }
         """.trimIndent()
     }

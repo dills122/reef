@@ -63,8 +63,8 @@ class JsonCodecTest {
     }
 
     @Test
-    fun jsonFieldsFacadePreservesEmptyFallbackForMalformedPayloads() {
-        assertEquals("", JsonFields.extract("""{"orderId":""", "orderId"))
+    fun legacyParserPreservesEmptyFallbackForMalformedPayloads() {
+        assertEquals("", JsonCodec.parseLegacyObjectOrEmpty("""{"orderId":""").string("orderId"))
     }
 
     @Test
