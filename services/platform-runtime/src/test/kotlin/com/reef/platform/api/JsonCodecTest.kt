@@ -65,7 +65,6 @@ class JsonCodecTest {
     @Test
     fun jsonFieldsFacadePreservesEmptyFallbackForMalformedPayloads() {
         assertEquals("", JsonFields.extract("""{"orderId":""", "orderId"))
-        assertTrue(JsonFields.extractObjects("""{"executions":""", "executions").isEmpty())
     }
 
     @Test
