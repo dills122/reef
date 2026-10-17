@@ -373,8 +373,6 @@ jobs:
             scripts/dev/projection-replay-proof.test.mjs \
             scripts/dev/calcify-direct-capacity.test.mjs \
             scripts/dev/calcify-throughput-check.test.mjs \
-            scripts/dev/calcify-financial/research/summarize-contention.test.mjs \
-            scripts/dev/calcify-financial/research/compare-contention.test.mjs \
             scripts/dev/calcify-financial/research/arena-credit-model.test.mjs \
             scripts/dev/calcify-financial/record-attempt.test.mjs \
             scripts/dev/calcify-financial/broker-proof.test.mjs \
@@ -663,7 +661,7 @@ jobs:
     # Calcify is opt-in/WIP, but its real-Postgres-backed receipt tests must
     # not silently no-op in CI: without these env vars set,
     # CalcifyReceiptStoreTest returns before any assertion runs. See
-    # docs/research/CALCIFY_PHASE1_2_ARCHITECTURE_REVIEW_2026-10-01.md
+    # https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_PHASE1_2_ARCHITECTURE_REVIEW_2026-10-01.md
     # Finding 3.
     needs: change-scope
     if: needs.change-scope.outputs.run-full-ci == 'true'

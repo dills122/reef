@@ -136,17 +136,10 @@ Expected DigitalOcean check artifact:
 
 1. `<fetched-run-artifact-dir>/do-benchmark-evidence-summary.json`: per-report normalized evidence from `canonicalEvidenceSummary(report)`.
 
-## Comparator Usage
+## Comparing current runs
 
-Use campaign comparator for before/after tuning:
-
-```bash
-DEV_CAMPAIGN_BASELINE_SUMMARY=/tmp/reef-throughput-campaign-baseline/throughput-campaign-summary.json \
-DEV_CAMPAIGN_CANDIDATE_SUMMARY=/tmp/reef-throughput-campaign/throughput-campaign-summary.json \
-make dev-throughput-compare
-```
-
-Comparator output:
-
-1. `/tmp/reef-throughput-campaign-comparator/throughput-campaign-comparator.json`
-2. `/tmp/reef-throughput-campaign-comparator/throughput-campaign-comparator.md`
+Use the same workload, stack profile and measurement stage when comparing runs.
+[Local run profiles](LOCAL_RUN_PROFILES.md) names supported commands;
+[throughput baselines](THROUGHPUT_BASELINES.md) records comparable measured
+profiles. The former generic campaign comparator and its output format are
+preserved in Records; see the [script-use audit](REPOSITORY_RETENTION_AUDIT.md#script-use-audit-october-16-follow-up).

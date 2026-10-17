@@ -3,7 +3,7 @@
 Status: **signed off by the owner on 2026-10-13** (decisions below). Written 2026-10-12 as a proposal. This page gathers every principal and grant the finite P3 financial path needs, the test that proves each,
 and the points that need a decision. It adds no new requirement: the sources are [`CALCIFY_FINITE_P3_DB_ROLES.md`](CALCIFY_FINITE_P3_DB_ROLES.md),
 [`CALCIFY_FINITE_P3_BINDING_V2_SPEC.md`](CALCIFY_FINITE_P3_BINDING_V2_SPEC.md) section 9 and
-[`CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md`](CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md) section 5. Nothing here is provisioned by a migration; the operator creates every role.
+[`CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md`](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md) section 5. Nothing here is provisioned by a migration; the operator creates every role.
 
 ## Kafka principals (Redpanda, SASL/SCRAM, authorization on)
 

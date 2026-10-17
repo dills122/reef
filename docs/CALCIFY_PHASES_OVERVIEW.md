@@ -6,7 +6,7 @@ Execution status belongs in [WORK_PLAN.md](WORK_PLAN.md); measurement and qualif
 
 **Phase 1 makes each match durably addressable. Phase 2 assembles its complete source context for later post-match processing.**
 
-Both phases have implementation in the repository. Calcify remains opt-in and additive; legacy post-match remains present. [D7](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md) qualifies local RF1 standing-liquidity flow for 300s at 10,425.19 verified trades/s and 10,440.92 resolved contexts/s. Paired/mixed workloads, RF3 resilience and financial settlement capacity remain open. This overview explains current component boundaries; scoped D7 evidence grants no production cutover.
+Both phases have implementation in the repository. Calcify remains opt-in and additive; legacy post-match remains present. [D7](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md) qualifies local RF1 standing-liquidity flow for 300s at 10,425.19 verified trades/s and 10,440.92 resolved contexts/s. Paired/mixed workloads, RF3 resilience and financial settlement capacity remain open. This overview explains current component boundaries; scoped D7 evidence grants no production cutover.
 
 ## Combined flow
 

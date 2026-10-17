@@ -20,17 +20,16 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
 .PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
 .PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-smoke-bot-sdk-hosted-live-container dev-venue-event-replay-check
-.PHONY: dev-read-surface-availability-check dev-gate-local-durable
+.PHONY: dev-read-surface-availability-check
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
-.PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench dev-projection-drain-bench dev-projection-instrumentation-ab-check
+.PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench dev-projection-drain-bench
 .PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-admin-auth-local-seed dev-admin-owned-bot-local-seed dev-smoke-admin-auth-local dev-control-room
 .PHONY: dev-bootstrap dev-doctor dev-seed-p2-settlement-facts dev-sim dev-sim-batch
 .PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-compare-reef-arena-separation dev-replay
-.PHONY: dev-throughput-campaign dev-throughput-compare
 .PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-stream-ack-up kube-smoke-stream-ack kube-materializer-up
 .PHONY: kube-materializer-scale kube-autoscale-apply kube-smoke-venue-event-materializer kube-port-forward
 .PHONY: backbone-local-up backbone-local-up-infra backbone-local-init-openbao backbone-local-migrate backbone-local-verify backbone-local-status backbone-local-logs backbone-local-down
-.PHONY: do-benchmark do-materializer-10k-gate do-materializer-scaling-gate do-projection-freshness-gate do-arena-pacing-lag-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
+.PHONY: do-benchmark do-materializer-10k-gate do-materializer-scaling-gate do-projection-freshness-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk test-dev-tooling
 
@@ -52,7 +51,6 @@ test-dev-tooling:
 	node scripts/dev/ci-pr-change-scope.test.mjs
 	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
 	node --test scripts/dev/lib/benchmark-runtime-signature.test.mjs scripts/dev/lib/cohort-residence.test.mjs scripts/dev/lib/downstream-cohort.test.mjs scripts/dev/lib/downstream-freshness.test.mjs scripts/dev/lib/downstream-sampler.test.mjs scripts/dev/lib/instrumentation-perturbation.test.mjs scripts/dev/lib/run-profile-roles.test.mjs scripts/dev/lib/source-cohort.test.mjs scripts/dev/lib/stream-profile-guard.test.mjs scripts/dev/lib/script-surface.test.mjs
-	node --test scripts/dev/downstream-state-reference.test.mjs scripts/dev/full-projection-headroom.test.mjs scripts/dev/isolated-downstream-capacity.test.mjs
 	node scripts/dev/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs
 	node --test scripts/ci/build-container.test.mjs
@@ -442,10 +440,6 @@ dev-read-surface-availability-check:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/read-surface-availability-check.mjs
 
-dev-gate-local-durable:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/local-durable-gate.mjs
-
 dev-stress:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/stress.mjs
@@ -490,15 +484,6 @@ dev-stress-venue-event-materializer:
 dev-projection-drain-bench:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/projection-drain-bench.mjs
-
-dev-projection-instrumentation-ab-check:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	@if [ -z "$(CONTROL)" ] || [ -z "$(INSTRUMENTED)" ]; then echo 'usage: make dev-projection-instrumentation-ab-check CONTROL=path INSTRUMENTED=path [OUT=path]'; exit 1; fi
-	$(JS_RUNTIME) scripts/dev/projection-instrumentation-ab-check.mjs "$(CONTROL)" "$(INSTRUMENTED)" $(if $(OUT),"$(OUT)")
-
-dev-ablation-ladder:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/ablation-ladder.mjs
 
 dev-intake-bench:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -589,14 +574,6 @@ dev-replay:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/replay-pack.mjs
 
-dev-throughput-campaign:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/throughput-campaign.mjs
-
-dev-throughput-compare:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/throughput-compare.mjs
-
 do-benchmark:
 	./scripts/dev/do-benchmark-host.sh $(ARGS)
 
@@ -608,9 +585,6 @@ do-materializer-scaling-gate:
 
 do-projection-freshness-gate:
 	$(JS_RUNTIME) scripts/dev/do-gate.mjs projection-freshness $(or $(ARGS),plan)
-
-do-arena-pacing-lag-gate:
-	./scripts/dev/do-arena-pacing-lag-gate.sh $(or $(ARGS),plan)
 
 simulation-run:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

@@ -1,0 +1,637 @@
+{
+  "schema_version": 1,
+  "migration_date": "2026-10-16",
+  "source_repository": "https://github.com/dills122/reef",
+  "source_commit": "cab570aa518530dada1f7b9a5e5f07f33880129d",
+  "selection_policy": "Expanded repository-retention pass: closed O2 planning, dated Calcify research/measurements, complete prior raw verification bundles and isolated research probes. Current owner docs, runnable fixtures, default tests, schema history and production code stay in Reef. Exact source commit bytes and paths preserved; historical references repaired after Records publication.",
+  "files": [
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/alignment/fault-offset-research.md",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/alignment/fault-offset-research.md",
+      "bytes": 13105,
+      "sha256": "58731a737dc95ab649bc6fe7a9ef0c8e2dab95e12510fbddf3a27ebcfb1d052a",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "18464b647cac37e6b2641edb5bf48bc3b89c8df0"
+    },
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/alignment/fixture.md",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/alignment/fixture.md",
+      "bytes": 15626,
+      "sha256": "71af96c5b6001d04dd1e94e3eec389f391046ffdcf7eb9553412d60b532cbc5b",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "7dc4878f3d4478605438809b18f757f0b9424982"
+    },
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/alignment/go.md",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/alignment/go.md",
+      "bytes": 13058,
+      "sha256": "60f026d399ff6003e09f3bfe4281d3719a6725f2243879ca76b3bfba1afd762b",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "94c5091fa5cbbaf606756791798620b25d0ed1de"
+    },
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/alignment/kotlin.md",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/alignment/kotlin.md",
+      "bytes": 11831,
+      "sha256": "9040180f7ad7735590bf34855eb59a36fb59c7dd73d12cbb6fee587ebe0fbdfd",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "687dc0bee888f8dfa8f42c823e505cc4a1f62788"
+    },
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/manager/acceptance-matrix.md",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/manager/acceptance-matrix.md",
+      "bytes": 6059,
+      "sha256": "9b39ee047b33e75bbdb7bd248f0f3632c5b43324ce62850f78c1feafe51b47c9",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "63f9f928abf10fe5edf2a66dac9793e0779802a9"
+    },
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/manager/implementation-contract.md",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/manager/implementation-contract.md",
+      "bytes": 9646,
+      "sha256": "be57c65839f23b17433345f59ba633dd971fb6760b657509bba346ec5322df76",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "4d41f01a0259b1c5b83d29007fae58f4796f279e"
+    },
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/manager/review/instance1/report.md",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/manager/review/instance1/report.md",
+      "bytes": 13920,
+      "sha256": "772c7d13e83e2c57b8557a987aacf83b7b1ca9d57814d9b12398043837b1560b",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "95a7f1bc4f7c82c02429bde1587fee8023832a23"
+    },
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/manager/session-handoff.json",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/manager/session-handoff.json",
+      "bytes": 13172,
+      "sha256": "1ce6cadbd7f7d81eeeaa864d09b5189daeaad3de4b014af3cd8e6b48029f03bd",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "9fe0bd86252e2f258b3c4aee1ce778e82d504e98"
+    },
+    {
+      "source_path": ".planning/calcify-p3-o2-2026-10-10/session.json",
+      "archive_path": "records/reef/.planning/calcify-p3-o2-2026-10-10/session.json",
+      "bytes": 35777,
+      "sha256": "77d45725f941d75779eb1d45e69ac4a917dbbae8cac9765bf60cad048393b39e",
+      "reason": "Closed O2 session alignment/review state; O2 merged and current tasking lives in program plan and work board.",
+      "source_blob_oid": "a243a5597aed9d5218cf42c27f7b8948dfdc7d61"
+    },
+    {
+      "source_path": "docs/evidence/calcify-financial-sprint1/delivery-verification-2026-10-06.json",
+      "archive_path": "records/reef/docs/evidence/calcify-financial-sprint1/delivery-verification-2026-10-06.json",
+      "bytes": 2952,
+      "sha256": "d26c5e7a959a00357023eac9b94737f53a14802e08486fe7bf80fd3be98d134e",
+      "reason": "Prior scoped financial verification receipt; October 6 latest checkpoint, fixtures and complete proof remain in Reef/Records.",
+      "source_blob_oid": "6a3e93e853a41e67b114502f79839e416efc01e6"
+    },
+    {
+      "source_path": "docs/evidence/calcify-financial-sprint1/e3-verification-2026-10-05.json",
+      "archive_path": "records/reef/docs/evidence/calcify-financial-sprint1/e3-verification-2026-10-05.json",
+      "bytes": 8990,
+      "sha256": "16337decfc26a9a29ff937ef65640e3572d4f76c7b87e332a3b8442c12906220",
+      "reason": "Prior scoped financial verification receipt; October 6 latest checkpoint, fixtures and complete proof remain in Reef/Records.",
+      "source_blob_oid": "12e65c19ee8bd7536d01ab2184daffd654e58f14"
+    },
+    {
+      "source_path": "docs/evidence/calcify-financial-sprint1/e4-verification-2026-10-05.json",
+      "archive_path": "records/reef/docs/evidence/calcify-financial-sprint1/e4-verification-2026-10-05.json",
+      "bytes": 26732,
+      "sha256": "9dfe894001e2186e399fd453f99d4338629c780f1bd57ffce0899323645b9439",
+      "reason": "Prior scoped financial verification receipt; October 6 latest checkpoint, fixtures and complete proof remain in Reef/Records.",
+      "source_blob_oid": "b8701e60cd541aa9a8f184734b3c1d6a7b2727e7"
+    },
+    {
+      "source_path": "docs/evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json",
+      "archive_path": "records/reef/docs/evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json",
+      "bytes": 8485,
+      "sha256": "5621754511a6ad70e4b4fcea0692676d5e1fb53be17eb889563fb4aef0b19cbd",
+      "reason": "Prior scoped financial verification receipt; October 6 latest checkpoint, fixtures and complete proof remain in Reef/Records.",
+      "source_blob_oid": "7e6dad4d65cdbd5bd1599c9659d85e9f09505b1a"
+    },
+    {
+      "source_path": "docs/evidence/calcify-financial-sprint1/recovery.json",
+      "archive_path": "records/reef/docs/evidence/calcify-financial-sprint1/recovery.json",
+      "bytes": 5113,
+      "sha256": "b885932f63cdda2952cd6421b4ba65916069a6806413d1cb614a3f9813e2b8a1",
+      "reason": "Prior scoped financial verification receipt; October 6 latest checkpoint, fixtures and complete proof remain in Reef/Records.",
+      "source_blob_oid": "baddf4d4d6c28a1e2f9d41d13458033ef66600a2"
+    },
+    {
+      "source_path": "docs/evidence/calcify-financial-sprint1/verification.json",
+      "archive_path": "records/reef/docs/evidence/calcify-financial-sprint1/verification.json",
+      "bytes": 9193,
+      "sha256": "9b3505b2b257835dade182f5ada83b463dc4dbe385a2909ac3a206bc71dbb537",
+      "reason": "Prior scoped financial verification receipt; October 6 latest checkpoint, fixtures and complete proof remain in Reef/Records.",
+      "source_blob_oid": "c1d4c687be9684ef1d4b71bda3ff4d9e3b48ab36"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/R08-ci-followup.md",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/R08-ci-followup.md",
+      "bytes": 2880,
+      "sha256": "31ba25c5356d56420124da048733f818c9f1b7f99643629394cfc9d13af4857d",
+      "reason": "Completed review or CI proof companion; focused latest checkpoint remains local, original evidence preserved in Records.",
+      "source_blob_oid": "d3543b7085e75841d15918a25adc1e2dd8bd9314"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/R08-review-3.md",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/R08-review-3.md",
+      "bytes": 2102,
+      "sha256": "6b3c31e55a347c77201bec61e67006e29693fe3503a0de197e6aa49c2b69f13c",
+      "reason": "Completed review or CI proof companion; focused latest checkpoint remains local, original evidence preserved in Records.",
+      "source_blob_oid": "27c6bd009ac1b165a571ab9da4033dcfc31aeb7c"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-check-review3.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-check-review3.log",
+      "bytes": 675,
+      "sha256": "07552fa6990d0a2ac255b6344fb1c740218ec1cbc3643338c3f12a9f0fe85d4f",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "9f506a4e5794a79cf2eec5704bdfebba2b3edc6f"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-ci-arena-container-final.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-ci-arena-container-final.log",
+      "bytes": 4297,
+      "sha256": "1e6e7642623a3b57aeb01a23be57873a5bcd7ef25af4468276b3ab1c88f964fb",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "5751615b4a6ff965e7569efd54fac62bc2991413"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-ci-container-final.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-ci-container-final.log",
+      "bytes": 39964,
+      "sha256": "94c5f445a59cb0d3158d377224a09b687ca422c236b50282a6daf7cc8d521e86",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "11b64f1c8977ef5495b0c820b659769fa0ce2df4"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-ci-missing-resource-fixed.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-ci-missing-resource-fixed.log",
+      "bytes": 969,
+      "sha256": "fcec238e0f2d038cbb4cf7e1ff6f8b569ad2aceb6f14d83fa3104d476b10df1c",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "4347baca0dbe877a1c5e5787e72349cd541296a5"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-ci-node.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-ci-node.log",
+      "bytes": 6253,
+      "sha256": "e239a9818fc5e48e563deb4343d7cf1a86021e6da97ee55d6bd8ba0ff9abb4b9",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "69de75be60f0958be0fa7f77aa4e257ed8423319"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-ci-schema-green.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-ci-schema-green.log",
+      "bytes": 899,
+      "sha256": "543e851f065082469c98ad39c9c5ed867750f456bc9084e6fc2157a6b3cbdabb",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "ebcbeddbfadc6d19384900d595351bc831ba49e5"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-migration-tests.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-migration-tests.log",
+      "bytes": 5174,
+      "sha256": "46e29be4de0261e751f7b7045bdffe55ed5db9bf35dd047c9bc76b0a79264ae7",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "18bab16f57a1c2b87453f26c2a2e7747aa4f5385"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-review3-focused.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-review3-focused.log",
+      "bytes": 621,
+      "sha256": "db1ed3a096b98ff4513b8b8ac17efc89702e4c78d08fe3fbfce1021e4f92f1e6",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "be44704d1362fcd52f6696b0e1e18e34413956bb"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-review3-independent.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-review3-independent.log",
+      "bytes": 631,
+      "sha256": "4629664592ddb4d4ba9ed9da28d774d94b9a3de01367deb3d86e26d46e90c314",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "a4ee277fb549d5eefc7fc62014c8ca0e588c82b2"
+    },
+    {
+      "source_path": "docs/evidence/runtime-order-identity/r08-review3-sql-probe.log",
+      "archive_path": "records/reef/docs/evidence/runtime-order-identity/r08-review3-sql-probe.log",
+      "bytes": 560,
+      "sha256": "0e9c43d158d9d77e9706fe9b541f986f0cd5cc011b0c70c8cc0834eefa87a615",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "07b54bf4b22c3866b1a456addd0e6b20e0f4b205"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/first-race-policy-assertion.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/first-race-policy-assertion.log",
+      "bytes": 1618,
+      "sha256": "637a75b51d4b9232c131268681e34ab9cc93eec80c07d7347cb0ea200f565ff3",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "43ae9e835ee6fb3bd678fe22a600ad126ab29467"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/first-reservation-api-build.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/first-reservation-api-build.log",
+      "bytes": 1444,
+      "sha256": "10a604ac8321c542098d7e2f708d61075e52fc56d35029d2bb8dda4f626b68ae",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "3ea9c352f7e665e252edbcddda0cf0ffbd8b9f4e"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/green-focused.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/green-focused.log",
+      "bytes": 159,
+      "sha256": "b236a3c05ae659c346117da68c68e694c133e21c6674a4b9fbd3f9e4ee873380",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "d1a4b9af4162b7a143e9726ec22f2e9617a71823"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/green-race-all.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/green-race-all.log",
+      "bytes": 1043,
+      "sha256": "0d78e24c5100371a312acb5f2c9b2323494a97beab741998a4cdda2b72f5f91d",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "7a10f71aa54659ef09606112bd152f724d8e38c6"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/green-race-pre-reservation.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/green-race-pre-reservation.log",
+      "bytes": 1043,
+      "sha256": "3d576c33bc7fbf89ebd681feaaa80a072dfce69ba820c4bba8572387db8b949a",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "6bdeb6d8d52a9d4e5ea671b855e3afcfd246ba7a"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/README.md",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/README.md",
+      "bytes": 2275,
+      "sha256": "1635fec3aceffdbff67547771e194c7ed64d11025abb38eb003b95131eef1031",
+      "reason": "Completed review or CI proof companion; focused latest checkpoint remains local, original evidence preserved in Records.",
+      "source_blob_oid": "28e0dc17de8f6086bb7e08799fec98c020771534"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/green-race-all.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/green-race-all.log",
+      "bytes": 1043,
+      "sha256": "fa624522381877841ac29825aab3c58b690c1d82142999912fa9b201fa9d17cb",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "23e95a86afd3e86cac4971773c17b4ae8464a952"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/manifest.json",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/manifest.json",
+      "bytes": 1346,
+      "sha256": "337733919cb4ec2236061828b347dae1fd5f976c3bb48d72e5262f5de65dda8b",
+      "reason": "Completed review or CI proof companion; focused latest checkpoint remains local, original evidence preserved in Records.",
+      "source_blob_oid": "9b34c46ee7dfe5385c59b10fe4215502248b913e"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/run.json",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/run.json",
+      "bytes": 172,
+      "sha256": "3e4b6953d74bdc7b59039fd4c8b227a4736f83c4c24c2f8f2fc6094d0b936089",
+      "reason": "Completed review or CI proof companion; focused latest checkpoint remains local, original evidence preserved in Records.",
+      "source_blob_oid": "3d0ee331d6d0673ca83b9f1188a2a15f5a51dd2b"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/red-batch-cut.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/red-batch-cut.log",
+      "bytes": 480,
+      "sha256": "fbeead0f77261a731ee29c5bac6e467de51a58bd7ba6f61a0c7e1665540f230a",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "a20838de4127a02de597ba55d946792e0989878e"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/red-multibook-preimage.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/red-multibook-preimage.log",
+      "bytes": 986,
+      "sha256": "93167abbd0ec92dc3669fc37350887e6ea1715d0fda42a3296c211f567f12f7d",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "00cbcad8cc87906b8e9f3c3fa822b02bec0096bb"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/red-provisional-reservation.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/red-provisional-reservation.log",
+      "bytes": 357,
+      "sha256": "bb5fbfca4c634022ca9f755c35e0b0316990276b8674fe1c91a0795ba145adee",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "a2c0487c6f685e6edd732271196ccec9f6120ed8"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/red.log",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/red.log",
+      "bytes": 846,
+      "sha256": "091e24f0955c354016e20077eb7586385807f77528f531aa3fc053f42b71ec79",
+      "reason": "Complete original verification log; focused local checkpoint and immutable provenance remain, with failures and successes retained together.",
+      "source_blob_oid": "9b045dfade3416d5f46c84dea3ff3766f8d460a2"
+    },
+    {
+      "source_path": "docs/evidence/terminal-retention-replay-fix/review.md",
+      "archive_path": "records/reef/docs/evidence/terminal-retention-replay-fix/review.md",
+      "bytes": 968,
+      "sha256": "6b4ea1ddf82ff051896bf2d5c3cc18cea03f5c167797c0c095e4e7e389bb4218",
+      "reason": "Completed review or CI proof companion; focused latest checkpoint remains local, original evidence preserved in Records.",
+      "source_blob_oid": "3015934b3fd12a613abf54745ca92e12a6715aa1"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_10K_CAPACITY_ARCHITECTURE_SKETCH_2026-10-01.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_10K_CAPACITY_ARCHITECTURE_SKETCH_2026-10-01.md",
+      "bytes": 12805,
+      "sha256": "966f8c20f713f16d30ef3b10c3d423b54af67b533dfa78ebd5b8ea29781b8dae",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "5883c9aba91aed4f48140a6feacf2f1585b04610"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_10K_TIMEBOX_2026-10-02.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_10K_TIMEBOX_2026-10-02.md",
+      "bytes": 24771,
+      "sha256": "1a1618ba3e71da947ed47b8e40a1d3fa96df372df68b4ead28e5748392056913",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "40a7901eb86f33f6c9b95ae18446bdddd5973e0f"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md",
+      "bytes": 13415,
+      "sha256": "f553c910c6a97dce9b3d409248d7042f1dfd42fc1de9aac6859ed2a0aa102579",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "081fc45b295b03cab4969ffb0dd4f32c7d17a03a"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md",
+      "bytes": 17570,
+      "sha256": "654deee882cc4d55457bc4aa40018864bab0e72f7010273a2f0dbc9197de33a7",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "9e12a2055e49c53866a3ffde8e05917944ddcbe1"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md",
+      "bytes": 9626,
+      "sha256": "105110af43db5e4ae4fbc9886c66811885ab8ed447b24ea524af743bc4e4bdba",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "91c28970008f604c964664d97f14c393d8b0253f"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_PHASE1_2_ARCHITECTURE_REVIEW_2026-10-01.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_PHASE1_2_ARCHITECTURE_REVIEW_2026-10-01.md",
+      "bytes": 58350,
+      "sha256": "9932155548559add48c9806a2c8eb8ba6071f09615fe32a1ac1cc44318aeb3ca",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "24d8b86cab6ad4f167f9e257afad01e24b7f8df5"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md",
+      "bytes": 36014,
+      "sha256": "6842a5d6f03bd0d1cd8ff3c236872131c78ba9ec04e4077678598110a9f5adbd",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "6ed3a7e9352e9c913e7f2066d529f5c7d04ec99f"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_SYSTEM_ARCHITECTURE_BLIND_REVIEW_2026-10-02.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_SYSTEM_ARCHITECTURE_BLIND_REVIEW_2026-10-02.md",
+      "bytes": 9440,
+      "sha256": "ba1382eddafb4a9fcf11000d86c8ba11d52b974403d91c9e88de5443289b5dca",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "aa08a7bbd3f86bd40ae08e04745b79046d75cebe"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_SYSTEM_ARCHITECTURE_FINAL_REVIEW_2026-10-02.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_SYSTEM_ARCHITECTURE_FINAL_REVIEW_2026-10-02.md",
+      "bytes": 4772,
+      "sha256": "1b629b0cd2a2e0b4cb0db5e641f7e2133e9a6921d62675ddd87bb724fc76f099",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "e93275040e63d06379de0c9ed1b57d96731c860a"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_SYSTEM_ARCHITECTURE_INDEPENDENT_REVIEW_2026-10-02.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_SYSTEM_ARCHITECTURE_INDEPENDENT_REVIEW_2026-10-02.md",
+      "bytes": 6129,
+      "sha256": "eae2399f6008f95530d0de9c79b3f8f4714dc12d8a5c23e7129abfa069e2bd8e",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "f03971470d9bf95b7b01d5842b110c5639155384"
+    },
+    {
+      "source_path": "docs/research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md",
+      "archive_path": "records/reef/docs/research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md",
+      "bytes": 19062,
+      "sha256": "a2bf61090a6d6fb7375459ef51a57028437115f14613188f19917d59959acf33",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "261c503f77141d3adf3c16803e09e6191ad4bca5"
+    },
+    {
+      "source_path": "docs/research/calcify-system-architecture-inputs/README.md",
+      "archive_path": "records/reef/docs/research/calcify-system-architecture-inputs/README.md",
+      "bytes": 721,
+      "sha256": "488df070fb2ae6f4ff00ea450930af515bd0782f904441c69734320a55cc0951",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "5a513c1ce0f58e11f026def49f6d3a246ca33c1a"
+    },
+    {
+      "source_path": "docs/research/calcify-system-architecture-inputs/initial-review.md",
+      "archive_path": "records/reef/docs/research/calcify-system-architecture-inputs/initial-review.md",
+      "bytes": 28018,
+      "sha256": "023561956315b8f268fe9c4cff8abd0b5f08d1f3b5a1868ad6a532cb08fcd08a",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "68f66ba8f849f4d88c85f5e259b6a0764cf36b48"
+    },
+    {
+      "source_path": "docs/research/calcify-system-architecture-inputs/original-rfc.md",
+      "archive_path": "records/reef/docs/research/calcify-system-architecture-inputs/original-rfc.md",
+      "bytes": 53344,
+      "sha256": "071f7000ca9f9d5d161b36c57f9e65ececce759f91cbfcfe46cad4a0dd541466",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "76d27a29fc5820916aa8cbc911c1f5731d1b69ba"
+    },
+    {
+      "source_path": "docs/research/calcify-system-architecture-inputs/provenance.json",
+      "archive_path": "records/reef/docs/research/calcify-system-architecture-inputs/provenance.json",
+      "bytes": 768,
+      "sha256": "6128f7d022b12daca6aae9b40df9f7f6c71c85243eddd2f84e6fe1ff9525de0a",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "3df3c23d708297defb620ef0db12af08196d3a20"
+    },
+    {
+      "source_path": "docs/research/calcify-system-architecture-inputs/review-addendum.md",
+      "archive_path": "records/reef/docs/research/calcify-system-architecture-inputs/review-addendum.md",
+      "bytes": 15851,
+      "sha256": "eaedf2cf7cc64e9aa2bb4f2cf4f4ad1810319ac6a6ac04042fd69f6e0ea19cdf",
+      "reason": "Dated Calcify research or review original; current claims and open gates live in throughput ledger, program plan, RFC and focused evidence.",
+      "source_blob_oid": "24abf03324aea4ba53a930361eee7fb35ae7eab5"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_COMBINED_DECISION_INVESTIGATION.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_COMBINED_DECISION_INVESTIGATION.md",
+      "bytes": 27493,
+      "sha256": "8daea0773dab7358c10c490747788ef6e0f5dbac9d72bd53f6aec38bd6c38e1e",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "0c6f3f64e0052955948bd699e96d7da2eedde747"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_COMMITMENT_PRACTICE_RESEARCH_2026-10-14.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_COMMITMENT_PRACTICE_RESEARCH_2026-10-14.md",
+      "bytes": 19990,
+      "sha256": "3703d32c0108397f24de82a9d0f5cb0d237507570be8fbe85330ac2762c6162a",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "f1677bfeecc9a529c6c9266954672c409fa4dbb6"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_DEDICATED_HOST_P26.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_DEDICATED_HOST_P26.md",
+      "bytes": 5042,
+      "sha256": "dc7c7e85e9d55c498bf897ec18d2f415d95d60025c5abdbeec627a3ca880cb97",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "6d3a2dd95e4358c1dddacc47f6bb9e932c141cb0"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_ENGINE_LANE_COST.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_ENGINE_LANE_COST.md",
+      "bytes": 5706,
+      "sha256": "06bc651182f5a6c09c9c6442255c5b95cd141bb6e99ebade2955c826f9d48ed3",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "564156d729480bc9d115a918917344d7ee237b63"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_FINITE_P3_B2_SPIKE_RESULT.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_FINITE_P3_B2_SPIKE_RESULT.md",
+      "bytes": 3141,
+      "sha256": "bf8dfeb3bfee445f3d33ae0d456f4bb50fa48e7df78209eb0cf316d936eeeb03",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "55e9880e4498476817996bf4ffe01a6fe31d80db"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_FINITE_P3_S2A_RESULT.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_FINITE_P3_S2A_RESULT.md",
+      "bytes": 14890,
+      "sha256": "b48d9df2444091a99a18796771cf00ec2aba2ef15f0169b59adb9fd64797d9ca",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "7ce0d7c1862fedcae86584dea890d1c2045a96a1"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_FINITE_P3_S2_CLOSEOUT_RESEARCH.md",
+      "bytes": 12145,
+      "sha256": "6fe3c7773bcf6463fdd1fba822465dc8c25b4cd0e33c8575f6a8196620c823e8",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "9a4314b0951608d28489282dfa95865627ac7d52"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_HISTORY_LOG.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_HISTORY_LOG.md",
+      "bytes": 55222,
+      "sha256": "e47508acb8998521c865e11b2577fe5366ba539a2fdec39e255342ae22e6a6f2",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "6e76ca6fcf1280703e8c929e0af3fb99c8457d3b"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_LANE_COST.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_LANE_COST.md",
+      "bytes": 10087,
+      "sha256": "175270dcc70ae13d952f1208c261a6dac3a06b1dc4fabaf84133cc87f65be30e",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "3d0b52fbb043219d7099034f25e4e64f403da9a2"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_OVERNIGHT_SESSION_PLAN.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_OVERNIGHT_SESSION_PLAN.md",
+      "bytes": 27108,
+      "sha256": "f3888093b0f0e870fe1d0c5281d309d40af9da1f734013b4690f7be587875f74",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "070f835ea3115ff0ddc644a7e19707d396b5cf6c"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_PROCESSOR_PATH_AND_SHARDING_OPTIONS_2026-10-14.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_PROCESSOR_PATH_AND_SHARDING_OPTIONS_2026-10-14.md",
+      "bytes": 9365,
+      "sha256": "1b79d2ccfe12c67d5e0799ab50023e9f3887a7a9b695f80a3fcbb27de41b712f",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "055478146da1b340b7304ba2c465a4d6eb47e857"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_REENCODING_INVESTIGATION.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_REENCODING_INVESTIGATION.md",
+      "bytes": 17107,
+      "sha256": "a0c74c5798f72614739ff75288c43de62ec291eae8e9d248d09aecea558f099d",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "4e3d832c8e092f9000ee6c364a8254e30322d4c8"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_STATE_COMMITMENT_INVESTIGATION.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_STATE_COMMITMENT_INVESTIGATION.md",
+      "bytes": 24646,
+      "sha256": "bb4cce4f8b72206b992a388893a44c96b4069dd19fa844718ae88b086669afb4",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "e98b1836d5d0d9359dccaca058823fe3f407db03"
+    },
+    {
+      "source_path": "docs/work/CALCIFY_STORE_WRITES_INVESTIGATION.md",
+      "archive_path": "records/reef/docs/work/CALCIFY_STORE_WRITES_INVESTIGATION.md",
+      "bytes": 20983,
+      "sha256": "7abd7ed6c62fb33e9d8ef0778d3f66c3920b3adcc15453dfab43a73f2ad7065a",
+      "reason": "Read-only history, executed plan, dated investigation or completed finite-P3 spike; current design, decisions and status remain in owners.",
+      "source_blob_oid": "657995d8d2a4a30b37f4daaf6af7007ae05e2115"
+    },
+    {
+      "source_path": "docs/work/evidence/CAL-FIN-P23-c32-lane-matrix.txt",
+      "archive_path": "records/reef/docs/work/evidence/CAL-FIN-P23-c32-lane-matrix.txt",
+      "bytes": 7892,
+      "sha256": "538bc299292248de80c4ec1073446e8bc53c300e768ddafadf32019b2efbac7c",
+      "reason": "Dated raw CAL-FIN measurement output; interpreted results and limits remain in throughput ledger.",
+      "source_blob_oid": "aba17f1eaf9caf39a5aed227a0f57ce7ed4542e3"
+    },
+    {
+      "source_path": "docs/work/evidence/CAL-FIN-P26-epyc-capmode.txt",
+      "archive_path": "records/reef/docs/work/evidence/CAL-FIN-P26-epyc-capmode.txt",
+      "bytes": 3870,
+      "sha256": "1b1b904a361a9e231f8dad00dcdca79d612a8a5ea999bb4dec7b2e85f6a35c67",
+      "reason": "Dated raw CAL-FIN measurement output; interpreted results and limits remain in throughput ledger.",
+      "source_blob_oid": "5fe5ff0db1fa1284706fb18eddd03026359b4c83"
+    },
+    {
+      "source_path": "docs/work/evidence/CAL-FIN-P26-xeon-capmode.txt",
+      "archive_path": "records/reef/docs/work/evidence/CAL-FIN-P26-xeon-capmode.txt",
+      "bytes": 5223,
+      "sha256": "f0e7960587caea0c8a8f3e0b483ef485df0d46a3b5168d5d8fc027f1f6b7a2e2",
+      "reason": "Dated raw CAL-FIN measurement output; interpreted results and limits remain in throughput ledger.",
+      "source_blob_oid": "9df0f80472eb648036873a513e5b25553e67f1f5"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/KernelProbe.kt",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/KernelProbe.kt",
+      "bytes": 7882,
+      "sha256": "0eb15e90f33b12f1a06b9cb9c849316c0a5a4a58120dd39c9f1abea989b2c6a5",
+      "reason": "Closed offline kernel research probe behind October 11 pressure-test evidence; no current Make, CI or package caller.",
+      "source_blob_oid": "4c84389634a7ee8771a82862d40556d775a029e6"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/run-kernel-probe.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/run-kernel-probe.mjs",
+      "bytes": 4555,
+      "sha256": "f607f9798511d22cf97cd518de45ab9449fa13e633ae0b187c1b69f13422d2b2",
+      "reason": "Closed offline kernel research probe behind October 11 pressure-test evidence; no current Make, CI or package caller.",
+      "source_blob_oid": "c9c3beaa2e9701cb8046b958ec69ff36c5974dc0"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/streaming-canonical.kt.txt",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/streaming-canonical.kt.txt",
+      "bytes": 1329,
+      "sha256": "864c2354a2e43c1cc31eab3492f1a5200ba3cf4d9b50f5b30718055872559d34",
+      "reason": "Closed offline kernel research probe behind October 11 pressure-test evidence; no current Make, CI or package caller.",
+      "source_blob_oid": "9aafa35281e37c09935d4ed25611cb913df5e3ec"
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/RocksDbLookupCostTest.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/finance/RocksDbLookupCostTest.kt",
+      "bytes": 4230,
+      "sha256": "d04a05e22bee36321d84e878d67be3e1855829bae7c5fde3074908658aed955b",
+      "reason": "Research-only RocksDB lookup-cost measurement behind bounded-memory design and throughput ledger; excluded from default tests.",
+      "source_blob_oid": "4f738107d399da188f178518330be85afae286af"
+    }
+  ],
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "f3c9941d5cd35df81b32970e9873ad8ca9f86391",
+  "archive_manifest": "manifests/2026-10-16-reef-repository-retention-audit-broad.json",
+  "redirect_paths": []
+}

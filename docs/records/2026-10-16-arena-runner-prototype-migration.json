@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "source_repository": "https://github.com/dills122/reef",
+  "source_commit": "5272fdb68bc8e5d52cea501e69ff164ba1083ecb",
+  "selection_policy": "Additional Arena runner benchmark pass: remove July 7 prototype entrypoints without current runbook or active owner, preserve original bytes, retain runner pool/tick and local hardening diagnostics. Source edit date is not last execution.",
+  "files": [
+    {
+      "source_path": "scripts/dev/arena-runner-bench-deno.ts",
+      "archive_path": "records/reef/scripts/dev/arena-runner-bench-deno.ts",
+      "bytes": 9095,
+      "sha256": "cc87933bd050d28ce4202b19cafaba1aea9a586664f36f406568463dd2e64241",
+      "reason": "July 7 Phase 1 synthetic Arena runner worker, imported only by the retired synthetic benchmark; current runner pool, tick and local hardening checks remain.",
+      "source_blob_oid": "1ae4cc90b3803e3402c250516a341eab4d6dc80b"
+    },
+    {
+      "source_path": "scripts/dev/arena-runner-bench-node.mjs",
+      "archive_path": "records/reef/scripts/dev/arena-runner-bench-node.mjs",
+      "bytes": 7346,
+      "sha256": "c724c77bd41650cf595d0a7a1ad04d13e98930fb2cf26c0736d5f16de11beb8f",
+      "reason": "July 7 Phase 1 synthetic Arena runner worker, imported only by the retired synthetic benchmark; current runner pool, tick and local hardening checks remain.",
+      "source_blob_oid": "69933652eadfd5232cbb1046d3cbbbd52fab08b9"
+    },
+    {
+      "source_path": "scripts/dev/arena-runner-bench.mjs",
+      "archive_path": "records/reef/scripts/dev/arena-runner-bench.mjs",
+      "bytes": 9897,
+      "sha256": "9e71202f95c4ec4f8111086ca18f6fe53ecacf6efdd73626e3e03ed5c85a7a1e",
+      "reason": "July 7 Phase 1 synthetic Arena runner prototype; package-only entrypoint with no current runbook or active owner; current runner pool, tick and local hardening checks remain.",
+      "source_blob_oid": "30116368dfad825781dd50d443f20ad770fe3f45"
+    },
+    {
+      "source_path": "scripts/dev/arena-runner-container-bench.mjs",
+      "archive_path": "records/reef/scripts/dev/arena-runner-container-bench.mjs",
+      "bytes": 2000,
+      "sha256": "80f8f6ebe9f1ec460c67a35a297d4aac9ba4a122aaf0396783ec0fce0e547439",
+      "reason": "July 7 container wrapper defaults to oven/bun:1.1.38 and has only a package alias; current CI uses Bun 1.3.14 and the current runner pool and local hardening checks remain.",
+      "source_blob_oid": "4573fb59dff34da66fa985394228bc5e5175ab3d"
+    },
+    {
+      "source_path": "scripts/dev/arena-runner-realworld-bench.mjs",
+      "archive_path": "records/reef/scripts/dev/arena-runner-realworld-bench.mjs",
+      "bytes": 12846,
+      "sha256": "9da2622330a4fef3622ea2c192fee05f07736363da3d19f7d6f29f646d37e087",
+      "reason": "July 7 Phase 1 real-world Arena runner benchmark has only a package alias and the retired container wrapper as callers; no current runbook or active owner. Runner pool, tick and local hardening checks remain.",
+      "source_blob_oid": "dcd1be07c24176dc85e9903ffed9ab1646a565db"
+    }
+  ],
+  "migration_date": "2026-10-16",
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "c8c3ac9cdaeaef227fe5946d4d028ef1d7221b1f",
+  "archive_manifest": "manifests/2026-10-16-reef-arena-runner-prototype.json",
+  "redirect_paths": []
+}

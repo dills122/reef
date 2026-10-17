@@ -3,13 +3,13 @@
 Historical bounded checkpoint: October5 UTC / October4 local. Branch `codex/calcify-sprint1-experiments`;
 Broker/Kotlin/profile proof remains from `f75b5d61` / `f56b30b1`; JavaScript
 checkpoint and metric fixes postdate round7.
-Test-only experiments. [Focused results](verification.json),
+Test-only experiments. [Focused results](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/calcify-financial-sprint1/verification.json),
 [current work plan](../../WORK_PLAN.md), [broker profile](broker-profile.json).
 
 ## Latest empirical checkpoint — October6 UTC
 
-[Current work](../../WORK_PLAN.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
-owns sprint status; [focused verification](e4-verification-2026-10-06.json) separates
+[Historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
+records sprint status; [focused verification](e4-verification-2026-10-06.json) separates
 source-count upper bounds from unmeasured deadline settlement rates. Two fresh
 4GiB attempts aborted at disk then heap limits; original failure journals retained.
 Explicit 8GiB profile passed review4of4 after user extension. Full 150000 settlements,
@@ -30,7 +30,7 @@ raw output topics. No tracked Reef originals removed.
 
 ### Current source continuation — October9, 2026
 
-[Current finite P0 checkpoint](../../WORK_PLAN.md#calcify-finite-p0-source-gate--october-7-2026)
+[Historical finite P0 checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-finite-p0-source-gate--october-7-2026)
 and [source contract](../../../contracts/calcify/README.md#finite-p0-matching-source-profile-2026-10-07)
 route next work after merged PR479: lifecycle/coverage membership, durable finite
 command/history/closure budgets and restore. Matching profile/snapshot identity
@@ -66,9 +66,9 @@ because shared digest calculation preserves existing v1 bytes and runtime behavi
 ## Historical October5 E4 continuation
 
 October5 branch `codex/calcify-e4-readiness`, base `29a8926d`.
-[Focused verification](e4-verification-2026-10-05.json) and
-[current work](../../WORK_PLAN.md#calcify-e4-continuation--october-5-2026)
-own bounded diagnostic status. Financial97/97 and NodeCI274/274 passed on
+[Focused verification](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/calcify-financial-sprint1/e4-verification-2026-10-05.json) and
+[historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-e4-continuation--october-5-2026)
+record bounded diagnostic status. Financial97/97 and NodeCI274/274 passed on
 Attempt1 frozen source; independent whole-code cycle3 Ready. Same-candidate49 E3 arms
 pass with complete oracle/history checks,1073.813s correctness timing. Original
 raw proof preserved; bounded lossless export independently verified, Attempt1
@@ -108,9 +108,9 @@ Earlier scopes below unchanged.
 ## Historical October5 heap protection component
 
 October5, 2026 UTC; branch `codex/calcify-heap-protection`, base `3ce2bdf2`.
-[Focused verification](heap-verification-2026-10-05.json) and
-[current work plan](../../WORK_PLAN.md#calcify-heap-protection-component--october-5-2026)
-own new test-harness component scope. Financial64/64, exact NodeCI230/230;
+[Focused verification](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/calcify-financial-sprint1/heap-verification-2026-10-05.json) and
+[historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-heap-protection-component--october-5-2026)
+record test-harness component scope. Financial64/64, exact NodeCI230/230;
 independent Attempt1 cycle3 Ready. Actual Java21 capability and final-build child
 refusal controls pass without broker/client setup. Sticky sampled protection
 continues through replay/publication; emitted peak scope ends at result assembly.
@@ -123,12 +123,12 @@ Hosted first Node227/229 failed missing macOS-only lock parent on Linux. Shared 
 ## Historical October5 E3 continuation
 
 October5 session on `codex/calcify-planning-readiness`, base `a6ddafbb`.
-[Current work plan](../../WORK_PLAN.md#calcify-e3-continuation--october-5-2026)
-owns candidate status. New test-only external faults and partition-cut verifier
+[Historical work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-e3-continuation--october-5-2026)
+records candidate status. New test-only external faults and partition-cut verifier
 have bounded acceptance complete; product merge pending. Kotlin45/45 and exact Node CI216/216 pass.
 Reviewed recovery guard passes real parent-observed `starting`/measured-disk/
 healthy recovery smoke; no financial workload in that smoke. Candidate external4/4, quartet, core24/24 and golden20/20 pass;
-[focused current verification](e3-verification-2026-10-05.json) records same-build
+[focused current verification](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/calcify-financial-sprint1/e3-verification-2026-10-05.json) records same-build
 scope, failures, timing and resources. Independent integrated review Ready: M0 Attempt2 cycle3, M1 Attempt1 cycle3,
 M2 Attempt1 cycle2; no findings, fresh Node60/60. [Complete proof](https://github.com/dills122/reef-records/tree/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75) and [review](https://github.com/dills122/reef-records/blob/ed6faadf261dab78a1c4f49991b8f297aecadea4/records/reef/docs/evidence/calcify-financial-sprint1/verification-session-2026-10-05-a6ddafbbae75/integration-review/final2-review/report.md) published;
 1358 remote blobs/53,415,268 bytes exact. [Records PR7](https://github.com/dills122/reef-records/pull/7) draft, landing pending.
@@ -167,6 +167,8 @@ Cap 7 exhausted; no automatic reset or further review round.
   Offline DB guards can return without assertions; no DB integration claim.
 - Frozen 20 cases/52 inputs; 300 seeded traces/19,200 business prefixes.
   [Fixture](fixtures.json) SHA256 `fee7eead368d2ef2927aad1e53877907a4d74f9762b696d20f7e5575b1361e6d`.
+  Generator `scripts/dev/calcify-financial/freeze-fixtures.mjs` remains with
+  this executable input; regenerate only with an explicit fixture contract update.
   E2 finite 156 + seeded 128 pass; symbolic bounds only. Rate selfcheck 40 prefixes
   and one-leg mutant rejection; E4 count/byte counterexamples rejected.
 
@@ -198,5 +200,5 @@ that tasking; no production, full-path capacity or cutover sign-off.
 Bulk only in Records, local-only Reef provenance; no local source removal.
 [Earlier rounds4–6 and failed default-segment run](https://github.com/dills122/reef-records/tree/ad7b60e9512907865785b3ab3723642c9d56dd86/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-f56b30b1),
 [original recovery/startup proof](https://github.com/dills122/reef-records/tree/cfa4217708ff0694a966e3d87acce9585010a65a/records/reef/docs/evidence/calcify-financial-sprint1/verification-2026-10-04-908c3e54).
-[Recovery hashes](recovery.json), [current routing and historical handoff](../../work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
+[Recovery hashes](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/calcify-financial-sprint1/recovery.json), [current routing and historical handoff](https://github.com/dills122/reef-records/blob/282d302db3adcff9bb38cd88a2b31447511c09b/records/reef/docs/work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md).
 October3 original raw proof lost; subsequent reruns are fresh evidence.

@@ -7,7 +7,7 @@ banner:
 
 Reef is past skeleton stage. You can run the local stack, submit orders, drive scenarios, inspect command status, read market data, and follow the first settlement evidence path. The UI and full post-trade workflow are still early, so this page keeps the marketing honest: built means implemented; planned means target shape.
 
-## Built Today
+## Built by September 4
 
 Core venue path:
 
@@ -39,7 +39,7 @@ Early product slices:
 - Persisted eligibility cutoffs, roster lock, immutable run/policy binding, and scoped economic-policy evidence are implemented.
 - Participant order and command-status scope checks, TLS/mesh client modes, standard engine gRPC health, and role-aware readiness are implemented.
 
-## Still Planned
+## Planned as of September 4
 
 - Rich platform UI and operator workflows.
 - Remaining post-trade depth and operator UX beyond the implemented allocation/confirmation/affirmation, clearing/novation, obligation/instruction/attempt, ledger, break/repair, and exception-queue facts.
@@ -51,7 +51,7 @@ Early product slices:
 - Sustained projection promotion beyond `2.5k/5m`. The `5k/5m` run failed; August 21's `5k/60s` one-maintainer run has exact canonical counts but fails downstream lifecycle/market drain checks.
 - Broader scenario campaigns beyond the now-promoted local P1/P2 locks and replay evidence.
 
-## Active Architecture Direction
+## Architecture Direction as of September 4
 
 The high-throughput path is organized around one promise: if Reef says `202 Accepted`, the configured durable ingress producer acknowledged the command. After that, the matching engine consumes commands by partition, publishes durable venue event batches, and Postgres catches up asynchronously. The direct-stream plus venue-event-materializer path is the canonical `10k` venue-core baseline. Projection's recorded sustained baseline is `2.5k/5m`; close the measured downstream drain gap before promoting sustained `5k`. Bounded-state benchmark code exists on an unmerged branch and needs reconciliation. Speed work must not weaken audit, replay, or acceptance semantics.
 

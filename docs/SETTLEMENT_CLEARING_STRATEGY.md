@@ -178,7 +178,7 @@ Policy storage:
 - explicit scenario/request override: scenario definition or settlement fact field `postTradeProfileId`
 - evidence field on obligations/ledger entries: `postTradeProfileId` and `postTradePolicyVersion`
 
-Obligation materialization:
+### Obligation materialization
 
 - gateway fact append command: `POST /admin/v1/settlement/facts`
 - gateway materialization command: `POST /admin/v1/settlement/obligations/materialize`

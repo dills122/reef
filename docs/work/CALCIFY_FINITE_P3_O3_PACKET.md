@@ -4,7 +4,7 @@ Date: October 11, 2026. Status: **draft for independent review; nothing here is 
 qualified**. Baseline: `master` at `85115ac80` (O1 PR485 and O2 PR488 merged). Authority boundary: no
 production financial authority, no capacity claim, no legacy removal. Governing sources:
 [source contract](CALCIFY_FINITE_P3_SOURCE_CONTRACT.md) (O3 row, numeric budgets), the
-[overnight plan](CALCIFY_OVERNIGHT_SESSION_PLAN.md) O3 row, the [system RFC](CALCIFY_SYSTEM_ARCHITECTURE_RFC.md),
+[overnight plan](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_OVERNIGHT_SESSION_PLAN.md) O3 row, the [system RFC](CALCIFY_SYSTEM_ARCHITECTURE_RFC.md),
 and the [O2 verification record](../evidence/calcify-finite-p3/2026-10-11-o2-verification.md) for what is and is not proven.
 
 ## 1. Objective and acceptance (from the contract, restated)

@@ -28,12 +28,12 @@ proposed; [current work](../WORK_PLAN.md) owns execution status.
 October11 initial owner clarification: single-server deployment; a larger server
 may be justified by measurements. At that checkpoint hard10k/s gate covered
 capture/context; settlement could lag. Financial/SQL service, backlog, retention and recovery remain separately
-bounded operating contracts. [Single-server pressure test](../research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md)
+bounded operating contracts. [Single-server pressure test](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md)
 records baseline O1 merge, primary-source research, local kernel experiments,
 state-layout risks and next proofs. It does not adopt financial authority or
 qualify a new runtime; prior dated measurements retain their original scope.
 
-October11 measured follow-up: [aged contention/recovery proof](../research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md)
+October11 measured follow-up: [aged contention/recovery proof](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md)
 fails10k full-context gate on local10CPU/~15.6GiB VM:8,106.99–8,145.11/s within300s,
 despite final exact3,063,383-context parity. Synthetic financial/SQL recovery audit
 passes; captured-trade financial integration remains unproved. Candidate now
@@ -43,7 +43,7 @@ post-load drain cannot satisfy timed capacity gate. Measure matched aged control
 then isolate one recovery/resource change before hardware or authority pivot.
 This tightens proposed acceptance contract; no production authority adoption.
 
-October11 matched control: [same financial/SQL and aged workload without cold resolver restart](../research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
+October11 matched control: [same financial/SQL and aged workload without cold resolver restart](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
 passes10k capture at10,321.21–10,349.52/s with full3,131,951-context integrity.
 Cold recovery remains failed; sequential-run differences prevent exact causal
 cost attribution. Prioritize compatible persisted-state restart proof on current
@@ -65,8 +65,8 @@ scope and do not qualify this larger boundary. Booking/risk and coherent SQL/API
 visibility enter foreground capacity gate; settlement needs bounded lag and
 enough long-run service to avoid session-sized cleanup.
 
-Companions: [research / review reconciliation](../research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md),
-[supplied proposals](../research/calcify-system-architecture-inputs/README.md),
+Companions: [research / review reconciliation](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md),
+[supplied proposals](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/calcify-system-architecture-inputs/README.md),
 [current Phase1/2 wiring](../CALCIFY_PHASES_OVERVIEW.md),
 [accepted decisions](../DECISIONS.md), [throughput evidence](../THROUGHPUT_BASELINES.md).
 
@@ -162,7 +162,7 @@ policy activation and account changes enter ordered input.
 
 The alternative is explicit DB authority: one Postgres transaction owns financial
 state, journal, dedup, domain sequence and outbox; broker results are published
-copies. Never call both authorities primary. [Research comparison](../research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md#3-compare-credible-financial-authorities).
+copies. Never call both authorities primary. [Research comparison](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md#3-compare-credible-financial-authorities).
 
 ### 3.2 Identities
 
@@ -775,7 +775,7 @@ qualify by draining later. Historical10.16k resolver run failed frozen gate.
 October6 test-only E4 measured63104/60s=1051.73settled/s versus2500/s target;
 eventual150000 settlement parity does not pass deadline target. Production/full-
 path financial capacity remains unqualified. [Financial diagnostic](../evidence/calcify-financial-sprint1/README.md#latest-empirical-checkpoint--october6-utc),
-[research baseline](../research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md#4-honest-capacity-baseline).
+[research baseline](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_SYSTEM_ARCHITECTURE_RESEARCH_2026-10-02.md#4-honest-capacity-baseline).
 
 If diagnosed financial commit/state/recovery or total operational cost warrants
 authority comparison, compare same P1 semantics/ordered inputs with Postgres transaction
@@ -787,7 +787,7 @@ Temporal require a measured fit gap; none is automatic next dependency.
 ### 10.1 First experiment sprint
 
 **Proposed timebox:** ten working days; sequence estimate, not a delivery guarantee.
-**Status:** [Current work checkpoint](../work/CALCIFY_HISTORY_LOG.md#calcify-finite-p0-source-gate--october-7-2026)
+**Status:** [Current work checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-finite-p0-source-gate--october-7-2026)
 and [focused verification](../evidence/calcify-financial-sprint1/README.md) own execution status;
 E0 preparation history remains linked from evidence. Acceptance gates below unchanged.
 Decision owner: Reef project owner. Planning checkpoint:
@@ -846,13 +846,16 @@ SQL read snapshots. Prefer repository source and official maintainer documentati
 stop when documented behavior plus remaining experiment question is explicit.
 Record facts, observations, inference and unknowns separately. No framework survey.
 
-Reuse existing probe orchestration/fixtures, adapting assertion and record model:
+Use retained probe and historical orchestration/fixtures as design references,
+adapting assertion and record model:
 [broker probe](../../services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/CalcifyResolverBrokerProbe.kt),
 [broker runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/broker-check.mjs),
 [capacity runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/capacity-check.mjs),
 [recovery runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/recovery-check.mjs),
 [paced runner](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/records/reef/scripts/dev/calcify-resolver/sustained-check.mjs) and
-[RF3 Compose](../../scripts/dev/calcify-resolver/broker.compose.yml).
+[historical RF3 Compose](https://github.com/dills122/reef/blob/02246d545424820c789204a2130acc653ff7020c/scripts/dev/calcify-resolver/broker.compose.yml).
+Archived runners and Compose are no longer supported entry points; use the
+[current Calcify run profile](../LOCAL_CONFIGURATION.md#calcify-phase-1-sidecars) for new measurements.
 Existing probe/oracle is resolver-specific and shares resolver calculation; new
 financial oracle must independently implement accounting expectations. Use test-only
 Kotlin package for kernel/adapter fixtures and small Bun runner/model scripts; freeze
@@ -957,7 +960,7 @@ and complete committed-result replay. Initial finite bootstrap is1000 settled
 trades plus100 pending,0 aged identities. Its strict heap/record/client/journal
 limits authorize empirical diagnostic only; sampled averages are not conservative
 upper bounds. Current-candidate49-arm E3 proof and frozen reviewed source/build/
-classpath/config/cluster identities remain prerequisites. [Current checkpoint](../work/CALCIFY_HISTORY_LOG.md#calcify-e4-continuation--october-5-2026)
+classpath/config/cluster identities remain prerequisites. [Current checkpoint](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-e4-continuation--october-5-2026)
 owns execution status, distinct from implementation review.
 
 Ordinary-shape bounded bootstrap passed complete raw owner/history parity,
@@ -990,7 +993,7 @@ Existing768MiB policy and1000/100 managed-restart
 proof retain their original gates and scope. Prior49-arm correctness is reused
 only for unchanged kernel/managed-adapter source; timed cohort does not gain
 new managed-restart qualification. User direction excludes further test-reference
-memory optimization. [Current sprint exit work](../work/CALCIFY_HISTORY_LOG.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
+memory optimization. [Current sprint exit work](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-sprint1-exit-continuation--october-6-2026-utc)
 owns run outcomes and next finite P3 acceptance slice.
 
 Prior Java21/768MiB two-owner model refuses smallest150000-trade ordinary arm:

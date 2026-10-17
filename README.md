@@ -109,7 +109,7 @@ make check-proto-additive
 make dev-reset
 make dev-stress
 make dev-stress-runtime-nodb
-make dev-throughput-campaign
+make dev-stress-venue-event-materializer
 make dev-admin CMD="instrument-upsert AAPL AAPL"
 ```
 

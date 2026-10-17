@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "source_repository": "https://github.com/dills122/reef",
+  "source_commit": "494c0bba71a669f14c0abdcbd0cff7392a49d1d5",
+  "selection_policy": "Additional bounded cleanup passes over dated Make-only wrappers. Check current docs, active plans, Make/CI/package callers, source behavior and retained component tools; preserve exact originals before removal. Git source edit is not last execution.",
+  "files": [
+    {
+      "source_path": "scripts/dev/do-arena-pacing-lag-gate.sh",
+      "archive_path": "records/reef/scripts/dev/do-arena-pacing-lag-gate.sh",
+      "bytes": 2600,
+      "sha256": "ffb084f7d70f2168303061c1fd300ac49089f44cde3c64c3839b2a3fdce577f1",
+      "reason": "July short c-8 Arena pacing wrapper has only a Make alias and no current runbook or active owner. Current DigitalOcean benchmark host and Arena gate contracts remain available.",
+      "source_blob_oid": "126a9a4e3ddc352c267a7006a0a49c8b38f681df"
+    },
+    {
+      "source_path": "scripts/dev/local-durable-gate.mjs",
+      "archive_path": "records/reef/scripts/dev/local-durable-gate.mjs",
+      "bytes": 5544,
+      "sha256": "3062cdb4af68c437dcdb87e03c3029d7c17c32f9fe982b9d2a3a91f45a29b611",
+      "reason": "July composed six-gate wrapper cites a WORK_PLAN item no longer active. Make-only caller; retained venue-event materializer smoke, replay checker and read-surface checker provide component checks.",
+      "source_blob_oid": "592ebecc539e35e9fbb476068c13bd06787a3f7e"
+    },
+    {
+      "source_path": "scripts/dev/projection-instrumentation-ab-check.mjs",
+      "archive_path": "records/reef/scripts/dev/projection-instrumentation-ab-check.mjs",
+      "bytes": 1775,
+      "sha256": "bc68719b17ddd4ce827c64c2ff2b97243b11c42c84e02bf24a352e47fc946b98",
+      "reason": "September projection A/B report comparator has only a Make alias and no current runbook or active plan caller. Shared instrumentation-perturbation helper and default test remain because downstream freshness uses that helper.",
+      "source_blob_oid": "b923520ff8c2761691cd51792b2324ece48e9b67"
+    }
+  ],
+  "migration_date": "2026-10-16",
+  "archive_commit": "01cec27c291cbc64e0194fe321c078e6f3115fc3",
+  "archive_manifest": "manifests/2026-10-16-reef-cleanup-followup-passes.json",
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "redirect_paths": []
+}

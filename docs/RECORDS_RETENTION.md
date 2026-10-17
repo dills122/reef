@@ -27,12 +27,12 @@ If current work needs a durable lesson, add concise verified fact to current own
 ## Current retained selections
 
 - Current code, tests, scenario definitions, contracts, accepted decisions, steering and operational runbooks.
-- Active execution in `WORK_PLAN.md`, Calcify overview/discovery/current Phase 2 implementation plan and current handoff; latest October 1 architecture reviews.
+- Active execution in `WORK_PLAN.md`, Calcify overview/discovery/current Phase 2 implementation plan and current O3/program owners. Closed handoffs and dated research are in Records.
 - Focused Phase 1 evidence for 300-pair pacing, corrected 5k and 7.5k runs with reconciliation companions, and 10k calibration; current raw selection remains governed by retained inventory.
 - Phase 2 implementation: latest corrected broker fault cohort `broker-a9bc0494`; latest multi-shape short cohort `capacity-0ccfefa6`; last candidate `capacity-156d616c` and last producer-batch comparison `capacity-4c565d6d`; latest sustained attempt `sustained-8ea6c8ce`; latest large recovery `recovery-5545850c`; full-path and nightly-checkpoint bundles. Complete raw selections moved to Records October 13; [local checkpoint](evidence/calcify-phase2-implementation/README.md), executable paired fixture and original checksum list remain. Latest failed attempts remain failures; retention does not upgrade their qualification.
 - Concise [direct-throughput](evidence/calcify-direct-throughput-2026-10-02/README.md) and [joined-10k](evidence/calcify-10k-timebox-2026-10-01/README.md) checkpoints. Complete raw campaign bundles, including failures/corrections/source manifests, moved to Records October 13. Profiles remain distinct; recorded scope unchanged.
-- Complete terminal-retention red/green proof and latest PR review pass2.
-- [Runtime order identity](evidence/runtime-order-identity/README.md): final R08 local/real-DB/reviewer verification and CI follow-up with correction companions.
+- [Terminal-retention checkpoint](evidence/terminal-retention-replay-fix/README.md) and complete red/green proof plus PR review pass2 in Records.
+- [Runtime order identity](evidence/runtime-order-identity/README.md): focused R08 result; complete local/real-DB/reviewer and CI correction logs in Records.
 - [Finite Calcify P3 O1](evidence/calcify-finite-p3/README.md): accepted optional lifecycle/capture model, complete failure/correction/review history in pinned Records proof; live O2 and financial gates remain open.
 - Source fixtures consumed by current scripts, original checksum/provenance manifests and correction notes. These are required companions, not obsolete bulk.
 
@@ -64,6 +64,39 @@ First command checks relocation metadata, removal/reference consistency, require
 To restore one file, read its `archive_path` at pinned archive commit with `git show`, verify SHA-256 against inventory, then write original `source_path` on a feature branch. Preserve immutable archive and inventory. Update retention/index links for intentional restoration; do not silently restore entire historical tree.
 
 Source deletion reduces current checkout size. Old Reef Git history still contains original blobs; this migration does not rewrite history. Ignored local runs, caches and build output are outside tracked migration inventory.
+
+## October 16 script-use audit follow-up
+
+The [script-use audit](REPOSITORY_RETENTION_AUDIT.md#script-use-audit-october-16-follow-up)
+classified all 443 tracked `scripts/` paths and retired 15 dated script files
+plus one Kotlin SQL probe (150,104 bytes). Exact originals from Reef source
+`9bbec61aafef55b05c1250b747e56fef92094f31` were published in
+[Records PR #17](https://github.com/dills122/reef-records/pull/17) at archive
+commit `5a8fed1d9efa9091ae5e5b5fcc93f0f3c1beca12`. The
+[relocation inventory](records/2026-10-16-script-use-audit-migration.json)
+records each source blob, SHA-256, destination and reason. The
+[full script inventory](https://github.com/dills122/reef-records/blob/7f1aa5d94107c307357d5681d931df94853ef777/docs/imports/2026-10-16-reef-script-surface-audit.tsv)
+distinguishes last source edit from last known run evidence. Current
+configurations and retained callers were checked before each removal; no
+runtime behavior or performance qualification changed.
+
+## October 16 additional cleanup passes
+
+Three dated Make-only wrappers (9,919 bytes) from Reef source `494c0bba7`
+were published in [Records PR #18](https://github.com/dills122/reef-records/pull/18)
+before removal. The
+[follow-up relocation inventory](records/2026-10-16-cleanup-followup-passes-migration.json)
+pins exact bytes, SHA-256, source blob and archive commit. Current component
+checks, shared test helpers and supported profile runners remain. The
+[decision log](REPOSITORY_RETENTION_AUDIT.md#additional-cleanup-passes-october-16)
+records retained families and why file age alone was not used to delete them.
+
+Five July 7 Arena runner prototype files (41,184 bytes) from Reef source
+`5272fdb68` were published in
+[Records PR #19](https://github.com/dills122/reef-records/pull/19). The
+[Arena relocation inventory](records/2026-10-16-arena-runner-prototype-migration.json)
+pins exact source and destination bytes. The production runner and current
+pool, tick and local hardening checks remain; see the same decision log for scope.
 
 ## October 3 Calcify E0 split
 
@@ -140,4 +173,27 @@ local data excluded. No runtime, authority or performance claim changed.
 ## October 16 Calcify harness and spike cleanup
 
 19 superseded Calcify run harnesses and research spikes (214,895 bytes) moved from Reef source commit `df8695dc29354f5b8d0e1924864797bbd2f3445e` to Records `fc291fce3931fe644101da534c4d17b0d677d722` ([import note](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/docs/imports/2026-10-16-reef-script-cleanup.md), [Records PR #15](https://github.com/dills122/reef-records/pull/15)). [Relocation inventory](records/2026-10-16-script-cleanup-migration.json) pins source and archive hashes. Reef keeps one supported way to run the path (`calcify-direct-bootstrap.mjs`, `calcify-direct-capacity.mjs`, `calcify-fullchain-soak.mjs`, the droplet runner and the capacity-path tests); the legacy Make targets and the droplet matrices of the S4/S1-era spikes were removed with them (ordinary versions stay in Git history).
+
+## October 16 repository audit
+
+101 more tracked originals (1,000,786 bytes) selected from Reef source
+`cab570aa518530dada1f7b9a5e5f07f33880129d`: 20 isolated scripts,
+one research-only test, 71 historical docs/raw evidence files and nine closed
+planning files. [Audit](REPOSITORY_RETENTION_AUDIT.md) records scope, recent
+merges, role classification and kept dependencies. [Records PR #16](https://github.com/dills122/reef-records/pull/16)
+contains exact-byte imports at `282d302db3adcff9bb38cd88a2b31447511c09b6`
+and `f3c9941d5cd35df81b32970e9873ad8ca9f86391`. [First inventory](records/2026-10-16-repository-audit-migration.json)
+and [expanded inventory](records/2026-10-16-repository-audit-broad-migration.json)
+pin source blobs, byte counts, SHA-256 values and destination commits.
+Focused current summaries, execution fixtures, contracts and default tests stay
+in Reef. Historical links now point to immutable imports. This changes no
+runtime, schema, API, scenario or throughput qualification.
+
+## October 16 documentation navigation correction
+
+The retained financial-sprint1 and finite-P3 checkpoint READMEs now link dated
+work sections in [pinned Calcify history](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md)
+instead of removed `WORK_PLAN.md` anchors. Their refreshed bytes and SHA-256 values
+are in [current retained inventory](records/retained-evidence.json); older retention
+receipts and archived proof remain unchanged. No new records superseded or moved.
 

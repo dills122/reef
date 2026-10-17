@@ -77,7 +77,7 @@ Larger values require measured backlog/latency and poison-prefix replay checks.
 
 For durable direct-ingress capacity work, use `scripts/dev/calcify-direct-bootstrap.mjs`
 and `scripts/dev/calcify-direct-capacity.mjs`; their frozen evidence and exact setup
-are recorded in [direct throughput campaign](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md).
+are recorded in [direct throughput campaign](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md).
 This route reuses C5 in-memory intake and direct matching controls, runs Calcify
 through managed resolved output, and omits receipt/legacy SQL settlement workers.
 Source generation/topic identity SQL remains startup/rebalance control work.
@@ -85,11 +85,13 @@ For isolated research bootstrap, optional `CALCIFY_DIRECT_PROJECT` assigns uniqu
 container names and proof labels; `CALCIFY_DIRECT_SUBNET` selects an inspected unused
 subnet and `CALCIFY_DIRECT_BROKER_IMAGE` records explicit broker-version override.
 Defaults remain unchanged; host ports must still be free. See
-[aged contention proof](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md) for
+[aged contention proof](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md) for
 frozen setup, synthetic financial contender and measured limits.
-Research runner `run-contention.mjs` accepts `control` to retain financial
-start/crash/replay while omitting resolver cold restart; `CALCIFY_CONTENTION_PLAN`
-pins explicit plan file. [Matched control](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
+The October 11 contention runner and synthetic SQL contender are preserved with
+the frozen setup in Records. That dated runner hardcodes its original container
+project and image; use the current direct or full-chain profiles below for new
+measurements rather than treating its historical command as a supported profile.
+[Matched control](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
 records configuration equality and sequential-run limits. Do not reinterpret
 no-restart capacity as a successful recovery proof.
 `MATCHING_ENGINE_KAFKA_MAX_MESSAGE_BYTES` defaults to 1 MiB; explicit larger values
@@ -99,7 +101,7 @@ This setting changes neither command batch size nor transaction ordering.
 **One supported way to run Calcify locally.** Every Calcify run starts from `scripts/dev/calcify-direct-bootstrap.mjs`, the profile that held 10k trades/s (October 2, D7): Netty HTTP, in-memory bounded intake with a durable Redpanda acknowledgement, 16 command partitions and 16 direct matching lanes, the Phase 1 extractor and verifier, the managed Phase 2 resolver, and standing BUY makers so that one timed SELL is one trade. Do not assemble another stack by hand: a per-order PostgreSQL intake on the JDK HTTP server with four partitions is a different, much slower profile, and two campaigns reported false limits from it.
 
 - `make calcify-fullchain-soak FC_RATE=1000 FC_SECONDS=60` (`scripts/dev/calcify-fullchain-soak.mjs`): the whole path including the capacity finance lanes and their projection, paced, with a sampler for every stage and an exact decision count at the end. Builds the images from the checkout and tears the stack down. See docs/work/CALCIFY_CAPACITY_RUNTIME.md, "Full-chain paced run".
-- `scripts/dev/calcify-direct-capacity.mjs`: the capture-stage qualification driver (frozen policy, independent full-fact parity oracle); see [direct throughput](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md) for its reproduction recipe.
+- `scripts/dev/calcify-direct-capacity.mjs`: the capture-stage qualification driver (frozen policy, independent full-fact parity oracle); see [direct throughput](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md) for its reproduction recipe.
 - Dedicated hosts: `make calcify-droplet-run MATRIX=fullchainsmoke` (paid; needs the owner's go with size and cost).
 
 On October 16, 2026 the older entry points were archived to Reef Records ([import note](https://github.com/dills122/reef-records/blob/fc291fce3931fe644101da534c4d17b0d677d722/docs/imports/2026-10-16-reef-script-cleanup.md)): `calcify-full-path-smoke.mjs` and the Make targets that wrapped it (`dev-smoke-calcify-full-path`, `dev-stress-calcify-basic`, `dev-soak-calcify-phase1`, `dev-smoke-calcify-high-rate`, `dev-soak-calcify-high-rate-load`, `dev-verify-calcify-high-rate`, `dev-smoke-calcify-phase2`), `calcify-joined-capacity.mjs`, `calcify-verify-existing.mjs` and the October 1 resolver runners. The Go load tool (`services/simulator/cmd/calcify-load`) stays; its `-instrument-ids`, `-workload-mode` and `-quantity` flags are the supported knobs.
