@@ -109,10 +109,6 @@ private fun OptionalProductAdminRoute.toAdminGatewayRoute(): AdminGatewayRoute =
 )
 
 private val adminGatewayPlatformAdminRoles = setOf(AdminIdentityService.RolePlatformAdmin)
-private val adminGatewaySecretAdminRoles = setOf(
-    AdminIdentityService.RoleSecretAdmin,
-    AdminIdentityService.RolePlatformAdmin
-)
 private val adminGatewayOperatorRoles = setOf(
     AdminIdentityService.RoleOperator,
     AdminIdentityService.RolePlatformAdmin
@@ -1897,10 +1893,6 @@ class PlatformHttpServer(
             }
             out.write(buffer, 0, read)
         }
-    }
-
-    private fun queryLimit(exchange: HttpExchange, defaultValue: Int): Int {
-        return exchange.queryValue("limit").toIntOrNull() ?: defaultValue
     }
 
     private fun correlationId(exchange: HttpExchange): String {

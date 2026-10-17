@@ -15,10 +15,6 @@ data class ExternalApiPrincipal(
     val accountIds: Set<String> = emptySet(),
     val botIds: Set<String> = emptySet()
 ) {
-    fun hasIdentityScope(): Boolean {
-        return actorIds.isNotEmpty() || participantIds.isNotEmpty() || accountIds.isNotEmpty() || botIds.isNotEmpty()
-    }
-
     fun hasOrderMutationScopes(): Boolean {
         return actorIds.isNotEmpty() && participantIds.isNotEmpty() && accountIds.isNotEmpty()
     }

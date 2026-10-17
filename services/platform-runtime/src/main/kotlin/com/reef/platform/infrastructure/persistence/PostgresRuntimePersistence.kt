@@ -2847,20 +2847,6 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun RuntimeEvent.modifyFacts(): RuntimeEventModifyFacts {
-        if (eventType != "OrderModified") return RuntimeEventModifyFacts()
-        val payload = JsonCodec.parseLegacyObjectOrEmpty(payloadJson)
-        return RuntimeEventModifyFacts(
-            quantityUnits = payload.string("quantityUnits"),
-            limitPrice = payload.string("limitPrice")
-        )
-    }
-
-    private data class RuntimeEventModifyFacts(
-        val quantityUnits: String = "",
-        val limitPrice: String = ""
-    )
-
     override fun acceptedOrder(identity: RuntimeOrderIdentity): PersistedOrder? = projectionQueryList(
         "SELECT $OrderSelectColumns FROM ${names.orders} WHERE run_id = ? AND order_id = ?",
         identity.runId, identity.orderId
