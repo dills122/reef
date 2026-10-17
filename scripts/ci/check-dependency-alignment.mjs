@@ -123,4 +123,29 @@ for (const [path, version] of workflowBun) {
   assert.equal(version, expectedBun, `${path} Bun version must match packageManager bun@${expectedBun}`);
 }
 
+// Every external action must resolve to a single pinned ref across workflows and composite actions.
+const compositeDirectory = new URL(".github/actions/", root);
+const compositeEntries = await Promise.all(
+  (await readdir(compositeDirectory, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map(async (entry) => {
+      const path = `.github/actions/${entry.name}/action.yml`;
+      return [path, await read(path)];
+    }),
+);
+const actionRefs = new Map();
+for (const [path, content] of [...workflowEntries, ...compositeEntries]) {
+  for (const match of content.matchAll(/^\s*(?:-\s+)?uses:\s*([^\s@]+)@(\S+)(?:\s+#\s*(\S+))?/gm)) {
+    const [, action, ref, comment] = match;
+    if (action.startsWith("./")) continue;
+    actionRefs.set(action, [...(actionRefs.get(action) ?? []), { path, ref, comment }]);
+  }
+}
+for (const [action, uses] of actionRefs) {
+  const refs = new Set(uses.map(({ ref }) => ref));
+  assert.equal(refs.size, 1, `${action} must use one pinned ref everywhere: ${[...refs].join(", ")}`);
+  const comments = new Set(uses.map(({ comment }) => comment));
+  assert.equal(comments.size, 1, `${action} version comments must match everywhere: ${[...comments].join(", ")}`);
+}
+
 console.log("dependency alignment checks passed");
