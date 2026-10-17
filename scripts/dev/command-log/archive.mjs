@@ -7,12 +7,12 @@ import {
   captureDbDiagnosticsSnapshot,
   defaultDiagnosticSchemas,
   summarizeDiagnosticsDelta,
-} from "./lib/db-diagnostics.mjs";
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+} from "../lib/db-diagnostics.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 import {
   buildRetentionPinExclusionPredicate,
   parseDurationSeconds,
-} from "./command-log-prune.mjs";
+} from "./prune.mjs";
 
 const execFileAsync = promisify(execFile);
 

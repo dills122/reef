@@ -7,8 +7,8 @@ import {
   captureDbDiagnosticsSnapshot,
   defaultDiagnosticSchemas,
   summarizeDiagnosticsDelta,
-} from "./lib/db-diagnostics.mjs";
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+} from "../lib/db-diagnostics.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 
