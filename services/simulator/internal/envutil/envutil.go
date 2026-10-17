@@ -1,4 +1,6 @@
-package main
+// Package envutil reads typed values from environment variables, falling back
+// to a default when a variable is unset or unparseable.
+package envutil
 
 import (
 	"os"
@@ -7,7 +9,7 @@ import (
 	"time"
 )
 
-func envOr(key, fallback string) string {
+func Or(key, fallback string) string {
 	value := os.Getenv(key)
 	if value == "" {
 		return fallback
@@ -15,7 +17,7 @@ func envOr(key, fallback string) string {
 	return value
 }
 
-func envInt(key string, fallback int) int {
+func Int(key string, fallback int) int {
 	value := os.Getenv(key)
 	if value == "" {
 		return fallback
@@ -27,7 +29,7 @@ func envInt(key string, fallback int) int {
 	return parsed
 }
 
-func envInt64(key string, fallback int64) int64 {
+func Int64(key string, fallback int64) int64 {
 	value := os.Getenv(key)
 	if value == "" {
 		return fallback
@@ -39,7 +41,7 @@ func envInt64(key string, fallback int64) int64 {
 	return parsed
 }
 
-func envDuration(key string, fallback time.Duration) time.Duration {
+func Duration(key string, fallback time.Duration) time.Duration {
 	value := os.Getenv(key)
 	if value == "" {
 		return fallback
@@ -51,7 +53,7 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 	return parsed
 }
 
-func envBool(key string, fallback bool) bool {
+func Bool(key string, fallback bool) bool {
 	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
 	if value == "" {
 		return fallback

@@ -259,24 +259,6 @@ func TestNormalizeProfile(t *testing.T) {
 	}
 }
 
-func TestMinIntHelper(t *testing.T) {
-	if minInt(3, 5) != 3 || minInt(5, 3) != 3 {
-		t.Error("minInt failed")
-	}
-}
-
-func TestMaxIntHelper(t *testing.T) {
-	if maxInt(3, 5) != 5 || maxInt(5, 3) != 5 {
-		t.Error("maxInt failed")
-	}
-}
-
-func TestMaxInt64Helper(t *testing.T) {
-	if maxInt64(3, 5) != 5 || maxInt64(5, 3) != 5 {
-		t.Error("maxInt64 failed")
-	}
-}
-
 func TestValidTransport(t *testing.T) {
 	if !validTransport("http") || !validTransport("STREAM") || !validTransport(" stream ") {
 		t.Error("expected known transports to validate")
