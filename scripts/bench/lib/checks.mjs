@@ -150,8 +150,8 @@ export function checkImages(processEnv, { entry = "soak", defaultImages = {} } =
   }
   if (entry === "bootstrap" && envImages.length < 2) {
     out.push(result("image:bootstrap-default", FAIL, "bootstrap default images", "explicit CALCIFY_DIRECT_IMAGE + CALCIFY_DIRECT_MATCHING_IMAGE built from this checkout",
-      `${defaultImages.runtime ?? "reef-platform-runtime:calcify-10k-master461"} / ${defaultImages.matching ?? "reef-matching-engine:calcify-10k-master461"}`,
-      "Running calcify-direct-bootstrap.mjs directly uses the stale default tags without --build. Use make calcify-fullchain-soak (it builds first and sets both)."));
+      `${defaultImages.runtime ?? "none (required, bootstrap refuses to start)"} / ${defaultImages.matching ?? "none (required)"}`,
+      "calcify-direct-bootstrap.mjs has no default image tags and exits unless CALCIFY_DIRECT_IMAGE, CALCIFY_DIRECT_MATCHING_IMAGE and CALCIFY_DIRECT_PROJECT are set. Use make calcify-fullchain-soak (it builds first and sets all three)."));
   }
   if (entry === "soak" && processEnv.FC_SKIP_BUILD === "true") {
     out.push(result("image:skip-build", WARN, "FC_SKIP_BUILD", "false (images rebuilt from this checkout)", "true",

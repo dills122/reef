@@ -181,11 +181,12 @@ test("class B: env overrides of CALCIFY_DIRECT_* flow into the static overlay", 
 
 test("stale Calcify image tag and bootstrap-without-build fail; plain soak passes; FC_SKIP_BUILD warns", () => {
   assert.equal(checks.checkImages({ CALCIFY_DIRECT_IMAGE: "reef-platform-runtime:calcify-10k-master461" })[0].status, checks.FAIL);
-  const direct = checks.checkImages({}, { entry: "bootstrap", defaultImages: { runtime: "reef-platform-runtime:calcify-10k-master461" } });
+  const direct = checks.checkImages({}, { entry: "bootstrap", defaultImages: {} });
   assert.equal(direct[0].status, checks.FAIL);
   assert.equal(checks.checkImages({}, { entry: "soak" })[0].status, checks.PASS);
   assert.equal(checks.checkImages({ FC_SKIP_BUILD: "true" })[0].status, checks.WARN);
-  assert.equal(checks.extractBootstrapOverlay(read("scripts/dev/calcify-direct-bootstrap.mjs")).defaultImages.runtime, "reef-platform-runtime:calcify-10k-master461");
+  // bootstrap carries no default tags or project: it must refuse to run without explicit values
+  assert.deepEqual(checks.extractBootstrapOverlay(read("scripts/dev/calcify-direct-bootstrap.mjs")).defaultImages, { runtime: null, matching: null });
 });
 
 test("class B env knobs: two-step mode, evict off, tmpfs, skip-build and quantity are caught", () => {
