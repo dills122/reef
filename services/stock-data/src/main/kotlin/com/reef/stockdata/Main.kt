@@ -3,40 +3,37 @@ package com.reef.stockdata
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 
-fun defaultSeedSnapshotRepository(): SeedSnapshotRepository {
-    val persistence = (System.getenv("STOCK_DATA_PERSISTENCE") ?: "inmemory").trim().lowercase()
-    return when (persistence) {
+fun defaultSeedSnapshotRepository(config: StockDataConfig = StockDataConfig.fromEnv()): SeedSnapshotRepository {
+    return when (config.persistence) {
         "inmemory", "memory" -> InMemorySeedSnapshotRepository()
         "postgres" -> {
-            val config = HikariConfig().apply {
-                jdbcUrl = System.getenv("STOCK_DATA_POSTGRES_JDBC_URL")
-                    ?: "jdbc:postgresql://localhost:5432/reef?currentSchema=stock_data"
-                username = System.getenv("STOCK_DATA_POSTGRES_USER") ?: "reef"
-                password = System.getenv("STOCK_DATA_POSTGRES_PASSWORD") ?: "reef"
+            val hikari = HikariConfig().apply {
+                jdbcUrl = config.postgresJdbcUrl
+                username = config.postgresUser
+                password = config.postgresPassword
                 poolName = "reef-stock-data"
-                maximumPoolSize = System.getenv("STOCK_DATA_POSTGRES_POOL_MAX")?.toIntOrNull() ?: 8
+                maximumPoolSize = config.postgresPoolMax
             }
-            PostgresSeedSnapshotRepository(HikariDataSource(config))
+            PostgresSeedSnapshotRepository(HikariDataSource(hikari))
         }
-        else -> throw IllegalArgumentException("Unsupported STOCK_DATA_PERSISTENCE: $persistence")
+        else -> throw IllegalArgumentException("Unsupported STOCK_DATA_PERSISTENCE: ${config.persistence}")
     }
 }
 
-fun defaultStockDataProvider(): StockDataProvider {
-    val providerName = (System.getenv("STOCK_DATA_PROVIDER") ?: "tiingo").trim().lowercase()
-    return when (providerName) {
+fun defaultStockDataProvider(config: StockDataConfig = StockDataConfig.fromEnv()): StockDataProvider {
+    return when (config.provider) {
         "fake" -> FakeStockDataProvider()
         "tiingo" -> {
-            val config = TiingoConfig.fromEnv()
-            TiingoStockDataProvider(config, JdkTiingoHttpClient(config))
+            val tiingo = TiingoConfig.fromEnv()
+            TiingoStockDataProvider(tiingo, JdkTiingoHttpClient(tiingo))
         }
-        else -> throw IllegalArgumentException("Unsupported STOCK_DATA_PROVIDER: $providerName")
+        else -> throw IllegalArgumentException("Unsupported STOCK_DATA_PROVIDER: ${config.provider}")
     }
 }
 
 fun main() {
-    val workflow = SeedWorkflow(defaultStockDataProvider(), defaultSeedSnapshotRepository())
-    val port = System.getenv("STOCK_DATA_HTTP_PORT")?.toIntOrNull() ?: 8081
-    StockDataHttpServer(workflow, port).start()
-    println("stock-data service listening on :$port")
+    val config = StockDataConfig.fromEnv()
+    val workflow = SeedWorkflow(defaultStockDataProvider(config), defaultSeedSnapshotRepository(config))
+    StockDataHttpServer(workflow, config.httpPort).start()
+    println("stock-data service listening on :${config.httpPort}")
 }
