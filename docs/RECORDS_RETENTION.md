@@ -80,6 +80,17 @@ distinguishes last source edit from last known run evidence. Current
 configurations and retained callers were checked before each removal; no
 runtime behavior or performance qualification changed.
 
+## October 16 additional cleanup passes
+
+Three dated Make-only wrappers (9,919 bytes) from Reef source `494c0bba7`
+were published in [Records PR #18](https://github.com/dills122/reef-records/pull/18)
+before removal. The
+[follow-up relocation inventory](records/2026-10-16-cleanup-followup-passes-migration.json)
+pins exact bytes, SHA-256, source blob and archive commit. Current component
+checks, shared test helpers and supported profile runners remain. The
+[decision log](REPOSITORY_RETENTION_AUDIT.md#additional-cleanup-passes-october-16)
+records retained families and why file age alone was not used to delete them.
+
 ## October 3 Calcify E0 split
 
 User-directed evidence split:97 original E0 files preserved at [Records08a4347](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md),

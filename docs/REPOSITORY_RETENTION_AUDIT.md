@@ -128,3 +128,32 @@ command owners still need profile-specific validation before use.
 
 These passes change no runtime, API, schema, scenario or throughput behavior.
 No new performance qualification is claimed.
+
+## Additional cleanup passes, October 16
+
+Rechecked three more surfaces against `origin/master` at
+`cab570aa518530dada1f7b9a5e5f07f33880129d`:
+
+1. **Dated Make-only wrappers:** retired `local-durable-gate.mjs`,
+   `projection-instrumentation-ab-check.mjs` and
+   `do-arena-pacing-lag-gate.sh` (three files, 9,919 bytes). No current
+   runbook or active plan calls them; their last source edits were July 8,
+   September 25 and July 14. Last edit is not last run. The durable component
+   smoke/replay/read-surface checks, shared instrumentation helper and test,
+   current DigitalOcean runner and Arena gates remain.
+2. **Other command families:** kept documented intake, JFR, projection drain,
+   replay, scenario, command-log, deployment and Arena controls. Make wiring
+   alone does not establish use, but these paths still have current owner docs,
+   default tests, active contracts or component consumers. No bulk deletion
+   from this class is justified by file age.
+3. **Large files and owner docs:** kept referenced README logo, executable
+   fixtures, generated protocol bindings, ordered migrations and current
+   Calcify/throughput owner docs. Size or age alone does not make them dead.
+
+Exact originals and reasons are pinned in the
+[follow-up relocation inventory](records/2026-10-16-cleanup-followup-passes-migration.json)
+and [Records PR #18](https://github.com/dills122/reef-records/pull/18).
+Total across passes: 120 removed originals, 1,160,809 bytes. Current script
+surface after follow-up: 425 tracked `scripts/` paths, 88 runnable JavaScript,
+TypeScript or shell commands. No current profile or financial-authority claim
+follows from these removals.
