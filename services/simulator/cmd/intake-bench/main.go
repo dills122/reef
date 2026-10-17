@@ -282,14 +282,6 @@ func buildSubmitPayload(cfg config, commandID, traceID, orderID string, workerID
 	return body
 }
 
-func buildReport(sessionID string, cfg config, started, finished time.Time, results []requestResult) report {
-	accumulator := newResultAccumulator()
-	for _, result := range results {
-		accumulator.add(result)
-	}
-	return accumulator.build(sessionID, cfg, started, finished)
-}
-
 // resultAccumulator aggregates request results as they arrive instead of
 // buffering every requestResult for the full run in memory. At sustained
 // high throughput over a long duration, retaining every result (and then

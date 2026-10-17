@@ -1,6 +1,6 @@
 ---
-title: September 4 Snapshot
-description: Built versus planned at the September 4 repository alignment.
+title: Status Snapshot
+description: Built versus planned at the dated September 4 repository alignment.
 banner:
   content: Aligned September 4, 2026. Check the work plan, source, and newer evidence before using this as current status.
 ---
