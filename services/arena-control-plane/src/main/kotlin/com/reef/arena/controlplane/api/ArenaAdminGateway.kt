@@ -58,6 +58,7 @@ import com.reef.arena.controlplane.arena.RecordArenaSubmissionPendingCommand
 import com.reef.arena.controlplane.arena.ArenaAdmissionWindow
 import com.reef.arena.controlplane.arena.ArenaAdmissionWindowPolicy
 import com.reef.arena.controlplane.arena.ArenaEligibilityCandidate
+import com.reef.arena.controlplane.arena.ArenaRosterEntry
 import com.reef.arena.controlplane.arena.ArenaRosterPolicySnapshot
 import com.reef.arena.controlplane.arena.ArenaResolvedPolicyKind
 import com.reef.arena.controlplane.arena.ArenaRosterPolicyVerifier
@@ -67,6 +68,7 @@ import com.reef.arena.controlplane.arena.ArenaRosterRemoval
 import com.reef.arena.controlplane.arena.ArenaRosterRemovalReason
 import com.reef.arena.controlplane.arena.ArenaRunEligibilityDecision
 import com.reef.platform.infrastructure.config.RuntimeEnv
+import java.time.Instant
 
 private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "platform-admin")
 
@@ -136,30 +138,30 @@ internal class ArenaAdminGateway(
         requestPrincipal.set(principal)
         return try {
             when (path) {
-        "/internal/admin/arena/bots" -> getOrPost(method, { arenaBotResponse(query) }, { registerArenaBotResponse(body) })
-        "/internal/admin/arena/my/bots" -> getResponseOnly(method) { arenaMyBotsResponse(query) }
-        "/internal/admin/arena/bot-versions" -> getOrPost(method, { arenaBotVersionResponse(query) }, { registerArenaBotVersionResponse(body) })
-        "/internal/admin/arena/bot-versions/transition" -> postOnly(method) { transitionArenaBotVersionResponse(body) }
-        "/internal/admin/arena/qualification-reports" -> getResponseOnly(method) { arenaQualificationReportsResponse(query) }
-        "/internal/admin/arena/operator-decisions" -> getResponseOnly(method) { arenaOperatorDecisionsResponse(query) }
-        "/internal/admin/arena/runtime-config-descriptors" -> getResponseOnly(method) { arenaRuntimeConfigDescriptorsResponse(query) }
-        "/internal/admin/arena/runs" -> getOrPost(method, { arenaRunResponse(query) }, { registerArenaRunResponse(body) })
-        "/internal/admin/arena/runs/status" -> postOnly(method) { updateArenaRunStatusResponse(body) }
-        "/internal/admin/arena/run-bot-results" -> getOrPost(method, { arenaRunBotResultsResponse(query) }, { recordArenaRunBotResultResponse(body) })
-        "/internal/admin/arena/run-enforcement-events" -> getOrPost(method, { arenaRunEnforcementEventsResponse(query) }, { recordArenaRunEnforcementEventResponse(body) })
-        "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardResponse(query) }
-        "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) { arenaBotOpenBaoProvisionResponse(body) }
-        "/internal/admin/arena/bots/ownership" -> postOnly(method) { assignArenaBotOwnershipResponse(body) }
-        "/internal/admin/arena/submission-admissions" -> postOnly(method) { recordArenaSubmissionAdmissionResponse(body) }
-        "/internal/admin/arena/submission-admissions/approve" -> postOnly(method) { approveArenaSubmissionAdmissionResponse(body) }
-        "/internal/admin/arena/admission-windows" -> getOrPost(method, { arenaAdmissionWindowResponse(query) }, { scheduleArenaAdmissionWindowResponse(body) })
-        "/internal/admin/arena/eligibility-decisions" -> getOrPost(method, { arenaEligibilityDecisionsResponse(query) }, { evaluateArenaEligibilityResponse(body) })
-        "/internal/admin/arena/rosters" -> getOrPost(method, { arenaRosterResponse(query) }, { lockArenaRosterResponse(body) })
-        "/internal/admin/arena/roster-previews" -> postOnly(method) { previewArenaRosterResponse(body) }
-        "/internal/admin/arena/roster-removals" -> getOrPost(method, { arenaRosterRemovalsResponse(query) }, { removeArenaRosterEntryResponse(body) })
-        "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigResponse(method, query, body)
-        "/internal/admin/analytics/run-exports" -> getOrPost(method, { analyticsRunExportsResponse(query) }, { recordAnalyticsRunExportResponse(body) })
-        "/internal/admin/analytics/run-bot-summaries" -> getResponseOnly(method) { analyticsRunBotSummariesResponse(query) }
+                "/internal/admin/arena/bots" -> getOrPost(method, { arenaBotResponse(query) }, { registerArenaBotResponse(body) })
+                "/internal/admin/arena/my/bots" -> getResponseOnly(method) { arenaMyBotsResponse(query) }
+                "/internal/admin/arena/bot-versions" -> getOrPost(method, { arenaBotVersionResponse(query) }, { registerArenaBotVersionResponse(body) })
+                "/internal/admin/arena/bot-versions/transition" -> postOnly(method) { transitionArenaBotVersionResponse(body) }
+                "/internal/admin/arena/qualification-reports" -> getResponseOnly(method) { arenaQualificationReportsResponse(query) }
+                "/internal/admin/arena/operator-decisions" -> getResponseOnly(method) { arenaOperatorDecisionsResponse(query) }
+                "/internal/admin/arena/runtime-config-descriptors" -> getResponseOnly(method) { arenaRuntimeConfigDescriptorsResponse(query) }
+                "/internal/admin/arena/runs" -> getOrPost(method, { arenaRunResponse(query) }, { registerArenaRunResponse(body) })
+                "/internal/admin/arena/runs/status" -> postOnly(method) { updateArenaRunStatusResponse(body) }
+                "/internal/admin/arena/run-bot-results" -> getOrPost(method, { arenaRunBotResultsResponse(query) }, { recordArenaRunBotResultResponse(body) })
+                "/internal/admin/arena/run-enforcement-events" -> getOrPost(method, { arenaRunEnforcementEventsResponse(query) }, { recordArenaRunEnforcementEventResponse(body) })
+                "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardResponse(query) }
+                "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) { arenaBotOpenBaoProvisionResponse(body) }
+                "/internal/admin/arena/bots/ownership" -> postOnly(method) { assignArenaBotOwnershipResponse(body) }
+                "/internal/admin/arena/submission-admissions" -> postOnly(method) { recordArenaSubmissionAdmissionResponse(body) }
+                "/internal/admin/arena/submission-admissions/approve" -> postOnly(method) { approveArenaSubmissionAdmissionResponse(body) }
+                "/internal/admin/arena/admission-windows" -> getOrPost(method, { arenaAdmissionWindowResponse(query) }, { scheduleArenaAdmissionWindowResponse(body) })
+                "/internal/admin/arena/eligibility-decisions" -> getOrPost(method, { arenaEligibilityDecisionsResponse(query) }, { evaluateArenaEligibilityResponse(body) })
+                "/internal/admin/arena/rosters" -> getOrPost(method, { arenaRosterResponse(query) }, { lockArenaRosterResponse(body) })
+                "/internal/admin/arena/roster-previews" -> postOnly(method) { previewArenaRosterResponse(body) }
+                "/internal/admin/arena/roster-removals" -> getOrPost(method, { arenaRosterRemovalsResponse(query) }, { removeArenaRosterEntryResponse(body) })
+                "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigResponse(method, query, body)
+                "/internal/admin/analytics/run-exports" -> getOrPost(method, { analyticsRunExportsResponse(query) }, { recordAnalyticsRunExportResponse(body) })
+                "/internal/admin/analytics/run-bot-summaries" -> getResponseOnly(method) { analyticsRunBotSummariesResponse(query) }
                 else -> null
             }
         } finally {
@@ -230,7 +232,7 @@ internal class ArenaAdminGateway(
                 ScheduleArenaAdmissionWindowCommand(
                     windowId = json.string("windowId"),
                     policy = ArenaAdmissionWindowPolicy(json.string("policyVersion")),
-                    scheduledStart = java.time.Instant.parse(json.string("scheduledStart")),
+                    scheduledStart = Instant.parse(json.string("scheduledStart")),
                     displayTimeZone = json.string("displayTimeZone")
                 )
             )
@@ -725,7 +727,7 @@ internal class ArenaAdminGateway(
             }
             val ownership = (arenaBotEntitlementStore
                 ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena entitlement store unavailable")))
-                .saveBotOwnership(ArenaBotOwnership(user.reefUserId, botId, ArenaBotOwnershipState.Owner, actor, java.time.Instant.now()))
+                .saveBotOwnership(ArenaBotOwnership(user.reefUserId, botId, ArenaBotOwnershipState.Owner, actor, Instant.now()))
             PlatformHotPathResponse(
                 200,
                 JsonCodec.writeObject(
@@ -758,7 +760,7 @@ internal class ArenaAdminGateway(
                     githubUserId = json.requiredLong("githubUserId"),
                     githubLogin = json.string("githubLogin"),
                     headSha = json.string("headSha"),
-                    occurredAt = java.time.Instant.now()
+                    occurredAt = Instant.now()
                 )
             )
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "admission" to arenaSubmissionAdmissionJson(admission)))
@@ -790,7 +792,7 @@ internal class ArenaAdminGateway(
                     approvedHeadSha = json.string("headSha"),
                     actorId = reviewerActorId,
                     reason = json.string("reason"),
-                    occurredAt = java.time.Instant.now()
+                    occurredAt = Instant.now()
                 )
             )
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "admission" to arenaSubmissionAdmissionJson(admission)))
@@ -1563,7 +1565,7 @@ internal class ArenaAdminGateway(
     )
     }
 
-    private fun arenaRosterEntryJson(entry: com.reef.arena.controlplane.arena.ArenaRosterEntry): Map<String, Any?> = mapOf(
+    private fun arenaRosterEntryJson(entry: ArenaRosterEntry): Map<String, Any?> = mapOf(
         "botOrder" to entry.botOrder,
         "botId" to entry.botId,
         "versionId" to entry.versionId,
@@ -1595,9 +1597,9 @@ internal class ArenaAdminGateway(
         return root.string(rootKey).ifBlank { nested.string(nestedKey) }.toDoubleOrNull()
     }
 
-    private fun instantOrNull(value: String): java.time.Instant? {
+    private fun instantOrNull(value: String): Instant? {
         if (value.isBlank()) return null
-        return java.time.Instant.parse(value)
+        return Instant.parse(value)
     }
 
     private fun requiredBoolean(json: JsonDocument, key: String): Boolean = when (json.string(key).lowercase()) {
@@ -1803,7 +1805,7 @@ internal class ArenaAdminGateway(
         val displayName: String,
         val trustState: com.reef.platform.application.admin.AdminTrustState,
         val ownershipState: ArenaBotOwnershipState,
-        val assignedAt: java.time.Instant
+        val assignedAt: Instant
     )
 
     private fun arenaBotVersionJson(version: ArenaBotVersion): Map<String, Any?> {
