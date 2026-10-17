@@ -32,8 +32,6 @@ infra/hetzner-core/server/openbao/logs/
 # shared `$HOME/.ai-central` checkout and is recreated with `bun run codex:links`.
 .codex/skills/
 .codex/steering/*-steering.md
-!.codex/steering/repository-steering.md
-!.codex/steering/testing-quality-gates-steering.md
 
 # Claude compatibility links mirror the selected canonical skills.
 .claude/skills/
