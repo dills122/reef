@@ -7,6 +7,8 @@ DEPLOY_ROOT="${REEF_DEPLOY_DIR:-/opt/reef}"
 MAX_MIGRATION_ARCHIVE_BYTES="${REEF_DEPLOY_MAX_MIGRATION_ARCHIVE_BYTES:-2097152}"
 HEALTH_ATTEMPTS="${REEF_DEPLOY_HEALTH_ATTEMPTS:-45}"
 HEALTH_DELAY_SECONDS="${REEF_DEPLOY_HEALTH_DELAY_SECONDS:-2}"
+PULL_ATTEMPTS=3
+PULL_RETRY_DELAY_SECONDS=2
 DEPLOY_LOG="${REEF_DEPLOY_LOG:-$DEPLOY_ROOT/deployments/application-services.jsonl}"
 
 temp_root=""
@@ -66,6 +68,31 @@ verify_image_revision() {
   revision="$(printf '%s' "$revision" | tr '[:upper:]' '[:lower:]')"
   [[ "$revision" == "$expected_sha" ]] ||
     fail "image revision label does not match requested commit: $image"
+}
+
+pull_image() {
+  local image="$1"
+  local attempt output delay
+
+  for ((attempt = 1; attempt <= PULL_ATTEMPTS; attempt++)); do
+    if output="$(docker pull "$image" 2>&1)"; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    printf '%s\n' "$output" >&2
+    if ! grep -Eiq 'TLS handshake timeout|context deadline exceeded|i/o timeout|connection reset by peer|unexpected EOF|Client.Timeout exceeded|received unexpected HTTP status: (429|500|502|503|504)|toomanyrequests|Too Many Requests|Service Unavailable|Bad Gateway|Gateway Timeout' <<<"$output" ||
+      grep -Eiq 'unauthorized|authentication required|access denied|manifest unknown|not found|invalid reference format' <<<"$output"; then
+      fail "image pull failed without a retryable registry error: $image (attempt $attempt/$PULL_ATTEMPTS)"
+      return 1
+    fi
+    if (( attempt == PULL_ATTEMPTS )); then
+      fail "image pull exhausted $PULL_ATTEMPTS attempts: $image"
+      return 1
+    fi
+    delay=$((PULL_RETRY_DELAY_SECONDS * (1 << (attempt - 1))))
+    echo "application service deploy: transient image pull failure for $image (attempt $attempt/$PULL_ATTEMPTS); retrying in ${delay}s" >&2
+    sleep "$delay"
+  done
 }
 
 validate_migration_archive() {
@@ -260,9 +287,9 @@ openbao_container_before="$(docker compose ps -q openbao)"
 openbao_health "$openbao_port"
 
 echo "pulling immutable application images for $git_sha"
-docker pull "$matching_image"
-docker pull "$runtime_image"
-docker pull "$simulator_image"
+pull_image "$matching_image"
+pull_image "$runtime_image"
+pull_image "$simulator_image"
 verify_image_revision "$matching_image" "$git_sha"
 verify_image_revision "$runtime_image" "$git_sha"
 verify_image_revision "$simulator_image" "$git_sha"

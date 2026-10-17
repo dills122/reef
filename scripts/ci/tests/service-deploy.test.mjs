@@ -33,6 +33,8 @@ function runDeploy(root, archive, bin, extraEnv = {}) {
       REEF_DEPLOY_HEALTH_ATTEMPTS: "2",
       REEF_DEPLOY_HEALTH_DELAY_SECONDS: "1",
       FAKE_DOCKER_LOG: join(root, "docker.log"),
+      FAKE_PULL_STATE: join(root, "pull.state"),
+      FAKE_SLEEP_LOG: join(root, "sleep.log"),
       FAKE_PSQL_INPUT_LOG: join(root, "psql-input.log"),
       FAKE_CURL_STATE: join(root, "curl.state"),
       ...extraEnv,
@@ -52,6 +54,8 @@ async function runForcedDeploy(root, archive, bin, extraEnv = {}) {
       REEF_DEPLOY_HEALTH_ATTEMPTS: "2",
       REEF_DEPLOY_HEALTH_DELAY_SECONDS: "1",
       FAKE_DOCKER_LOG: join(root, "docker.log"),
+      FAKE_PULL_STATE: join(root, "pull.state"),
+      FAKE_SLEEP_LOG: join(root, "sleep.log"),
       FAKE_PSQL_INPUT_LOG: join(root, "psql-input.log"),
       FAKE_CURL_STATE: join(root, "curl.state"),
       SSH_ORIGINAL_COMMAND: `deploy ${gitSha}`,
@@ -117,6 +121,24 @@ elif [[ "\${1:-}" == "compose" && "\${2:-}" == "ps" ]]; then
   printf '%s-id\\n' "\${@: -1}"
 elif [[ "\${1:-}" == "image" && "\${2:-}" == "inspect" ]]; then
   printf '%s\\n' "\${FAKE_IMAGE_REVISION:-${gitSha}}"
+elif [[ "\${1:-}" == "pull" ]]; then
+  pull_count=0
+  if [[ -f "$FAKE_PULL_STATE" ]]; then pull_count="$(cat "$FAKE_PULL_STATE")"; fi
+  pull_count=$((pull_count + 1))
+  printf '%s\\n' "$pull_count" > "$FAKE_PULL_STATE"
+  if (( pull_count <= \${FAKE_PULL_FAIL_ATTEMPTS:-0} )); then
+    if [[ "\${FAKE_PULL_FAILURE:-transient}" == "auth" ]]; then
+      echo 'unauthorized: authentication required' >&2
+    elif [[ "\${FAKE_PULL_FAILURE:-transient}" == "manifest" ]]; then
+      echo 'manifest unknown: manifest unknown' >&2
+    elif [[ "\${FAKE_PULL_FAILURE:-transient}" == "registry" ]]; then
+      echo 'received unexpected HTTP status: 503 Service Unavailable' >&2
+    else
+      echo 'Get "https://registry-1.docker.io/v2/": net/http: TLS handshake timeout' >&2
+    fi
+    exit 1
+  fi
+  echo "pulled $2"
 elif [[ "\${1:-}" == "inspect" ]]; then
   if [[ "$*" == *"runtime-stopped-id"* ]]; then
     printf 'exited\\n'
@@ -157,9 +179,16 @@ fi
 exit 0
 `,
   );
+  await writeFile(
+    join(bin, "sleep"),
+    `#!/usr/bin/env bash
+printf '%s\\n' "$1" >> "$FAKE_SLEEP_LOG"
+`,
+  );
   await chmod(join(bin, "docker"), 0o755);
   await chmod(join(bin, "curl"), 0o755);
   await chmod(join(bin, "flock"), 0o755);
+  await chmod(join(bin, "sleep"), 0o755);
   await writeFile(join(root, "scripts", "apply-migrations.sh"), await readFile(migrationScript));
   await chmod(join(root, "scripts", "apply-migrations.sh"), 0o755);
   const tar = spawnSync("tar", ["-czf", archive, "-C", join(root, "migration-source"), "migrations"], {
@@ -212,6 +241,53 @@ try {
   assert.match(deployLog, /"simulatorStarted":false/);
 } finally {
   await rm(fixture.root, { recursive: true, force: true });
+}
+
+for (const failure of ["transient", "registry"]) {
+  const transientPullFixture = await createFixture();
+  try {
+    const result = runDeploy(
+      transientPullFixture.root,
+      transientPullFixture.archive,
+      transientPullFixture.bin,
+      { FAKE_PULL_FAIL_ATTEMPTS: "2", FAKE_PULL_FAILURE: failure },
+    );
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stderr, /retrying in 2s/);
+    assert.match(result.stderr, /retrying in 4s/);
+    assert.equal(await readFile(join(transientPullFixture.root, "sleep.log"), "utf8"), "2\n4\n");
+    const dockerLog = await readFile(join(transientPullFixture.root, "docker.log"), "utf8");
+    assert.equal((dockerLog.match(/pull dills122\/reef-matching-engine:sha-/g) ?? []).length, 3);
+    assert.equal((dockerLog.match(/pull dills122\/reef-arena-platform-runtime:sha-/g) ?? []).length, 1);
+    assert.equal((dockerLog.match(/pull dills122\/reef-simulator:sha-/g) ?? []).length, 1);
+    assert.match(dockerLog, /compose up -d --no-deps --force-recreate platform-runtime/);
+  } finally {
+    await rm(transientPullFixture.root, { recursive: true, force: true });
+  }
+}
+
+for (const [failure, attempts] of [["transient", 3], ["auth", 1], ["manifest", 1]]) {
+  const failedPullFixture = await createFixture();
+  try {
+    const before = await readFile(join(failedPullFixture.root, ".env"), "utf8");
+    const result = runDeploy(
+      failedPullFixture.root,
+      failedPullFixture.archive,
+      failedPullFixture.bin,
+      { FAKE_PULL_FAIL_ATTEMPTS: "10", FAKE_PULL_FAILURE: failure },
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, failure === "transient" ? /exhausted 3 attempts/ : /without a retryable registry error/);
+    assert.equal(await readFile(join(failedPullFixture.root, ".env"), "utf8"), before);
+    const dockerLog = await readFile(join(failedPullFixture.root, "docker.log"), "utf8");
+    assert.equal((dockerLog.match(/pull dills122\/reef-matching-engine:sha-/g) ?? []).length, attempts);
+    assert.doesNotMatch(dockerLog, /compose exec -T .* psql|compose up /);
+    if (failure !== "transient") {
+      await assert.rejects(() => readFile(join(failedPullFixture.root, "sleep.log")), /ENOENT/);
+    }
+  } finally {
+    await rm(failedPullFixture.root, { recursive: true, force: true });
+  }
 }
 
 const forcedFixture = await createFixture();

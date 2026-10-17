@@ -266,6 +266,15 @@ Deployment ordering is:
 7. Confirm the same OpenBao container is still unsealed.
 8. Record the deployment. The simulator stays stopped until an intentional run.
 
+Each image pull makes at most three attempts. Only recognized transient TLS,
+network, rate-limit, or registry 5xx failures retry, after 2 then 4 seconds;
+the host logs each failed attempt and delay. Authentication, missing-manifest,
+and other errors fail immediately. If pulls remain unavailable, deployment
+stops before migrations or image-pin changes. A successful retry still requires
+the full OCI revision-label check for all three immutable images. Inspect the
+failed Actions job's SSH output before manually dispatching the same published
+SHA; do not switch to a mutable tag to bypass this gate.
+
 On a post-pin failure, the host restores the previous `.env` and recreates the
 previous matching/runtime images. Inspect:
 
