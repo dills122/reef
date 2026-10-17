@@ -376,6 +376,44 @@ Use these through `make dev-stress-stream-direct-nodb`.
 | `DEV_STRESS_CAPTURE_STREAM_DIRECT` | `1` | Attach direct engine consume deltas. |
 | `DEV_STRESS_STREAM_DIRECT_DRAIN_WAIT_MS` | `30000` | Wait for engine direct-consume drain before final report. |
 
+### Look-alike settings: which variant is which
+
+Several settings take different values in different profiles. None is a typo;
+quote the variant you ran. For the checklist of what to verify before a run, see
+[How to benchmark correctly](PERFORMANCE_LEARNINGS.md#how-to-benchmark-correctly).
+
+| Setting | Gate / validated 10k profile | Diagnostic or other variants |
+| --- | --- | --- |
+| `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY` | **8192**: `materializer-soak` (gate and local materializer stress) and the Calcify bootstrap used by the full-chain soak | 1024: `stream-direct-nodb` ceiling profile (diagnostic, not the gate). 4096: stream-ack stack profile and the compose default |
+| Load workers (`DEV_STRESS_SWEEP_WORKERS` / `REEF_DO_*`) | **1,024**: the official remote gate and C5; also the full-chain soak (`FC_WORKERS`) | 384: local `make dev-stress-venue-event-materializer` default and the generic DO `materializer` profile default (do **not** reproduce the 10k/s baseline; fewer workers makes the load generator the limit). 256: `stream-direct-nodb`, runtime no-DB sanity, C22/C28 diagnostics |
+| Materializer-10k gate tier | **`soak-5m`** is the current 10k venue-core evidence (two 5m samples) | `short` (60s x3) is the wrapper's default tier and a smoke-level confirmation; `soak-15m` only after `soak-5m` is clean |
+| `STREAM_ACK_LOG_PROVIDER` for `make dev-stress-stream-direct-nodb` | `redpanda` (**you must set it**; the make target does not force it) | default `jetstream`: runs NATS, 64 partitions by default and a different ceiling. The 16-partition defaults apply only under `redpanda` |
+
+### Terminal order retention: two regimes
+
+Two retention settings are both called "the 10k profile":
+
+- `MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT=250000` per book: the
+  materializer-soak stress profile, the gate runs, and the default of
+  `calcify-direct-bootstrap.mjs` (64 books permit 16 million records; size memory).
+- `3906` per book (`FC_TERMINAL_PER_BOOK`): what `make calcify-fullchain-soak`
+  overrides the bootstrap with. It narrows the lookup/reuse horizon and requires
+  fresh state; results from the two regimes are not interchangeable.
+
+### Compression: three different codecs
+
+| Producer | Setting | Value |
+| --- | --- | --- |
+| API command log (platform-api to broker) | `STREAM_ACK_KAFKA_COMPRESSION_TYPE` | `lz4` (compose default; the tuned value, do not override casually) |
+| Engine canonical event batches (matching engine to broker) | `MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE` | compose default is empty, which falls back to the setting above (`lz4`); the `stream-direct-nodb` Redpanda profile and the Calcify bootstrap set **`none`** |
+| Capacity finance Streams producer (decisions and changelog) | `producer.compression.type` in `CapacityLauncher.kt` | `lz4` (a choice: fewer bytes per decision for 1.5 to 2.4 us of thread CPU) |
+
+The "lz4 producer compression" credited for the storage-per-trade figures in the
+ledger is the capacity Streams producer, not engine event compression. The
+engine's `max.message.bytes` interaction depends on the codec: the topic limit
+applies to the compressed batch, the producer limit to the uncompressed one
+(see [Performance Learnings](PERFORMANCE_LEARNINGS.md)).
+
 ### Validation And Promotion Knobs
 
 | Knob / command | Purpose |

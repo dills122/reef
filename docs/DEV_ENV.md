@@ -826,6 +826,8 @@ Run matching-engine benchmark guardrail check (CI-equivalent):
 make bench-matching-engine-check
 ```
 
+This is a crash tripwire, not a performance regression test: its limits sit orders of magnitude above measured values ([why](PERFORMANCE_LEARNINGS.md#how-to-benchmark-correctly)).
+
 For throughput qualification, select a named current workload and stack in
 [Local run profiles](LOCAL_RUN_PROFILES.md), then compare it with the matching
 profile in [throughput baselines](THROUGHPUT_BASELINES.md). The older local
