@@ -4,7 +4,7 @@ import {
   hostedBotContainerNetworks,
   hostedBotContainerReachableUrl,
   validateHostedBotContainerNetwork,
-} from "./lib/bot-isolation.mjs";
+} from "./bot-isolation.mjs";
 
 for (const network of hostedBotContainerNetworks) {
   assert.equal(validateHostedBotContainerNetwork(network), network);

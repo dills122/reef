@@ -4,7 +4,7 @@ import {
   partitionCounts,
   selectPartitionSpreadInstruments,
   streamRoutingPartition,
-} from "./lib/stream-partition-spread.mjs";
+} from "./stream-partition-spread.mjs";
 
 const runId = "venue-event-materializer-mixed-lifecycle-stress";
 const venueSessionId = "venue-event-materializer-mixed-lifecycle-stress";

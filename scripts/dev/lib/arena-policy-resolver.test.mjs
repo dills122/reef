@@ -9,9 +9,9 @@ import {
   resolveEconomicPolicy,
   resolvePolicyComposition,
   resolveScoringPolicy,
-} from "./lib/arena-policy-resolver.mjs";
+} from "./arena-policy-resolver.mjs";
 
-const repoRoot = new URL("../../", import.meta.url).pathname;
+const repoRoot = new URL("../../../", import.meta.url).pathname;
 const readJson = (path) => JSON.parse(readFileSync(new URL(path, `file://${repoRoot}`).pathname, "utf8"));
 const actorFixture = readJson("packages/scenario-definitions/arena/actor-profiles.v1.json");
 const modeFixture = readJson("packages/scenario-definitions/arena/equity-sprint.v1.json");

@@ -4,7 +4,7 @@ import {
   assertClaimGuardedProjectionReplay,
   assertStableProjectionReplaySnapshot,
   stableStringify,
-} from "./lib/projection-replay-proof.mjs";
+} from "./projection-replay-proof.mjs";
 
 test("stableStringify canonicalizes object key order", () => {
   assert.equal(stableStringify({ b: 1, a: { d: 2, c: 3 } }), '{"a":{"c":3,"d":2},"b":1}');

@@ -4,7 +4,7 @@ import {
   canonicalEvidenceSummary,
   canonicalThroughput,
   stableReportFingerprint,
-} from "./lib/report-taxonomy.mjs";
+} from "./report-taxonomy.mjs";
 
 const report = {
   throughputRps: 100,

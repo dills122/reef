@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolveEconomicPolicy } from "./lib/arena-policy-resolver.mjs";
-import { reconcileArenaEconomics } from "./lib/arena-economic-reconciliation.mjs";
+import { resolveEconomicPolicy } from "./arena-policy-resolver.mjs";
+import { reconcileArenaEconomics } from "./arena-economic-reconciliation.mjs";
 
 const policy = resolveEconomicPolicy(JSON.parse(readFileSync(
   "packages/scenario-definitions/arena/economics/preview-zero-fee-v1.json",

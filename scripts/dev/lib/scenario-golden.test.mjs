@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { compareGoldenJsonFiles } from "./lib/scenario-golden.mjs";
+import { compareGoldenJsonFiles } from "./scenario-golden.mjs";
 
 const dir = mkdtempSync(join(tmpdir(), "reef-scenario-golden-test-"));
 const expectedPath = join(dir, "expected.json");

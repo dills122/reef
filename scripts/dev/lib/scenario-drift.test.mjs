@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildDriftBaseline, evaluateReportDrift } from "./lib/scenario-drift.mjs";
+import { buildDriftBaseline, evaluateReportDrift } from "./scenario-drift.mjs";
 
 const report = {
   throughput: { attemptedPerSecond: 120, acceptedPerSecond: 100 },

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeJsonFileStreaming } from "./lib/large-json-writer.mjs";
+import { writeJsonFileStreaming } from "./large-json-writer.mjs";
 
 const dir = mkdtempSync(join(tmpdir(), "reef-large-json-writer-"));
 

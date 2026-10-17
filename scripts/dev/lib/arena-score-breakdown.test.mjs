@@ -4,7 +4,7 @@ import {
   buildScoreBreakdown,
   buildScoreContext,
   summarizeScoreCalibration,
-} from "./lib/arena-score-breakdown.mjs";
+} from "./arena-score-breakdown.mjs";
 
 const context = buildScoreContext({
   scoringPolicyVersion: "score-v0",

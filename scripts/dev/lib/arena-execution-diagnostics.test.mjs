@@ -5,7 +5,7 @@ import {
   priceFromExecutionPrice,
   summarizeAdverseSelection,
   summarizeExecutionDiagnostics,
-} from "./lib/arena-execution-diagnostics.mjs";
+} from "./arena-execution-diagnostics.mjs";
 
 assert.equal(priceFromExecutionPrice("100000000000"), 100);
 assert.equal(priceFromExecutionPrice("100.25"), 100.25);

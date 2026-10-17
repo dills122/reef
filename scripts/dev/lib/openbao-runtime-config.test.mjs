@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createOpenBaoRuntimeSecretProvider, openBaoKvV2DataPath, runtimeConfigPreflightReport } from "./lib/openbao-runtime-config.mjs";
+import { createOpenBaoRuntimeSecretProvider, openBaoKvV2DataPath, runtimeConfigPreflightReport } from "./openbao-runtime-config.mjs";
 
-const repoRoot = new URL("../../", import.meta.url).pathname;
+const repoRoot = new URL("../../../", import.meta.url).pathname;
 const { resolveBotRuntimeConfigV1 } = await import(
   pathToFileURL(join(repoRoot, "packages/bot-sdk/src/runtime-config.ts")).href
 );

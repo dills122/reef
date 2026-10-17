@@ -47,7 +47,7 @@ test-dev-tooling:
 	node scripts/dev/doctor.test.mjs
 	node scripts/dev/lib/dev-links.test.mjs
 	node scripts/dev/onboarding-links.test.mjs
-	node scripts/dev/smoke-identity.test.mjs
+	node scripts/dev/lib/smoke-identity.test.mjs
 	node scripts/dev/ci-pr-change-scope.test.mjs
 	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
 	node --test scripts/dev/lib/benchmark-runtime-signature.test.mjs scripts/dev/lib/cohort-residence.test.mjs scripts/dev/lib/downstream-cohort.test.mjs scripts/dev/lib/downstream-freshness.test.mjs scripts/dev/lib/downstream-sampler.test.mjs scripts/dev/lib/instrumentation-perturbation.test.mjs scripts/dev/lib/run-profile-roles.test.mjs scripts/dev/lib/source-cohort.test.mjs scripts/dev/lib/stream-profile-guard.test.mjs scripts/dev/lib/script-surface.test.mjs
@@ -128,13 +128,13 @@ test-bot-sdk:
 	bun scripts/dev/bot-sdk-strategy-runner.test.mjs
 	bun scripts/dev/bot-sdk-hosted-runner.test.mjs
 	bun scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs
-	bun scripts/dev/bot-isolation.test.mjs
+	bun scripts/dev/lib/bot-isolation.test.mjs
 	bun scripts/dev/bot-sdk-hosted-artifact-build.test.mjs
 	bun scripts/dev/bot-sdk-hosted-worker.test.mjs
 	bun scripts/dev/bot-sdk-sandbox-policy.test.mjs
 	bun scripts/dev/bot-sdk-preflight.test.mjs
 	bun scripts/dev/bot-sdk-runtime-config.test.mjs
-	bun scripts/dev/openbao-runtime-config.test.mjs
+	bun scripts/dev/lib/openbao-runtime-config.test.mjs
 	bun scripts/dev/bot-submission-validate.test.mjs
 	bun scripts/dev/bot-submission-commit-status.test.mjs
 	bun scripts/dev/bot-submission-record-admission.test.mjs
@@ -148,16 +148,16 @@ test-bot-sdk:
 	bun scripts/dev/arena-persist-report-local.test.mjs
 	bun scripts/dev/arena-render-report-index.test.mjs
 	bun scripts/dev/arena-render-report.test.mjs
-	bun scripts/dev/arena-execution-diagnostics.test.mjs
-	bun scripts/dev/arena-policy-resolver.test.mjs
-	bun scripts/dev/arena-score-breakdown.test.mjs
-	bun scripts/dev/arena-economic-reconciliation.test.mjs
+	bun scripts/dev/lib/arena-execution-diagnostics.test.mjs
+	bun scripts/dev/lib/arena-policy-resolver.test.mjs
+	bun scripts/dev/lib/arena-score-breakdown.test.mjs
+	bun scripts/dev/lib/arena-economic-reconciliation.test.mjs
 	bun scripts/dev/run-arena-economic-policy-matrix.test.mjs
 	bun scripts/dev/arena-actor-profile-behavior.test.mjs
 	bun scripts/dev/arena-local-hardening-summary.test.mjs
 	bun scripts/dev/arena-runner-isolation-failure.test.mjs
 	bun scripts/dev/arena-runner-output-limit.test.mjs
-	bun scripts/dev/large-json-writer.test.mjs
+	bun scripts/dev/lib/large-json-writer.test.mjs
 	bun scripts/dev/arena-local-tick-report-writer.test.mjs
 	bun scripts/dev/compare-arena-score-v1-proof.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
@@ -180,8 +180,8 @@ test-bot-sdk:
 	node --check scripts/dev/arena-render-report.mjs
 	node --check scripts/dev/arena-run-result-ingestion-smoke.mjs
 	node --check scripts/dev/arena-bot-risk-smoke.mjs
-	bun scripts/dev/report-taxonomy.test.mjs
-	bun scripts/dev/stream-partition-spread.test.mjs
+	bun scripts/dev/lib/report-taxonomy.test.mjs
+	bun scripts/dev/lib/stream-partition-spread.test.mjs
 	bun scripts/dev/lib/stress-run-guard.test.mjs
 	bun scripts/dev/lib/dev-profiles.test.mjs
 	bun test scripts/dev/lib/compose-psql.test.mjs
@@ -191,9 +191,9 @@ test-bot-sdk:
 	bun scripts/dev/lib/projection-drain-report.test.mjs
 	bun scripts/dev/do-benchmark-check.test.mjs
 	bun scripts/dev/do-gate.test.mjs
-	bun test scripts/dev/projection-replay-proof.test.mjs
-	bun scripts/dev/scenario-drift.test.mjs
-	bun scripts/dev/scenario-golden.test.mjs
+	bun test scripts/dev/lib/projection-replay-proof.test.mjs
+	bun scripts/dev/lib/scenario-drift.test.mjs
+	bun scripts/dev/lib/scenario-golden.test.mjs
 
 fmt-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && gofmt -w ./cmd ./internal

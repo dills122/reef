@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { validateStreamProfile } from "./lib/stream-profile-guard.mjs";
+import { validateStreamProfile } from "./stream-profile-guard.mjs";
 
 const originalEnv = { ...process.env };
 

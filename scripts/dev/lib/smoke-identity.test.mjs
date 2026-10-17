@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createSmokeIdentity, newSmokeExecutionId } from "./lib/smoke-identity.mjs";
+import { createSmokeIdentity, newSmokeExecutionId } from "./smoke-identity.mjs";
 
 const first = createSmokeIdentity("test-1");
 const second = createSmokeIdentity("test-2");

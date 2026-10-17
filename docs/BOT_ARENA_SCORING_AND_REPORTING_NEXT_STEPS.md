@@ -351,7 +351,7 @@ No-stack tests should protect the report math before every long run:
 
 Current static coverage:
 
-- `scripts/dev/arena-execution-diagnostics.test.mjs`
+- `scripts/dev/lib/arena-execution-diagnostics.test.mjs`
 - `scripts/dev/arena-render-report.test.mjs`
 - `scripts/dev/arena-local-hardening-summary.test.mjs`
 - `scripts/dev/arena-local-tick-report-writer.test.mjs`
