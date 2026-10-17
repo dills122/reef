@@ -53,7 +53,19 @@ versions("Gradle wrapper", wrappers, /gradle-([0-9.]+)-bin\.zip/g);
 
 const goDockerPaths = ["services/matching-engine/Dockerfile", "services/simulator/Dockerfile"];
 const goDocker = await Promise.all(goDockerPaths.map(async (path) => [path, await read(path)]));
-versions("Go builder image", goDocker, /^FROM golang:([^\s]+) AS build$/gm);
+const goBuilder = versions("Go builder image", goDocker, /^FROM golang:([^\s]+) AS build$/gm);
+const goModPaths = ["services/matching-engine/go.mod", "services/simulator/go.mod"];
+const goMods = await Promise.all(goModPaths.map(async (path) => [path, await read(path)]));
+const goModVersion = versions("go.mod go directive", goMods, /^go ([0-9.]+)$/gm);
+assert.equal(
+  goBuilder.replace(/-alpine$/, ""),
+  goModVersion,
+  `Go builder image golang:${goBuilder} must match the go.mod go directive ${goModVersion}`,
+);
+const ciWorkflow = await read(".github/workflows/ci.yml");
+for (const match of ciWorkflow.matchAll(/go-version:\s*['"]?([0-9][^'"\s]*)/g)) {
+  assert.equal(match[1], goModVersion, `ci.yml go-version ${match[1]} must match the go.mod go directive ${goModVersion}`);
+}
 versions("Go debug runtime image", goDocker, /^FROM alpine:([^\s]+) AS debug$/gm);
 
 const arenaPackage = JSON.parse(await read("apps/arena-admin/package.json"));
