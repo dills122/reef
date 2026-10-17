@@ -1,12 +1,12 @@
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
-import { assertValidBotId } from "./lib/bot-submission-contract.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
+import { assertValidBotId } from "./contract.mjs";
 
 loadDotEnv();
 
 const [, , botId, ...flags] = process.argv;
 const validateOnly = flags.includes("--validate-only");
 if (!botId) {
-  console.error("usage: node scripts/dev/bot-submission-registry-diff.mjs <botId> [--validate-only]");
+  console.error("usage: node scripts/dev/bot-submission/registry-diff.mjs <botId> [--validate-only]");
   process.exit(1);
 }
 try {

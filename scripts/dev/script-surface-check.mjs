@@ -228,7 +228,7 @@ function checkWorkflowSecurity() {
   requireIncludes(
     ".github/workflows/bot-submission-provision.yml",
     botProvision,
-    "bot-submission-commit-status.mjs",
+    "bot-submission/commit-status.mjs",
     "trusted provisioning workflow must publish the registry-diff-and-provision commit status",
   );
   requireIncludes(

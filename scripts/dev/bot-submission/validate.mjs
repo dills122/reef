@@ -3,7 +3,7 @@ import {
   assertManifestPathMatchesBotId,
   assertSafeBotSourceFileName,
   assertValidBotId,
-} from "./lib/bot-submission-contract.mjs";
+} from "./contract.mjs";
 
 const BASIC_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REQUIRED_FIELDS = ["botId", "fileName", "metadata"];
@@ -11,7 +11,7 @@ const REQUIRED_METADATA_FIELDS = ["name", "publisher", "email"];
 
 const [, , manifestPath] = process.argv;
 if (!manifestPath) {
-  console.error("usage: node scripts/dev/bot-submission-validate.mjs <bots/*/bot.json>");
+  console.error("usage: node scripts/dev/bot-submission/validate.mjs <bots/*/bot.json>");
   process.exit(1);
 }
 

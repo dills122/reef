@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const repoRoot = new URL("../../", import.meta.url).pathname;
+const repoRoot = new URL("../../../", import.meta.url).pathname;
 const tempRoot = mkdtempSync(join(tmpdir(), "reef-bot-submission-validate-"));
 
 const validManifest = manifest("sample-bot");
@@ -47,7 +47,7 @@ function writeManifest(directoryBotId, value) {
 
 function runValidator(path) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["scripts/dev/bot-submission-validate.mjs", path], {
+    const child = spawn(process.execPath, ["scripts/dev/bot-submission/validate.mjs", path], {
       cwd: repoRoot,
       stdio: ["ignore", "pipe", "pipe"],
     });

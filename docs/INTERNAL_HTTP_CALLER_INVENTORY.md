@@ -8,9 +8,9 @@ Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or 
 
 - `.github/workflows/bot-submission-provision.yml`: trusted bot-submission provisioning handoff uses `/admin/v1/arena/bots/openbao-provision` after the unprivileged PR workflow succeeds.
 - `.github/workflows/bot-registry-sync.yml`: post-merge bot registry sync uses `/admin/v1/arena/bots` and `/admin/v1/arena/bot-versions`.
-- `scripts/dev/bot-submission-register-merged.mjs`: post-merge bot registry sync client for `/admin/v1/arena/bots` and `/admin/v1/arena/bot-versions`.
-- `scripts/dev/bot-submission-provision-openbao.mjs`: uses `/admin/v1/arena/bots/openbao-provision`.
-- `scripts/dev/bot-submission-registry-diff.mjs`: uses `/admin/v1/arena/bots`.
+- `scripts/dev/bot-submission/register-merged.mjs`: post-merge bot registry sync client for `/admin/v1/arena/bots` and `/admin/v1/arena/bot-versions`.
+- `scripts/dev/bot-submission/provision-openbao.mjs`: uses `/admin/v1/arena/bots/openbao-provision`.
+- `scripts/dev/bot-submission/registry-diff.mjs`: uses `/admin/v1/arena/bots`.
 - `scripts/dev/arena-ingest-bot-run-result.mjs`: posts run-bot results through `/admin/v1/arena/run-bot-results`.
 - `scripts/dev/arena-run-result-ingestion-smoke.mjs`: registers arena bots, versions, runs, run results, and leaderboard readback through `/admin/v1/arena/...`.
 - `scripts/dev/arena-persist-report-local.mjs`: persists local arena report evidence through `/admin/v1/arena/...` from inside the `platform-api` container.

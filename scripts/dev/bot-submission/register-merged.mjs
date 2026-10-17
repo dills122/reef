@@ -3,19 +3,19 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 import {
   assertManifestPathMatchesBotId,
   assertSafeBotSourceFileName,
   assertValidBotId,
-} from "./lib/bot-submission-contract.mjs";
+} from "./contract.mjs";
 
 loadDotEnv();
 
-const repoRoot = new URL("../../", import.meta.url).pathname;
+const repoRoot = new URL("../../../", import.meta.url).pathname;
 const manifestPaths = process.argv.slice(2);
 if (manifestPaths.length === 0) {
-  console.error("usage: node scripts/dev/bot-submission-register-merged.mjs <bots/*/bot.json>...");
+  console.error("usage: node scripts/dev/bot-submission/register-merged.mjs <bots/*/bot.json>...");
   process.exit(2);
 }
 

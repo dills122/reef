@@ -1,4 +1,5 @@
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
+import { sleep } from "../lib/sleep.mjs";
 
 loadDotEnv();
 
@@ -90,10 +91,6 @@ function parseRetryDelays(value) {
 
 function truncate(value, maxLength = 1000) {
   return value.length <= maxLength ? value : `${value.slice(0, maxLength)}...`;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function requiredEnv(name) {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import http from "node:http";
 
-const repoRoot = new URL("../../", import.meta.url).pathname;
+const repoRoot = new URL("../../../", import.meta.url).pathname;
 
 const requests = [];
 const server = await fakeGitHubApi((req, body, res) => {
@@ -78,7 +78,7 @@ console.log("bot submission commit status checks passed");
 
 function runStatus(env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["scripts/dev/bot-submission-commit-status.mjs"], {
+    const child = spawn(process.execPath, ["scripts/dev/bot-submission/commit-status.mjs"], {
       cwd: repoRoot,
       env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],

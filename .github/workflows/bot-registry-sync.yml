@@ -13,7 +13,7 @@ on:
       - main
     paths:
       - 'bots/**'
-      - 'scripts/dev/bot-submission-register-merged.mjs'
+      - 'scripts/dev/bot-submission/register-merged.mjs'
 
 permissions:
   contents: read
@@ -78,8 +78,8 @@ jobs:
             else
               changed_paths="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" -- \
                 'bots/*/bot.json' \
-                'scripts/dev/bot-submission-register-merged.mjs')"
-              if printf '%s\n' "$changed_paths" | grep -Fxq 'scripts/dev/bot-submission-register-merged.mjs'; then
+                'scripts/dev/bot-submission/register-merged.mjs')"
+              if printf '%s\n' "$changed_paths" | grep -Fxq 'scripts/dev/bot-submission/register-merged.mjs'; then
                 changed="$(git ls-files 'bots/*/bot.json')"
               else
                 changed="$changed_paths"
@@ -137,4 +137,4 @@ jobs:
           MANIFEST_PATHS: ${{ steps.manifests.outputs.paths }}
         run: |
           printf '%s' "$MANIFEST_PATHS" \
-            | xargs node scripts/dev/bot-submission-register-merged.mjs
+            | xargs node scripts/dev/bot-submission/register-merged.mjs

@@ -1,4 +1,4 @@
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 
 loadDotEnv();
 

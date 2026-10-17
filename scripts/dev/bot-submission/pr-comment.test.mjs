@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const script = fileURLToPath(new URL("./bot-submission-pr-comment.mjs", import.meta.url));
+const script = fileURLToPath(new URL("./pr-comment.mjs", import.meta.url));
 const result = spawnSync(process.execPath, [script], {
   encoding: "utf8",
   env: {

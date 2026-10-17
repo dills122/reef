@@ -1,5 +1,5 @@
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
-import { assertValidBotId, assertValidOpenBaoPathSegment } from "./lib/bot-submission-contract.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
+import { assertValidBotId, assertValidOpenBaoPathSegment } from "./contract.mjs";
 
 loadDotEnv();
 
@@ -7,7 +7,7 @@ const [, , botId, flow, submitterIdentity] = process.argv;
 const validFlows = ["add", "update", "remove"];
 if (!botId || !validFlows.includes(flow) || !submitterIdentity) {
   console.error(
-    "usage: node scripts/dev/bot-submission-provision-openbao.mjs <botId> <add|update|remove> <submitterIdentity>",
+    "usage: node scripts/dev/bot-submission/provision-openbao.mjs <botId> <add|update|remove> <submitterIdentity>",
   );
   process.exit(1);
 }

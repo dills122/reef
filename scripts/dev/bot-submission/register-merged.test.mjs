@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import http from "node:http";
 
-const repoRoot = new URL("../../", import.meta.url).pathname;
+const repoRoot = new URL("../../../", import.meta.url).pathname;
 const tempRoot = mkdtempSync(join(tmpdir(), "reef-register-merged-test-"));
 const botDir = join(tempRoot, "bots", "sample-bot");
 await import("node:fs/promises").then((fs) => fs.mkdir(botDir, { recursive: true }));
@@ -182,7 +182,7 @@ try {
 
 function runRegister(args, env) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, ["scripts/dev/bot-submission-register-merged.mjs", ...args], {
+    const child = spawn(process.execPath, ["scripts/dev/bot-submission/register-merged.mjs", ...args], {
       cwd: repoRoot,
       env: {
         ...process.env,

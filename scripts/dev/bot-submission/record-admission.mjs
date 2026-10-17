@@ -1,5 +1,5 @@
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
-import { assertValidBotId } from "./lib/bot-submission-contract.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
+import { assertValidBotId } from "./contract.mjs";
 
 loadDotEnv();
 

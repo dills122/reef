@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { resolveTrustedPullRequest } from "./bot-submission-resolve-pr.mjs";
+import { resolveTrustedPullRequest } from "../../dev/bot-submission/resolve-pr.mjs";
 
-const provision = await readFile(new URL("../../.github/workflows/bot-submission-provision.yml", import.meta.url), "utf8");
-const approval = await readFile(new URL("../../.github/workflows/bot-submission-invite-approve.yml", import.meta.url), "utf8");
-const nonBotStatus = await readFile(new URL("../../.github/workflows/bot-submission-non-bot-status.yml", import.meta.url), "utf8");
-const submission = await readFile(new URL("../../.github/workflows/bot-submission.yml", import.meta.url), "utf8");
-const registrySync = await readFile(new URL("../../.github/workflows/bot-registry-sync.yml", import.meta.url), "utf8");
+const provision = await readFile(new URL("../../../.github/workflows/bot-submission-provision.yml", import.meta.url), "utf8");
+const approval = await readFile(new URL("../../../.github/workflows/bot-submission-invite-approve.yml", import.meta.url), "utf8");
+const nonBotStatus = await readFile(new URL("../../../.github/workflows/bot-submission-non-bot-status.yml", import.meta.url), "utf8");
+const submission = await readFile(new URL("../../../.github/workflows/bot-submission.yml", import.meta.url), "utf8");
+const registrySync = await readFile(new URL("../../../.github/workflows/bot-registry-sync.yml", import.meta.url), "utf8");
 const arenaGateway = await readFile(
-  new URL("../../services/arena-control-plane/src/main/kotlin/com/reef/arena/controlplane/api/ArenaAdminGateway.kt", import.meta.url),
+  new URL("../../../services/arena-control-plane/src/main/kotlin/com/reef/arena/controlplane/api/ArenaAdminGateway.kt", import.meta.url),
   "utf8",
 );
 
@@ -144,7 +144,7 @@ assert.match(registrySync, /pull-requests: read/);
 assert.match(registrySync, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
 assert.match(
   registrySync,
-  /grep -Fxq 'scripts\/dev\/bot-submission-register-merged\.mjs'[\s\S]+git ls-files 'bots\/\*\/bot\.json'/,
+  /grep -Fxq 'scripts\/dev\/bot-submission\/register-merged\.mjs'[\s\S]+git ls-files 'bots\/\*\/bot\.json'/,
 );
 assert.match(
   approval,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import http from "node:http";
 
-const repoRoot = new URL("../../", import.meta.url).pathname;
+const repoRoot = new URL("../../../", import.meta.url).pathname;
 
 const dryRun = await runProvisioner(["bot-1", "add", "octocat"], {
   BOT_SUBMISSION_OPENBAO_MODE: "dry-run",
@@ -178,7 +178,7 @@ function submissionEnv() {
 
 function runProvisioner(args, env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["scripts/dev/bot-submission-provision-openbao.mjs", ...args], {
+    const child = spawn(process.execPath, ["scripts/dev/bot-submission/provision-openbao.mjs", ...args], {
       cwd: repoRoot,
       env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],

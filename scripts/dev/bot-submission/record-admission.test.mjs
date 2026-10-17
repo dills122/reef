@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import http from "node:http";
 
-const repoRoot = new URL("../../", import.meta.url).pathname;
+const repoRoot = new URL("../../../", import.meta.url).pathname;
 const sha = "a".repeat(40);
 
 const dryRun = await run([], baseEnv());
@@ -40,7 +40,7 @@ function baseEnv() {
 }
 function run(args, values) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["scripts/dev/bot-submission-record-admission.mjs", ...args], { cwd: repoRoot, env: { ...process.env, ...values }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(process.execPath, ["scripts/dev/bot-submission/record-admission.mjs", ...args], { cwd: repoRoot, env: { ...process.env, ...values }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = ""; let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
