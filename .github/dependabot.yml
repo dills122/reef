@@ -91,6 +91,13 @@ updates:
       - dependency-name: "typescript"
         versions:
           - ">=7"
+      # trading-signals 8 ships an un-tree-shakeable bundle that declares `window`
+      # identifiers; the hosted-bot sandbox scanner rejects the resulting artifact.
+      # The approved-package pin in packages/bot-sdk must move together with the
+      # scanner policy, so adopt 8.x manually.
+      - dependency-name: "trading-signals"
+        update-types:
+          - "version-update:semver-major"
     multi-ecosystem-group: "javascript-apps"
 
   # The docs deployment uses npm and package-lock.json in CI.
