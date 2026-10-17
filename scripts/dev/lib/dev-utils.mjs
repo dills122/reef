@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import { sleep } from "./sleep.mjs";
 
 export function env(name, fallback = "") {
   const value = process.env[name];
@@ -103,9 +104,7 @@ export async function waitForHttp(url, timeoutSeconds = 90, requestTimeoutMs = 2
   throw new Error(`timeout waiting for ${url} after ${timeoutSeconds}s${tail}`);
 }
 
-export function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+export { sleep };
 
 function probeHttp(url, timeoutMs) {
   return new Promise((resolve) => {

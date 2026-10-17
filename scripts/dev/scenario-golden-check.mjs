@@ -1,12 +1,13 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { compareGoldenJsonFiles, writeDiffText } from "./lib/scenario-golden.mjs";
+import { parseKeyValueArgs } from "./lib/cli-args.mjs";
 import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 process.env.GOCACHE ||= "/tmp/reef-go-build-cache";
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseKeyValueArgs(process.argv.slice(2));
 const artifactDir = resolve(args["artifact-dir"] ?? env("DEV_SCENARIO_GOLDEN_ARTIFACT_DIR", "/tmp/reef-scenario-golden"));
 const update = booleanArg(args.update ?? env("DEV_SCENARIO_GOLDEN_UPDATE", ""));
 const maxFailures = Number(args["max-failures"] ?? env("DEV_SCENARIO_GOLDEN_MAX_FAILURES", "50"));
@@ -95,30 +96,6 @@ async function runScenarioSmoke(scenario, reportOut) {
     ],
     { cwd: "services/simulator", passthrough: false },
   );
-}
-
-function parseArgs(argv) {
-  const out = {};
-  for (let index = 0; index < argv.length; index++) {
-    const arg = argv[index];
-    if (!arg.startsWith("--")) {
-      throw new Error(`unexpected positional argument: ${arg}`);
-    }
-    const keyValue = arg.slice(2);
-    const [key, inlineValue] = keyValue.split("=", 2);
-    if (inlineValue != null) {
-      out[key] = inlineValue;
-      continue;
-    }
-    const next = argv[index + 1];
-    if (!next || next.startsWith("--")) {
-      out[key] = "true";
-      continue;
-    }
-    out[key] = next;
-    index++;
-  }
-  return out;
 }
 
 function booleanArg(value) {

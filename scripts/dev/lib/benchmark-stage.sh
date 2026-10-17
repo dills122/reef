@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Sourced library: do not set shell options here; callers own `set -euo pipefail`.
 
 benchmark_run_stage() {
   local log_dir="$1"

@@ -349,28 +349,30 @@ jobs:
             scripts/dev/lib/source-cohort.test.mjs \
             scripts/dev/lib/stream-profile-guard.test.mjs \
             scripts/dev/lib/script-surface.test.mjs \
-            scripts/dev/ci-workflow-hardening.test.mjs \
+            scripts/dev/lib/cli-args.test.mjs \
+            scripts/dev/lib/sleep.test.mjs \
+            scripts/ci/tests/ci-workflow-hardening.test.mjs \
             scripts/dev/ci-pr-change-scope.test.mjs \
             scripts/ci/check-required-results.test.mjs \
             scripts/ci/build-container.test.mjs \
             scripts/dev/db/migrate.test.mjs \
-            scripts/dev/container-images-workflow.test.mjs \
+            scripts/ci/tests/container-images-workflow.test.mjs \
             scripts/dev/command-log-integrity-check.test.mjs \
             scripts/dev/command-log-pin.test.mjs \
             scripts/dev/command-log-archive.test.mjs \
             scripts/dev/command-log-archive-partitions.test.mjs \
             scripts/dev/command-log-prune.test.mjs \
-            scripts/dev/bot-submission-register-merged.test.mjs \
+            scripts/dev/bot-submission/register-merged.test.mjs \
             scripts/dev/export-simulation-run.test.mjs \
-            scripts/dev/deploy-receiver.test.mjs \
+            scripts/ci/tests/deploy-receiver.test.mjs \
             scripts/dev/analyze-arena-actor-diagnostics.test.mjs \
-            scripts/dev/arena-score-breakdown.test.mjs \
+            scripts/dev/lib/arena-score-breakdown.test.mjs \
             scripts/dev/compare-arena-score-v1-proof.test.mjs \
             scripts/dev/compare-arena-scoring-calibration.test.mjs \
             scripts/dev/run-arena-actor-calibration-matrix.test.mjs \
             scripts/dev/run-arena-economic-policy-matrix.test.mjs \
             scripts/dev/run-arena-scoring-calibration-matrix.test.mjs \
-            scripts/dev/projection-replay-proof.test.mjs \
+            scripts/dev/lib/projection-replay-proof.test.mjs \
             scripts/dev/calcify-direct-capacity.test.mjs \
             scripts/dev/calcify-throughput-check.test.mjs \
             scripts/dev/calcify-financial/research/arena-credit-model.test.mjs \
@@ -384,7 +386,7 @@ jobs:
             scripts/dev/calcify-financial/bootstrap-calibration.test.mjs \
             scripts/dev/calcify-financial/physical-evidence.test.mjs \
             scripts/dev/calcify-financial/physical-adapter.test.mjs \
-            scripts/dev/stream-profile-guard.test.mjs | tee coverage/node-dev-tooling/test-output.txt
+            scripts/dev/lib/stream-profile-guard-validate.test.mjs | tee coverage/node-dev-tooling/test-output.txt
       - name: Add coverage summary
         run: |
           {

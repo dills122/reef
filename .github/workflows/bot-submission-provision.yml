@@ -54,7 +54,7 @@ jobs:
           EXPECTED_BASE_REPOSITORY: dills122/reef
         run: |
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            node scripts/dev/bot-submission-resolve-pr.mjs >> "$GITHUB_OUTPUT"
+            node scripts/dev/bot-submission/resolve-pr.mjs >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -80,7 +80,7 @@ jobs:
               -f per_page=100 > /tmp/reef-bot-submission-pr-candidates.json
           fi
 
-          node scripts/dev/bot-submission-resolve-pr.mjs \
+          node scripts/dev/bot-submission/resolve-pr.mjs \
             /tmp/reef-bot-submission-pr-candidates.json >> "$GITHUB_OUTPUT"
       - name: Persist trusted pull request number
         env:
@@ -99,7 +99,7 @@ jobs:
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > /tmp/reef-bot-submission-pr.json
           if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
-            node scripts/dev/bot-submission-resolve-pr.mjs \
+            node scripts/dev/bot-submission/resolve-pr.mjs \
               /tmp/reef-bot-submission-pr.json > /dev/null
           fi
           # JavaScript template literals are intentionally single-quoted for the shell.
@@ -155,7 +155,7 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if ! node scripts/dev/bot-submission-registry-diff.mjs "$bot_name" --validate-only >/tmp/reef-bot-id-validation.log 2>&1; then
+          if ! node scripts/dev/bot-submission/registry-diff.mjs "$bot_name" --validate-only >/tmp/reef-bot-id-validation.log 2>&1; then
             {
               echo "is-bot=true"
               echo "trusted-bot=false"
@@ -187,7 +187,7 @@ jobs:
           SUBMITTER_GITHUB_ID: ${{ steps.metadata.outputs.submitter-github-id }}
           SUBMITTER_GITHUB_LOGIN: ${{ steps.metadata.outputs.submitter-github-login }}
         run: |
-          result=$(node scripts/dev/bot-submission-record-admission.mjs)
+          result=$(node scripts/dev/bot-submission/record-admission.mjs)
           state=$(printf '%s' "$result" | node -e 'let raw=""; process.stdin.on("data", chunk => raw += chunk).on("end", () => { const state = JSON.parse(raw).admission?.state; if (!state) process.exit(1); process.stdout.write(state); })')
           echo "state=$state" >> "$GITHUB_OUTPUT"
       - name: Resolve non-bot branch provisioning status
@@ -211,7 +211,7 @@ jobs:
           STATUS_STATE: ${{ steps.non-bot-status.outputs.state }}
           STATUS_DESCRIPTION: ${{ steps.non-bot-status.outputs.description }}
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
-        run: node scripts/dev/bot-submission-commit-status.mjs
+        run: node scripts/dev/bot-submission/commit-status.mjs
       - name: Fail after a non-bot upstream validation failure
         if: steps.classify.outputs.classification == 'skip' && github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion != 'success'
         run: exit 1
@@ -223,7 +223,7 @@ jobs:
           STATUS_STATE: pending
           STATUS_DESCRIPTION: Bot submission provisioning is queued
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
-        run: node scripts/dev/bot-submission-commit-status.mjs
+        run: node scripts/dev/bot-submission/commit-status.mjs
       - name: Mark upstream bot submission failure
         if: steps.classify.outputs.classification != 'skip' && github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion != 'success'
         env:
@@ -233,7 +233,7 @@ jobs:
           STATUS_DESCRIPTION: Bot Submission workflow did not pass
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
         run: |
-          node scripts/dev/bot-submission-commit-status.mjs
+          node scripts/dev/bot-submission/commit-status.mjs
           exit 1
       - name: Mark invite review pending
         if: steps.classify.outputs.classification == 'pending' && steps.admission.outputs.state != 'invite_approved'
@@ -243,7 +243,7 @@ jobs:
           STATUS_STATE: pending
           STATUS_DESCRIPTION: Fork submission is pending invite review
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
-        run: node scripts/dev/bot-submission-commit-status.mjs
+        run: node scripts/dev/bot-submission/commit-status.mjs
       - name: Comment invite review pending
         if: steps.classify.outputs.classification == 'pending' && steps.admission.outputs.state != 'invite_approved'
         continue-on-error: true
@@ -254,7 +254,7 @@ jobs:
           PROVISION_FLOW: ${{ steps.classify.outputs.flow }}
           PROVISION_RESULT: pending
           SUBMISSION_HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
-        run: node scripts/dev/bot-submission-pr-comment.mjs
+        run: node scripts/dev/bot-submission/pr-comment.mjs
       - name: Registry diff (new bot vs existing bot)
         id: registry-diff
         if: (steps.classify.outputs.trusted-bot == 'true' || steps.admission.outputs.state == 'invite_approved') && steps.classify.outputs.flow != 'remove'
@@ -262,7 +262,7 @@ jobs:
           ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
           ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
           BOT_NAME: ${{ steps.classify.outputs.bot-name }}
-        run: node scripts/dev/bot-submission-registry-diff.mjs "$BOT_NAME"
+        run: node scripts/dev/bot-submission/registry-diff.mjs "$BOT_NAME"
       - name: OpenBao provisioning
         id: openbao-provision
         if: steps.classify.outputs.trusted-bot == 'true' || steps.admission.outputs.state == 'invite_approved'
@@ -290,7 +290,7 @@ jobs:
             echo "slice-path=$slice_path"
           } >> "$GITHUB_OUTPUT"
           set +e
-          output=$(node scripts/dev/bot-submission-provision-openbao.mjs \
+          output=$(node scripts/dev/bot-submission/provision-openbao.mjs \
             "$BOT_NAME" \
             "$provision_flow" \
             "$SUBMITTER_IDENTITY" 2>&1)
@@ -323,7 +323,7 @@ jobs:
           PROVISION_MESSAGE: ${{ steps.openbao-provision.outputs.message }}
           OPENBAO_SLICE_PATH: ${{ steps.openbao-provision.outputs['slice-path'] }}
           SUBMISSION_HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
-        run: node scripts/dev/bot-submission-pr-comment.mjs
+        run: node scripts/dev/bot-submission/pr-comment.mjs
       - name: Mark provisioning status success
         if: steps.openbao-provision.outputs['exit-code'] != '' && steps.openbao-provision.outputs['exit-code'] == '0'
         env:
@@ -332,7 +332,7 @@ jobs:
           STATUS_STATE: success
           STATUS_DESCRIPTION: OpenBao provisioning completed
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
-        run: node scripts/dev/bot-submission-commit-status.mjs
+        run: node scripts/dev/bot-submission/commit-status.mjs
       - name: Mark provisioning status failure
         if: steps.openbao-provision.outputs['exit-code'] != '' && steps.openbao-provision.outputs['exit-code'] != '0'
         env:
@@ -341,7 +341,7 @@ jobs:
           STATUS_STATE: failure
           STATUS_DESCRIPTION: OpenBao provisioning failed
           STATUS_TARGET_URL: ${{ env.STATUS_TARGET_URL }}
-        run: node scripts/dev/bot-submission-commit-status.mjs
+        run: node scripts/dev/bot-submission/commit-status.mjs
       - name: Fail on OpenBao provisioning failure
         if: steps.openbao-provision.outputs['exit-code'] != '' && steps.openbao-provision.outputs['exit-code'] != '0'
         run: exit 1

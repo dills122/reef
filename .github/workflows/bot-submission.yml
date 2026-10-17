@@ -9,7 +9,7 @@ name: Bot Submission
 #   bots/remove/<bot-name> - archives the bot and revokes/deletes its OpenBao slice
 #
 # Manifest convention: bots/<bot-name>/bot.json (schema: see
-# scripts/dev/bot-submission-validate.mjs), alongside the bot's TypeScript entry
+# scripts/dev/bot-submission/validate.mjs), alongside the bot's TypeScript entry
 # file, added/changed in the same PR.
 #
 # Hosted registry diff and OpenBao provisioning run in the separate
@@ -111,7 +111,7 @@ jobs:
         env:
           BOT_NAME: ${{ needs.detect-flow.outputs.bot-name }}
         run: |
-          node scripts/dev/bot-submission-validate.mjs \
+          node scripts/dev/bot-submission/validate.mjs \
             "bots/${BOT_NAME}/bot.json"
 
   # Stages 2+3: security/static analysis (approved-import scan) and sandboxed
