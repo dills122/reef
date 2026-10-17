@@ -9,7 +9,7 @@ import {
   buildRetentionPinExclusionPredicate,
   buildVacuumSql,
   parseDurationSeconds,
-} from "./command-log-prune.mjs";
+} from "./prune.mjs";
 
 test("parses prune duration values", () => {
   assert.equal(parseDurationSeconds("0s"), 0);

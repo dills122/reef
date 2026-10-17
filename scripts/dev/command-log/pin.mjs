@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 const selectorTypes = new Set(["command_id", "idempotency_prefix", "trace_id", "correlation_id", "client_id", "run_id"]);

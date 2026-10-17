@@ -2,8 +2,9 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { composeArgs } from "./lib/compose-utils.mjs";
+import { parseEqualsFlags } from "./lib/cli-args.mjs";
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseEqualsFlags(process.argv.slice(2));
 const reportPath = args.report;
 const outPath = args.out ?? reportPath;
 const actorId = args.actorId ?? process.env.ADMIN_ACTOR_ID ?? "admin-cli";
@@ -264,18 +265,4 @@ function safeJson(text) {
   } catch {
     return { raw: text };
   }
-}
-
-function parseArgs(values) {
-  const parsed = {};
-  for (const value of values) {
-    if (!value.startsWith("--")) continue;
-    const index = value.indexOf("=");
-    if (index === -1) {
-      parsed[value.slice(2)] = true;
-    } else {
-      parsed[value.slice(2, index)] = value.slice(index + 1);
-    }
-  }
-  return parsed;
 }

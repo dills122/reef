@@ -5,7 +5,7 @@ import {
   buildListPinsSql,
   buildUpsertPinSql,
   normalizeSelectorType,
-} from "./command-log-pin.mjs";
+} from "./pin.mjs";
 
 test("normalizes supported retention pin selector types", () => {
   assert.equal(normalizeSelectorType("idempotency_prefix"), "idempotency_prefix");
