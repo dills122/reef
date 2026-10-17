@@ -480,3 +480,44 @@ test("routes arena migrations only to arena database target", async () => {
     ],
   );
 });
+
+// Known historical exceptions. Applied migrations are keyed by filename in
+// reef_schema_migrations, so these are never renumbered; new ones are rejected.
+const allowedDuplicatePrefixes = new Map([["admin", new Set(["0004"])]]);
+const allowedPrefixGaps = new Map([["runtime", new Set(["0067"])]]);
+
+test("migration numeric prefixes are unique per domain and gap-free apart from known exceptions", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const byDomain = new Map();
+  for (const migration of migrations) {
+    const prefix = migration.filename.slice(0, 4);
+    if (!byDomain.has(migration.domain)) byDomain.set(migration.domain, new Map());
+    const prefixes = byDomain.get(migration.domain);
+    prefixes.set(prefix, (prefixes.get(prefix) ?? 0) + 1);
+  }
+
+  const problems = [];
+  for (const [domain, prefixes] of byDomain) {
+    const allowedDuplicates = allowedDuplicatePrefixes.get(domain) ?? new Set();
+    const allowedGaps = allowedPrefixGaps.get(domain) ?? new Set();
+    for (const [prefix, count] of prefixes) {
+      if (count > 1 && !allowedDuplicates.has(prefix)) {
+        problems.push(`${domain}: duplicate prefix ${prefix} (${count} files)`);
+      }
+    }
+    const max = Math.max(...[...prefixes.keys()].map(Number));
+    for (let n = 1; n <= max; n += 1) {
+      const prefix = String(n).padStart(4, "0");
+      if (!prefixes.has(prefix) && !allowedGaps.has(prefix)) {
+        problems.push(`${domain}: missing prefix ${prefix}`);
+      }
+    }
+    for (const prefix of allowedDuplicates) {
+      if ((prefixes.get(prefix) ?? 0) < 2) problems.push(`${domain}: stale duplicate-prefix allowlist entry ${prefix}`);
+    }
+    for (const prefix of allowedGaps) {
+      if (prefixes.has(prefix)) problems.push(`${domain}: stale gap allowlist entry ${prefix}`);
+    }
+  }
+  assert.deepEqual(problems, []);
+});
