@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatTimestamp } from '$lib/format';
 	import {
 		assignAdminAccessRole,
 		fetchAdminAccessRoles,
@@ -243,11 +244,6 @@
 			return '';
 		}
 		return reason;
-	}
-
-	function formatTimestamp(value?: string | null): string {
-		if (!value) return 'none';
-		return new Date(value).toLocaleString();
 	}
 </script>
 
