@@ -185,6 +185,29 @@ healthy. Normal application deployment therefore does not require an OpenBao
 unseal ceremony. A real host or OpenBao restart still uses the manual
 three-of-five unseal procedure.
 
+The Actions job invokes the **host-resident**
+`/opt/reef/scripts/deploy-application-services.sh`; merging a change to this
+script does not install it on the host. Before using a changed deploy script,
+start from a checkout containing the merged change, confirm that the dedicated
+GitHub deploy public key is available, then sync and verify the exact script:
+
+```bash
+deploy_key_pub="$HOME/.ssh/reef-github-deploy.pub"
+test -s "$deploy_key_pub"
+REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH="$deploy_key_pub" \
+  make hetzner-core ARGS=deploy-automation-up
+local_digest="$(shasum -a 256 infra/hetzner-core/server/scripts/deploy-application-services.sh | cut -d ' ' -f 1)"
+remote_digest="$(ssh "ops@$REEF_HETZNER_HOST" 'sha256sum /opt/reef/scripts/deploy-application-services.sh' | cut -d ' ' -f 1)"
+test "$local_digest" = "$remote_digest"
+ssh "ops@$REEF_HETZNER_HOST" 'timeout --version | grep -q "GNU coreutils"'
+```
+
+`deploy-automation-up` also installs or updates the restricted forced-command
+key. If the public key is unavailable, recover it through the normal deploy-key
+procedure before syncing; do not run an automatic or manual application-service
+deploy on the assumption that the new script is active. This sync does not
+deploy application images or run migrations.
+
 ### One-time bootstrap
 
 1. Create a dedicated key. Do not reuse the operator or Noodle identity:
@@ -267,7 +290,8 @@ Deployment ordering is:
 8. Record the deployment. The simulator stays stopped until an intentional run.
 
 Each image pull makes at most three attempts. Only recognized transient TLS,
-network, rate-limit, or registry 5xx failures retry, after 2 then 4 seconds;
+network, rate-limit, or registry 5xx failures retry, after 2 then 4 seconds.
+Each attempt has a 120-second deadline (plus a 5-second termination grace);
 the host logs each failed attempt and delay. Authentication, missing-manifest,
 and other errors fail immediately. If pulls remain unavailable, deployment
 stops before migrations or image-pin changes. A successful retry still requires
