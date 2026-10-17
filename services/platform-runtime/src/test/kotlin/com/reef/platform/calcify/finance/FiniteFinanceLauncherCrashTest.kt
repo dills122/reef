@@ -11,7 +11,6 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.apache.kafka.clients.admin.AdminClient
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.postgresql.ds.PGSimpleDataSource

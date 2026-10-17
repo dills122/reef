@@ -1,7 +1,6 @@
 package com.reef.platform.api
 
 import com.sun.net.httpserver.Headers
-import java.util.concurrent.CompletableFuture
 
 data class BotRuntimeOrderCommand(
     val route: String,
@@ -24,13 +23,6 @@ class BotRuntimeOrderClient(
         val response = platform.handleHotPathRequest(command.toHotPathRequest())
             ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "bot order route not found"))
         return command.toBotResponse(response)
-    }
-
-    fun sendAsync(command: BotRuntimeOrderCommand): CompletableFuture<BotRuntimeOrderResponse> {
-        return platform.handleHotPathRequestAsync(command.toHotPathRequest())
-            .thenApply { response ->
-                command.toBotResponse(response ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "bot order route not found")))
-            }
     }
 
     private fun BotRuntimeOrderCommand.toHotPathRequest(): PlatformHotPathRequest {

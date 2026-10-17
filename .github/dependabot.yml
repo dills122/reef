@@ -138,6 +138,18 @@ updates:
       - dependency-name: "postgres"
         update-types:
           - "version-update:semver-major"
+      # Dependabot treats architecture-variant tags (e.g. 0.162.0-386) as
+      # newer versions; the real release tag is the plain X.Y.Z.
+      - dependency-name: "otel/opentelemetry-collector-contrib"
+        versions:
+          - "*-386"
+          - "*-amd64"
+          - "*-arm64"
+          - "*-armv7"
+          - "*-ppc64le"
+          - "*-s390x"
+          - "*-riscv64"
+          - "*-windows*"
     multi-ecosystem-group: "infrastructure"
 
   - package-ecosystem: "opentofu"

@@ -1,14 +1,8 @@
 package com.reef.platform.admin
 
-import com.reef.platform.api.AccountRiskControl
-import com.reef.platform.api.AccountRiskControlStore
-import com.reef.platform.api.AccountRiskDecision
-import com.reef.platform.api.CommandCircuitBreakerState
-import com.reef.platform.api.CommandCircuitBreakerStore
-import com.reef.platform.api.CommandCircuitBreakerRequest
-import com.reef.platform.api.InstrumentPriceCollarRequest
-import com.reef.platform.api.InstrumentPriceCollarState
-import com.reef.platform.api.InstrumentPriceCollarStore
+import com.reef.platform.api.RecordingAccountRiskStore
+import com.reef.platform.api.RecordingCommandCircuitBreakerStore
+import com.reef.platform.api.RecordingInstrumentPriceCollarStore
 import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.api.JsonCodec
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
@@ -18,7 +12,7 @@ import kotlin.test.assertContains
 class AdminCliAdapterTest {
     @Test
     fun executesReferenceDataUpsertCommands() {
-        val accountRiskControls = RecordingAccountRiskControlStore()
+        val accountRiskControls = RecordingAccountRiskStore()
         val service = AdminApplicationService(
             InMemoryRuntimePersistence(),
             accountRiskControlStore = accountRiskControls
@@ -120,46 +114,4 @@ class AdminCliAdapterTest {
         assertContains(json.string("actorId"), "quoted")
         assertContains(response, "\\n")
     }
-}
-
-private class RecordingAccountRiskControlStore : AccountRiskControlStore {
-    private val controls = linkedMapOf<String, AccountRiskControl>()
-
-    override fun upsertControl(
-        scopeType: String,
-        scopeId: String,
-        decision: AccountRiskDecision,
-        reason: String,
-        maxQuantityUnits: String,
-        maxNotional: String,
-        currency: String
-    ) {
-        controls["$scopeType|$scopeId"] = AccountRiskControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
-    }
-
-    override fun listControls(): List<AccountRiskControl> = controls.values.toList()
-}
-
-private class RecordingCommandCircuitBreakerStore : CommandCircuitBreakerStore {
-    private val breakers = linkedMapOf<String, CommandCircuitBreakerState>()
-
-    override fun evaluate(request: CommandCircuitBreakerRequest) = null
-
-    override fun setBreaker(scopeType: String, scopeId: String, tripped: Boolean, reason: String) {
-        breakers["$scopeType|$scopeId"] = CommandCircuitBreakerState(scopeType, scopeId, tripped, reason)
-    }
-
-    override fun listBreakers(): List<CommandCircuitBreakerState> = breakers.values.toList()
-}
-
-private class RecordingInstrumentPriceCollarStore : InstrumentPriceCollarStore {
-    private val collars = linkedMapOf<String, InstrumentPriceCollarState>()
-
-    override fun evaluate(request: InstrumentPriceCollarRequest) = null
-
-    override fun setCollar(instrumentId: String, minPrice: String, maxPrice: String, currency: String, reason: String) {
-        collars[instrumentId] = InstrumentPriceCollarState(instrumentId, minPrice, maxPrice, currency, reason)
-    }
-
-    override fun listCollars(): List<InstrumentPriceCollarState> = collars.values.toList()
 }

@@ -6,7 +6,6 @@ import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Timestamp
-import java.time.Instant
 import javax.sql.DataSource
 
 class PostgresAdminIdentityStore(
