@@ -7,6 +7,9 @@ DEPLOY_ROOT="${REEF_DEPLOY_DIR:-/opt/reef}"
 MAX_MIGRATION_ARCHIVE_BYTES="${REEF_DEPLOY_MAX_MIGRATION_ARCHIVE_BYTES:-2097152}"
 HEALTH_ATTEMPTS="${REEF_DEPLOY_HEALTH_ATTEMPTS:-45}"
 HEALTH_DELAY_SECONDS="${REEF_DEPLOY_HEALTH_DELAY_SECONDS:-2}"
+PULL_ATTEMPTS=3
+PULL_RETRY_DELAY_SECONDS=2
+PULL_TIMEOUT_SECONDS=120
 DEPLOY_LOG="${REEF_DEPLOY_LOG:-$DEPLOY_ROOT/deployments/application-services.jsonl}"
 
 temp_root=""
@@ -66,6 +69,41 @@ verify_image_revision() {
   revision="$(printf '%s' "$revision" | tr '[:upper:]' '[:lower:]')"
   [[ "$revision" == "$expected_sha" ]] ||
     fail "image revision label does not match requested commit: $image"
+}
+
+pull_image() {
+  local image="$1"
+  local attempt output delay pull_status
+
+  for ((attempt = 1; attempt <= PULL_ATTEMPTS; attempt++)); do
+    if output="$(timeout --signal=TERM --kill-after=5s "${PULL_TIMEOUT_SECONDS}s" docker pull "$image" 2>&1)"; then
+      printf '%s\n' "$output"
+      return 0
+    else
+      pull_status=$?
+    fi
+    printf '%s\n' "$output" >&2
+    if (( pull_status == 137 )); then
+      fail "image pull process was killed (exit 137); refusing retry: $image (attempt $attempt/$PULL_ATTEMPTS)"
+      return 1
+    fi
+    if grep -Eiq 'unauthorized|authentication required|access denied|manifest unknown|not found|invalid reference format' <<<"$output" ||
+      { (( pull_status != 124 )) &&
+        ! grep -Eiq 'TLS handshake timeout|context deadline exceeded|i/o timeout|timed out|connection reset by peer|connection refused|network is unreachable|no route to host|temporary failure in name resolution|unexpected EOF|Client.Timeout exceeded|toomanyrequests|Too Many Requests|status[^0-9]*429|status[^0-9]*5[0-9]{2}|(^|[^0-9])(429|5[0-9]{2})([[:space:]]|$)' <<<"$output"; }; then
+      fail "image pull failed without a retryable registry error: $image (attempt $attempt/$PULL_ATTEMPTS)"
+      return 1
+    fi
+    if (( pull_status == 124 )); then
+      echo "application service deploy: image pull timed out after ${PULL_TIMEOUT_SECONDS}s: $image (attempt $attempt/$PULL_ATTEMPTS)" >&2
+    fi
+    if (( attempt == PULL_ATTEMPTS )); then
+      fail "image pull exhausted $PULL_ATTEMPTS attempts: $image"
+      return 1
+    fi
+    delay=$((PULL_RETRY_DELAY_SECONDS * (1 << (attempt - 1))))
+    echo "application service deploy: transient image pull failure for $image (attempt $attempt/$PULL_ATTEMPTS); retrying in ${delay}s" >&2
+    sleep "$delay"
+  done
 }
 
 validate_migration_archive() {
@@ -260,9 +298,10 @@ openbao_container_before="$(docker compose ps -q openbao)"
 openbao_health "$openbao_port"
 
 echo "pulling immutable application images for $git_sha"
-docker pull "$matching_image"
-docker pull "$runtime_image"
-docker pull "$simulator_image"
+command -v timeout >/dev/null || fail "GNU timeout is required for bounded image pulls"
+pull_image "$matching_image"
+pull_image "$runtime_image"
+pull_image "$simulator_image"
 verify_image_revision "$matching_image" "$git_sha"
 verify_image_revision "$runtime_image" "$git_sha"
 verify_image_revision "$simulator_image" "$git_sha"

@@ -185,6 +185,37 @@ healthy. Normal application deployment therefore does not require an OpenBao
 unseal ceremony. A real host or OpenBao restart still uses the manual
 three-of-five unseal procedure.
 
+The Actions job invokes the **host-resident**
+`/opt/reef/scripts/deploy-application-services.sh`; merging a change to this
+script does not install it on the host. Before using a changed deploy script,
+start from a checkout containing the merged change, confirm that the dedicated
+GitHub deploy public key is available, then sync and verify the exact script:
+
+```bash
+bash -euo pipefail <<'REEF_DEPLOY_SCRIPT_SYNC'
+deploy_key_pub="$HOME/.ssh/reef-github-deploy.pub"
+if [[ ! -s "$deploy_key_pub" ]]; then
+  echo "dedicated GitHub deploy public key is missing; stop before host sync" >&2
+  exit 1
+fi
+REEF_GITHUB_DEPLOY_PUBLIC_KEY_PATH="$deploy_key_pub" \
+  make hetzner-core ARGS=deploy-automation-up
+local_digest="$(shasum -a 256 infra/hetzner-core/server/scripts/deploy-application-services.sh | cut -d ' ' -f 1)"
+remote_digest="$(ssh "ops@$REEF_HETZNER_HOST" 'sha256sum /opt/reef/scripts/deploy-application-services.sh' | cut -d ' ' -f 1)"
+if [[ "$local_digest" != "$remote_digest" ]]; then
+  echo "host deploy script digest mismatch; stop before application deploy" >&2
+  exit 1
+fi
+ssh "ops@$REEF_HETZNER_HOST" 'timeout --version | grep -q "GNU coreutils"'
+REEF_DEPLOY_SCRIPT_SYNC
+```
+
+`deploy-automation-up` also installs or updates the restricted forced-command
+key. If the public key is unavailable, recover it through the normal deploy-key
+procedure before syncing; do not run an automatic or manual application-service
+deploy on the assumption that the new script is active. This sync does not
+deploy application images or run migrations.
+
 ### One-time bootstrap
 
 1. Create a dedicated key. Do not reuse the operator or Noodle identity:
@@ -265,6 +296,19 @@ Deployment ordering is:
 6. Wait for runtime `/health`.
 7. Confirm the same OpenBao container is still unsealed.
 8. Record the deployment. The simulator stays stopped until an intentional run.
+
+Each image pull makes at most three attempts. Only recognized transient TLS,
+network, rate-limit, or registry 5xx failures retry, after 2 then 4 seconds.
+Each attempt has a 120-second deadline (plus a 5-second termination grace);
+the host logs each failed attempt and delay. Authentication, missing-manifest,
+and other errors fail immediately. If pulls remain unavailable, deployment
+stops before migrations or image-pin changes. A successful retry still requires
+the full OCI revision-label check for all three immutable images. Inspect the
+failed Actions job's SSH output before manually dispatching the same published
+SHA; do not switch to a mutable tag to bypass this gate.
+If GNU `timeout` reports exit 137, the host stops immediately: that status can
+also indicate a killed Docker client, so it is not safe to treat as a transient
+registry response.
 
 On a post-pin failure, the host restores the previous `.env` and recreates the
 previous matching/runtime images. Inspect:
