@@ -5,16 +5,12 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"regexp"
 	"sort"
@@ -29,17 +25,21 @@ import (
 )
 
 const inputLimit = 32768
+
 const ordinaryOutputLimit = 65536
+
 const historyOutputLimit = 2 * 1024 * 1024
 
 type credential struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
+
 type user struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
+
 type grant struct {
 	Principal string `json:"principal"`
 	Kind      string `json:"kind"`
@@ -47,6 +47,7 @@ type grant struct {
 	Operation string `json:"operation"`
 	Pattern   string `json:"pattern,omitempty"`
 }
+
 type request struct {
 	Schema  string            `json:"schema"`
 	Mode    string            `json:"mode"`
@@ -71,13 +72,6 @@ type request struct {
 	Bearer  string            `json:"bearer,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    json.RawMessage   `json:"body,omitempty"`
-}
-type receipt struct {
-	Schema string `json:"schema"`
-	Mode   string `json:"mode"`
-	Status string `json:"status"`
-	Code   string `json:"code,omitempty"`
-	Data   any    `json:"data,omitempty"`
 }
 
 var ownedName = regexp.MustCompile(`^calcify-o2-[a-z0-9-]{1,64}$`)
@@ -119,6 +113,7 @@ func uniqueJSON(d *json.Decoder) error {
 	}
 	return nil
 }
+
 func decode(r io.Reader) (request, error) {
 	var q request
 	b, err := io.ReadAll(io.LimitReader(r, inputLimit+1))
@@ -143,6 +138,7 @@ func decode(r io.Reader) (request, error) {
 	}
 	return q, nil
 }
+
 func validate(q request) error {
 	if q.Schema != "calcify-finite-probe-v1" || !ownedName.MatchString(q.Prefix) {
 		return errors.New("invalid schema/prefix")
@@ -239,6 +235,7 @@ func validate(q request) error {
 	}
 	return nil
 }
+
 func observedOpening(q request) (streamdirect.FiniteOpening, error) {
 	var o streamdirect.FiniteOpening
 	if q.Auth.Username != q.Prefix+"-matcher" || len(q.Opening) > 16384 {
@@ -263,7 +260,9 @@ func observedOpening(q request) (streamdirect.FiniteOpening, error) {
 }
 
 var configKeys = map[string]bool{"retention.ms": true, "retention.bytes": true, "segment.bytes": true, "max.message.bytes": true, "cleanup.policy": true, "write.caching": true, "compression.type": true, "redpanda.remote.read": true, "redpanda.remote.write": true}
+
 var kinds = map[string]sarama.AclResourceType{"topic": sarama.AclResourceTopic, "group": sarama.AclResourceGroup, "transactional-id": sarama.AclResourceTransactionalID}
+
 var operations = map[string]sarama.AclOperation{"read": sarama.AclOperationRead, "write": sarama.AclOperationWrite, "describe": sarama.AclOperationDescribe, "describe-configs": sarama.AclOperationDescribeConfigs}
 
 func kafkaConfig(q request) *sarama.Config {
@@ -301,379 +300,6 @@ func kafkaConfig(q request) *sarama.Config {
 		c.Producer.Transaction.ID = q.Prefix + "-state-fit-tx"
 	}
 	return c
-}
-func errorReceipt(q request, err error) receipt {
-	r := receipt{Schema: "calcify-finite-probe-result-v1", Mode: q.Mode, Status: "error", Code: "operation_failed"}
-	var historyError *historyPhaseError
-	if q.Mode == "history" && errors.As(err, &historyError) {
-		switch historyError.phase {
-		case "offset_lookup", "lost_genesis", "leader_lookup", "fetch_request", "missing_block", "kafka_error", "unstable_cut", "missing_batch", "partial_batch", "unsupported_codec", "record_budget", "no_progress", "fetch_budget":
-			r.Code = "history_" + historyError.phase
-			r.Data = map[string]any{"phase": historyError.phase, "fetchCount": historyError.fetchCount, "position": strconv.FormatInt(historyError.position, 10), "readCommittedEndOffset": strconv.FormatInt(historyError.end, 10), "recordCount": historyError.recordCount, "payloadBytes": historyError.payloadBytes, "codec": historyError.codec}
-			var k sarama.KError
-			if errors.As(err, &k) {
-				r.Data.(map[string]any)["kafkaErrorCode"] = int(k)
-			}
-		}
-	}
-	var phase *seedPhaseError
-	if errors.As(err, &phase) {
-		r.Data = map[string]any{"phase": phase.phase, "commitMayHaveStarted": phase.commitAttempted}
-		var k sarama.KError
-		if errors.As(err, &k) {
-			r.Code = strconv.Itoa(int(k))
-		}
-	}
-	for _, k := range []sarama.KError{sarama.ErrTopicAuthorizationFailed, sarama.ErrGroupAuthorizationFailed, sarama.ErrClusterAuthorizationFailed, sarama.ErrTransactionalIDAuthorizationFailed} {
-		if errors.Is(err, k) {
-			r.Status = "denied"
-			r.Code = strconv.Itoa(int(k))
-			return r
-		}
-	}
-	if errors.Is(err, sarama.ErrSASLAuthenticationFailed) {
-		r.Status = "authentication"
-		r.Code = strconv.Itoa(int(sarama.ErrSASLAuthenticationFailed))
-	}
-	var pe sarama.ProducerErrors
-	if errors.As(err, &pe) {
-		for _, e := range pe {
-			return errorReceipt(q, e.Err)
-		}
-	}
-	if q.Mode == "matcher-observe" {
-		for prefix, code := range map[string]string{"finite actual topic identity/routing mismatch": "topic_identity_mismatch", "finite canonical history missing genesis prefix": "history_missing_prefix", "finite actual cluster identity mismatch": "cluster_identity_mismatch", "finite canonical history must retain": "history_configuration_mismatch", "finite managed changelog policy mismatch": "changelog_configuration_mismatch", "finite topic record limit too small": "record_limit_mismatch"} {
-			if strings.HasPrefix(err.Error(), prefix) {
-				r.Status = "refused"
-				r.Code = code
-				return r
-			}
-		}
-	}
-	return r // Never return arbitrary server error text: it can echo credentials.
-}
-func httpClient() *http.Client {
-	return &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("redirect refused") }}
-}
-func requestHTTP(ctx context.Context, q request, url string, body []byte, basic bool) (any, error) {
-	r, err := http.NewRequestWithContext(ctx, q.Method, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	r.Header.Set("Content-Type", "application/json")
-	if basic {
-		r.SetBasicAuth(q.Auth.Username, q.Auth.Password)
-	} else if q.Bearer != "" {
-		r.Header.Set("Authorization", "Bearer "+q.Bearer)
-	}
-	for k, v := range q.Headers {
-		r.Header.Set(k, v)
-	}
-	startedAt := time.Now()
-	resp, err := httpClient().Do(r)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	limit := int64(32768)
-	if q.Mode == "admin-read" {
-		limit = 262144
-	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil || int64(len(b)) > limit {
-		return nil, errors.New("HTTP response cap")
-	}
-	// Public HTTP bodies are retained only after exact credential spill check.
-	for _, secret := range []string{q.Auth.Password, q.Bearer} {
-		if secret != "" && bytes.Contains(b, []byte(secret)) {
-			return nil, errors.New("credential spill")
-		}
-	}
-	return map[string]any{"httpStatus": resp.StatusCode, "bodyBase64": base64.StdEncoding.EncodeToString(b), "bodySha256": digest(b), "bytes": len(b), "transportStartedAt": startedAt.UTC().Format(time.RFC3339Nano), "transportCompletedAt": time.Now().UTC().Format(time.RFC3339Nano), "transportDurationNanos": fmt.Sprint(time.Since(startedAt).Nanoseconds()), "measurementScope": "HTTP transport start through complete bounded response body; excludes Docker/controller startup"}, nil
-}
-func digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
-
-const adminReadPath = "/v1/cluster_config?include_defaults=true"
-
-// Return only fixture safety fields; missing properties remain missing and fail supervisor guards.
-func projectAdminConfig(raw []byte) (map[string]json.RawMessage, error) {
-	var values map[string]json.RawMessage
-	if json.Unmarshal(raw, &values) != nil || values == nil {
-		return nil, errors.New("invalid admin config")
-	}
-	public := map[string]json.RawMessage{}
-	for _, key := range []string{"kafka_enable_authorization", "sasl_mechanisms", "admin_api_require_auth", "http_authentication", "superusers", "write_caching_default", "auto_create_topics_enabled", "log_segment_size", "log_segment_size_min", "transaction_coordinator_log_segment_size", "group_topic_partitions", "transaction_coordinator_partitions", "compacted_log_segment_size", "id_allocator_log_capacity"} {
-		if v, ok := values[key]; ok {
-			public[key] = v
-		}
-	}
-	return public, nil
-}
-
-// rawSaslProbe bypasses Sarama's local empty-credential validation only for
-// two fixed fixture security probes. Raw server messages/authbytes stay private.
-func rawSaslProbe(conn net.Conn, q request) (int16, map[string]any, error) {
-	stages := []map[string]any{}
-	if q.Mode == "sasl-empty" {
-		body := append([]byte{0, 5}, []byte("PLAIN")...)
-		raw, err := saslExchange(conn, 17, 1, 1, q.Prefix+"-probe", body)
-		if err != nil {
-			return 0, nil, err
-		}
-		code, err := decodeSaslHandshake(raw)
-		if err != nil {
-			return 0, nil, err
-		}
-		if code != 0 {
-			return 0, nil, sarama.KError(code)
-		}
-		stages = append(stages, saslStage(17, 1, 1, raw, code))
-	}
-	// PLAIN authzid/authcid/password are all empty: exactly two NUL bytes.
-	raw, err := saslExchange(conn, 36, 0, 2, q.Prefix+"-probe", []byte{0, 0, 0, 2, 0, 0})
-	if err != nil {
-		return 0, nil, err
-	}
-	code, err := decodeSaslAuthenticate(raw)
-	if err != nil {
-		return 0, nil, err
-	}
-	stages = append(stages, saslStage(36, 0, 2, raw, code))
-	scope := "Empty PLAIN credential authentication"
-	if q.Mode == "unauthenticated-state" {
-		scope = "Unauthenticated out-of-sequence SASL state; no canonical READ/WRITE claim"
-	}
-	return code, map[string]any{"stages": stages, "scope": scope}, nil
-}
-func saslStage(api, version int16, correlation int32, raw []byte, code int16) map[string]any {
-	hash := sha256.Sum256(raw)
-	return map[string]any{"apiKey": api, "apiVersion": version, "correlationId": correlation, "brokerErrorCode": code, "responseBodyBytes": len(raw), "responseBodySha256": hex.EncodeToString(hash[:])}
-}
-func saslExchange(conn net.Conn, api, version int16, correlation int32, clientID string, body []byte) ([]byte, error) {
-	if len(clientID) > 128 || 10+len(clientID)+len(body) > 32768 {
-		return nil, errors.New("SASL request cap")
-	}
-	request := make([]byte, 4+10+len(clientID)+len(body))
-	binary.BigEndian.PutUint32(request[:4], uint32(len(request)-4))
-	binary.BigEndian.PutUint16(request[4:6], uint16(api))
-	binary.BigEndian.PutUint16(request[6:8], uint16(version))
-	binary.BigEndian.PutUint32(request[8:12], uint32(correlation))
-	binary.BigEndian.PutUint16(request[12:14], uint16(len(clientID)))
-	copy(request[14:], clientID)
-	copy(request[14+len(clientID):], body)
-	for remaining := request; len(remaining) > 0; {
-		n, err := conn.Write(remaining)
-		if err != nil {
-			return nil, err
-		}
-		if n <= 0 {
-			return nil, io.ErrShortWrite
-		}
-		remaining = remaining[n:]
-	}
-	var header [4]byte
-	if _, err := io.ReadFull(conn, header[:]); err != nil {
-		return nil, err
-	}
-	n := binary.BigEndian.Uint32(header[:])
-	if n < 4 || n > 32768 {
-		return nil, errors.New("SASL response cap")
-	}
-	raw := make([]byte, int(n))
-	if _, err := io.ReadFull(conn, raw); err != nil {
-		return nil, err
-	}
-	if int32(binary.BigEndian.Uint32(raw[:4])) != correlation {
-		return nil, errors.New("SASL correlation mismatch")
-	}
-	return raw[4:], nil
-}
-func decodeSaslHandshake(raw []byte) (int16, error) {
-	reader := bytes.NewReader(raw)
-	var code int16
-	var count int32
-	if binary.Read(reader, binary.BigEndian, &code) != nil || binary.Read(reader, binary.BigEndian, &count) != nil || count < 0 || count > 16 {
-		return 0, errors.New("SASL handshake shape")
-	}
-	plain := false
-	for i := int32(0); i < count; i++ {
-		var size int16
-		if binary.Read(reader, binary.BigEndian, &size) != nil || size < 0 || size > 64 || int(size) > reader.Len() {
-			return 0, errors.New("SASL mechanism shape")
-		}
-		value := make([]byte, int(size))
-		if _, err := io.ReadFull(reader, value); err != nil {
-			return 0, err
-		}
-		if string(value) == "PLAIN" {
-			plain = true
-		}
-	}
-	if reader.Len() != 0 {
-		return 0, errors.New("SASL handshake trailing bytes")
-	}
-	if code == 0 && !plain {
-		return 0, errors.New("PLAIN not advertised")
-	}
-	return code, nil
-}
-func decodeSaslAuthenticate(raw []byte) (int16, error) {
-	reader := bytes.NewReader(raw)
-	var code int16
-	var messageSize int16
-	var authSize int32
-	if binary.Read(reader, binary.BigEndian, &code) != nil || binary.Read(reader, binary.BigEndian, &messageSize) != nil || messageSize < -1 || int(messageSize) > reader.Len() {
-		return 0, errors.New("SASL auth shape")
-	}
-	if messageSize >= 0 {
-		reader.Seek(int64(messageSize), io.SeekCurrent)
-	}
-	if binary.Read(reader, binary.BigEndian, &authSize) != nil || authSize < 0 || int64(authSize) != int64(reader.Len()) {
-		return 0, errors.New("SASL auth bytes shape")
-	}
-	return code, nil
-}
-
-// Genesis seeding is a one-time mutation; only coordinator READ discovery is retried.
-// Timed-out reads may finish in their bounded client call, but cannot authorize a commit.
-type seedOperations struct{ bounds, fetch, commit func() (any, error) }
-type seedPhaseError struct {
-	phase           string
-	commitAttempted bool
-	cause           error
-}
-
-func (e *seedPhaseError) Error() string { return "seed phase refused" }
-func (e *seedPhaseError) Unwrap() error { return e.cause }
-func seedCall(ctx context.Context, call func() (any, error)) (any, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	type result struct {
-		value any
-		err   error
-	}
-	done := make(chan result, 1)
-	go func() {
-		if e := ctx.Err(); e != nil {
-			done <- result{nil, e}
-			return
-		}
-		v, e := call()
-		done <- result{v, e}
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case r := <-done:
-		if e := ctx.Err(); e != nil {
-			return nil, e
-		}
-		return r.value, r.err
-	}
-}
-func seedRead(ctx context.Context, call func() (any, error), interval time.Duration) (any, int, error) {
-	attempts := 0
-	for {
-		attempts++
-		v, e := seedCall(ctx, call)
-		if e == nil {
-			return v, attempts, nil
-		}
-		if !errors.Is(e, sarama.ErrConsumerCoordinatorNotAvailable) && !errors.Is(e, sarama.ErrNotCoordinatorForConsumer) {
-			return nil, attempts, e
-		}
-		timer := time.NewTimer(interval)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, attempts, ctx.Err()
-		case <-timer.C:
-		}
-	}
-}
-func seedOffset(value any, topic string) (int64, error) {
-	response, ok := value.(*sarama.OffsetFetchResponse)
-	if !ok || response == nil {
-		return 0, errors.New("missing offset response")
-	}
-	if response.Err != sarama.ErrNoError {
-		return 0, response.Err
-	}
-	block := response.GetBlock(topic, 0)
-	if block == nil {
-		return 0, errors.New("missing offset block")
-	}
-	if block.Err != sarama.ErrNoError {
-		return 0, block.Err
-	}
-	return block.Offset, nil
-}
-func seedGenesis(ctx context.Context, q request, ops seedOperations, interval time.Duration) (any, error) {
-	committed := false
-	fail := func(phase string, e error) (any, error) { return nil, &seedPhaseError{phase, committed, e} }
-	raw, boundAttempts, e := seedRead(ctx, ops.bounds, interval)
-	if e != nil {
-		return fail("topic-bounds", e)
-	}
-	bounds, ok := raw.([2]int64)
-	if !ok || bounds != [2]int64{0, 0} {
-		return fail("topic-bounds", errors.New("nonempty genesis"))
-	}
-	fetch := func() (any, error) {
-		v, e := ops.fetch()
-		if e != nil {
-			return nil, e
-		}
-		offset, e := seedOffset(v, q.Topic)
-		return offset, e
-	}
-	raw, beforeAttempts, e := seedRead(ctx, fetch, interval)
-	if e != nil {
-		return fail("read-before", e)
-	}
-	if raw.(int64) != -1 {
-		return fail("read-before", errors.New("existing cut refuses reseed"))
-	}
-	// Check topic remains empty immediately before first and only commit.
-	raw, finalBoundsAttempts, e := seedRead(ctx, ops.bounds, interval)
-	if e != nil {
-		return fail("precommit-bounds", e)
-	}
-	if b, ok := raw.([2]int64); !ok || b != [2]int64{0, 0} {
-		return fail("precommit-bounds", errors.New("changed genesis"))
-	}
-	if e = ctx.Err(); e != nil {
-		return fail("commit", e)
-	}
-	committed = true
-	raw, e = seedCall(ctx, ops.commit)
-	if e != nil {
-		return fail("commit", e)
-	}
-	response, ok := raw.(*sarama.OffsetCommitResponse)
-	if !ok || response == nil {
-		return fail("commit", errors.New("missing commit response"))
-	}
-	partitions, ok := response.Errors[q.Topic]
-	if !ok {
-		return fail("commit", errors.New("missing commit topic"))
-	}
-	code, ok := partitions[0]
-	if !ok {
-		return fail("commit", errors.New("missing commit partition"))
-	}
-	if code != sarama.ErrNoError {
-		return fail("commit", code)
-	}
-	raw, afterAttempts, e := seedRead(ctx, fetch, interval)
-	if e != nil {
-		return fail("read-after", e)
-	}
-	if raw.(int64) != 0 {
-		return fail("read-after", errors.New("commit readback mismatch"))
-	}
-	return map[string]any{"group": q.Group, "topic": q.Topic, "offset": "0", "previousOffset": "-1", "beginningOffset": "0", "endOffset": "0", "commitAttempts": 1, "boundsReadAttempts": boundAttempts + finalBoundsAttempts, "beforeReadAttempts": beforeAttempts, "afterReadAttempts": afterAttempts, "scope": "Observed empty topic, explicit absent cut, single acknowledged commit, actual OffsetFetch0 readback"}, nil
 }
 
 func execute(ctx context.Context, q request) (receipt, error) {
@@ -1214,148 +840,6 @@ func execute(ctx context.Context, q request) (receipt, error) {
 	return r, nil
 }
 
-type historyPhaseError struct {
-	phase                                        string
-	fetchCount, recordCount, payloadBytes, codec int
-	position, end                                int64
-	cause                                        error
-}
-
-func (e *historyPhaseError) Error() string { return "history phase refused" }
-func (e *historyPhaseError) Unwrap() error { return e.cause }
-func history(c sarama.Client, q request) (data any, err error) {
-	diagnostic := historyPhaseError{phase: "offset_lookup", end: -1, codec: -1}
-	defer func() {
-		if err != nil {
-			diagnostic.cause = err
-			err = &diagnostic
-		}
-	}()
-	lo, err := c.GetOffset(q.Topic, 0, sarama.OffsetOldest)
-	if err != nil {
-		return nil, err
-	}
-	if lo != 0 {
-		diagnostic.phase = "lost_genesis"
-		return nil, errors.New("lost genesis")
-	}
-	diagnostic.phase = "leader_lookup"
-	broker, err := c.Leader(q.Topic, 0)
-	if err != nil {
-		return nil, err
-	}
-	position := int64(0)
-	end := int64(-1)
-	rows := []any{}
-	aborted := map[int64]int64{}
-	bytesRead := 0
-	for fetch := 0; fetch < 64; fetch++ {
-		fr := &sarama.FetchRequest{Version: 11, MaxWaitTime: 250, MinBytes: 1, MaxBytes: 8 * 1024 * 1024, Isolation: sarama.ReadCommitted}
-		fr.AddBlock(q.Topic, 0, position, 8*1024*1024, -1)
-		diagnostic.phase = "fetch_request"
-		diagnostic.fetchCount = fetch + 1
-		diagnostic.position = position
-		diagnostic.end = end
-		response, err := broker.Fetch(fr)
-		if err != nil {
-			return nil, err
-		}
-		block := response.GetBlock(q.Topic, 0)
-		if block == nil {
-			diagnostic.phase = "missing_block"
-			return nil, errors.New("missing fetch block")
-		}
-		if block.Err != sarama.ErrNoError {
-			diagnostic.phase = "kafka_error"
-			return nil, block.Err
-		}
-		if end < 0 {
-			end = block.LastStableOffset
-			diagnostic.end = end
-		} else if block.LastStableOffset != end {
-			diagnostic.phase = "unstable_cut"
-			return nil, errors.New("unstable history cut")
-		}
-		for _, t := range block.AbortedTransactions {
-			if old, ok := aborted[t.ProducerID]; !ok || t.FirstOffset < old {
-				aborted[t.ProducerID] = t.FirstOffset
-			}
-		}
-		before := position
-		for _, set := range block.RecordsSet {
-			batch := set.RecordBatch
-			diagnostic.phase = "missing_batch"
-			if batch == nil {
-				return nil, errors.New("unsupported/partial batch")
-			}
-			diagnostic.codec = int(batch.Codec)
-			diagnostic.phase = "partial_batch"
-			if batch.PartialTrailingRecord {
-				return nil, errors.New("unsupported/partial batch")
-			}
-			diagnostic.phase = "unsupported_codec"
-			if batch.Codec != sarama.CompressionNone {
-				return nil, errors.New("unsupported/partial batch")
-			}
-			if batch.FirstOffset >= end {
-				break
-			}
-			next := batch.LastOffset() + 1
-			if next > position {
-				position = next
-			}
-			if batch.Control {
-				if first, ok := aborted[batch.ProducerID]; ok && batch.FirstOffset >= first {
-					delete(aborted, batch.ProducerID)
-				}
-				continue
-			}
-			if first, ok := aborted[batch.ProducerID]; ok && batch.IsTransactional && batch.FirstOffset >= first {
-				continue
-			}
-			for _, record := range batch.Records {
-				offset := batch.FirstOffset + record.OffsetDelta
-				if offset >= end || offset < before {
-					continue
-				}
-				bytesRead += len(record.Value)
-				diagnostic.recordCount = len(rows)
-				diagnostic.payloadBytes = bytesRead
-				if len(rows) >= 16 || len(record.Value) > 131072 || bytesRead > 2*1024*1024 {
-					diagnostic.phase = "record_budget"
-					return nil, errors.New("history budget")
-				}
-				headers := []map[string]string{}
-				for _, h := range record.Headers {
-					headers = append(headers, map[string]string{"keyBase64": base64.StdEncoding.EncodeToString(h.Key), "valueBase64": base64.StdEncoding.EncodeToString(h.Value)})
-				}
-				rows = append(rows, map[string]any{"offset": strconv.FormatInt(offset, 10), "keyBase64": base64.StdEncoding.EncodeToString(record.Key), "valueBase64": base64.StdEncoding.EncodeToString(record.Value), "payloadSha256": digest(record.Value), "headers": headers, "bytes": len(record.Value)})
-			}
-		}
-		if position >= end {
-			return map[string]any{"topic": q.Topic, "lowOffset": "0", "readCommittedEndOffset": strconv.FormatInt(end, 10), "scanNextOffset": strconv.FormatInt(position, 10), "records": rows, "payloadBytes": bytesRead}, nil
-		}
-		if position == before {
-			diagnostic.phase = "no_progress"
-			diagnostic.position = position
-			diagnostic.recordCount = len(rows)
-			diagnostic.payloadBytes = bytesRead
-			return nil, errors.New("history scan no progress")
-		}
-	}
-	diagnostic.phase = "fetch_budget"
-	diagnostic.position = position
-	diagnostic.recordCount = len(rows)
-	diagnostic.payloadBytes = bytesRead
-	return nil, errors.New("history fetch budget")
-}
-func encodeReceipt(r receipt, max int) ([]byte, error) {
-	b, err := json.Marshal(r)
-	if err != nil || len(b) > max {
-		return nil, errors.New("public output cap")
-	}
-	return append(b, '\n'), nil
-}
 func main() {
 	q, err := decode(os.Stdin)
 	if err != nil {
