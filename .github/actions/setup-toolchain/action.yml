@@ -1,0 +1,57 @@
+name: Setup toolchain
+description: >-
+  Install the repository's pinned Node, Bun and Java (Temurin) toolchains.
+  Versions come from .node-version (major only), package.json packageManager
+  and .java-version, so they are defined in one place. The repository must be
+  checked out first. Gradle and Go setup stay in the calling workflow.
+inputs:
+  bun:
+    description: Install Bun (version from package.json packageManager).
+    default: 'false'
+  node:
+    description: Install Node.js (major version from .node-version).
+    default: 'false'
+  java:
+    description: Install Temurin Java (version from .java-version).
+    default: 'false'
+  node-cache:
+    description: Package manager cache passed to setup-node (npm, yarn, pnpm or empty).
+    default: ''
+  node-cache-dependency-path:
+    description: Lockfile path passed to setup-node when node-cache is set.
+    default: ''
+runs:
+  using: composite
+  steps:
+    - id: versions
+      shell: bash
+      env:
+        WANT_BUN: ${{ inputs.bun }}
+        WANT_NODE: ${{ inputs.node }}
+      run: |
+        set -euo pipefail
+        if [ "$WANT_NODE" = "true" ]; then
+          node_major="$(tr -d '[:space:]' < .node-version | cut -d. -f1)"
+          [ -n "$node_major" ] || { echo "::error::.node-version is empty"; exit 1; }
+          echo "node=$node_major" >> "$GITHUB_OUTPUT"
+        fi
+        if [ "$WANT_BUN" = "true" ]; then
+          bun_version="$(sed -n 's/^ *"packageManager": *"bun@\([^"]*\)".*/\1/p' package.json | head -n 1)"
+          [ -n "$bun_version" ] || { echo "::error::package.json packageManager must pin bun@<version>"; exit 1; }
+          echo "bun=$bun_version" >> "$GITHUB_OUTPUT"
+        fi
+    - if: inputs.bun == 'true'
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      with:
+        bun-version: ${{ steps.versions.outputs.bun }}
+    - if: inputs.node == 'true'
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      with:
+        node-version: ${{ steps.versions.outputs.node }}
+        cache: ${{ inputs.node-cache }}
+        cache-dependency-path: ${{ inputs.node-cache-dependency-path }}
+    - if: inputs.java == 'true'
+      uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      with:
+        distribution: temurin
+        java-version-file: .java-version

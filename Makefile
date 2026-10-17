@@ -10,7 +10,7 @@ SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CR
 SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test test-dev-tooling test-finite-o2-harness calcify-droplet-run lint check-scripts check-dependency-alignment check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
+.PHONY: test test-dev-tooling test-finite-o2-harness calcify-droplet-run lint check-scripts check-dependency-alignment check-env-reference check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
 .PHONY: test-go test-platform-runtime test-reef-core build-reef-core build-arena-control-plane test-arena-control-plane test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
 .PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
 .PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
@@ -54,6 +54,7 @@ test-dev-tooling:
 	node scripts/ci/tests/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs
 	node --test scripts/ci/build-container.test.mjs
+	node --test scripts/ci/check-env-reference.test.mjs
 	node --test scripts/dev/calcify-financial/record-attempt.test.mjs
 	node --test scripts/dev/calcify-financial/reservation-model.test.mjs scripts/dev/calcify-financial/gate-model.test.mjs scripts/dev/calcify-financial/rate-proof.test.mjs
 
@@ -70,6 +71,9 @@ check-scripts:
 
 check-dependency-alignment:
 	node scripts/ci/check-dependency-alignment.mjs
+
+check-env-reference:
+	node scripts/ci/check-env-reference.mjs
 
 check-reef-arena-boundaries:
 	node scripts/dev/reef-arena-boundary-check.mjs
