@@ -29,3 +29,21 @@ export function parseKeyValueArgs(argv) {
   }
   return out;
 }
+
+/**
+ * Parses `--key=value` and bare `--flag` arguments. Bare flags become boolean `true`; values are
+ * never read from the next argument; arguments that do not start with `--` are ignored.
+ */
+export function parseEqualsFlags(argv) {
+  const parsed = {};
+  for (const value of argv) {
+    if (!value.startsWith("--")) continue;
+    const index = value.indexOf("=");
+    if (index === -1) {
+      parsed[value.slice(2)] = true;
+    } else {
+      parsed[value.slice(2, index)] = value.slice(index + 1);
+    }
+  }
+  return parsed;
+}
