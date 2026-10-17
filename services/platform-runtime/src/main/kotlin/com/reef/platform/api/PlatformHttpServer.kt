@@ -1,57 +1,15 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
-import com.reef.platform.application.admin.AdminActor
 import com.reef.platform.application.admin.AdminAuthService
 import com.reef.platform.application.admin.AdminGitHubOAuthClient
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
-import com.reef.platform.application.admin.ConfiguredAdminGitHubOAuthClient
-import com.reef.platform.application.admin.GitHubUserIdentity
-import com.reef.platform.application.admin.PostgresAdminAuthStore
-import com.reef.platform.application.admin.PostgresAdminIdentityStore
 import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
 import com.reef.platform.application.settlement.DefaultPostTradeProfileId
-import com.reef.platform.application.settlement.InMemorySettlementFactStore
-import com.reef.platform.application.settlement.PostgresSettlementFactStore
-import com.reef.platform.application.settlement.PostgresSettlementSqlNames
 import com.reef.platform.application.settlement.PostTradeProfileResolver
-import com.reef.platform.application.settlement.SettlementBreakOpenedReason
-import com.reef.platform.application.settlement.SettlementBreakOpenedReasonSecurity
-import com.reef.platform.application.settlement.SettlementAffirmationAcceptedFact
-import com.reef.platform.application.settlement.SettlementAllocationProposedFact
-import com.reef.platform.application.settlement.SettlementAttemptStartedFact
-import com.reef.platform.application.settlement.SettlementBreakOpenedFact
-import com.reef.platform.application.settlement.SettlementConfirmationGeneratedFact
-import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.calcify.finance.FinanceReadStore
-import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
-import com.reef.platform.application.settlement.SettlementLedgerDirectionCredit
-import com.reef.platform.application.settlement.SettlementLedgerDirectionDebit
-import com.reef.platform.application.settlement.SettlementLedgerEntryFact
-import com.reef.platform.application.settlement.SettlementLedgerEntryTypeCash
-import com.reef.platform.application.settlement.SettlementLedgerEntryTypeSecurity
-import com.reef.platform.application.settlement.SettlementLedgerProjection
-import com.reef.platform.application.settlement.SettlementLedgerProjectionView
-import com.reef.platform.application.settlement.SettlementLegOutcomeFact
-import com.reef.platform.application.settlement.SettlementObligationCreatedFact
-import com.reef.platform.application.settlement.SettlementObligationProjection
-import com.reef.platform.application.settlement.SettlementObligationView
-import com.reef.platform.application.settlement.SettlementOperatorActionFact
-import com.reef.platform.application.settlement.SettlementOperatorActionForceSettle
-import com.reef.platform.application.settlement.SettlementOperatorActionReverseLedgerEntry
-import com.reef.platform.application.settlement.SettlementRepairPostedActionCash
-import com.reef.platform.application.settlement.SettlementRepairPostedActionSecurity
-import com.reef.platform.application.settlement.SettlementRepairPostedFact
-import com.reef.platform.application.settlement.SettlementResolvedFact
-import com.reef.platform.application.settlement.SettlementResourcePositionFact
-import com.reef.platform.application.settlement.SettlementScenarioProofProjection
-import com.reef.platform.application.settlement.SettlementScenarioProofView
-import com.reef.platform.application.settlement.SettlementScoreProjection
-import com.reef.platform.application.settlement.SettlementScoreProjectionOptions
-import com.reef.platform.application.settlement.SettlementScoreProjectionView
-import com.reef.platform.application.settlement.SettlementSettledFact
 import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
@@ -109,10 +67,6 @@ private fun OptionalProductAdminRoute.toAdminGatewayRoute(): AdminGatewayRoute =
 )
 
 private val adminGatewayPlatformAdminRoles = setOf(AdminIdentityService.RolePlatformAdmin)
-private val adminGatewaySecretAdminRoles = setOf(
-    AdminIdentityService.RoleSecretAdmin,
-    AdminIdentityService.RolePlatformAdmin
-)
 private val adminGatewayOperatorRoles = setOf(
     AdminIdentityService.RoleOperator,
     AdminIdentityService.RolePlatformAdmin
@@ -1897,10 +1851,6 @@ class PlatformHttpServer(
             }
             out.write(buffer, 0, read)
         }
-    }
-
-    private fun queryLimit(exchange: HttpExchange, defaultValue: Int): Int {
-        return exchange.queryValue("limit").toIntOrNull() ?: defaultValue
     }
 
     private fun correlationId(exchange: HttpExchange): String {

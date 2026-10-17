@@ -10,7 +10,6 @@ import org.apache.kafka.streams.state.KeyValueStore
 import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.state.Stores
 import reef.contracts.calcify.v1.*
-import reef.contracts.orderexecution.v1.OrderSide
 
 /** Pure bounded record reduction. State is immutable; any failure discards all proposed changes. */
 internal object FiniteLifecycleReducer {

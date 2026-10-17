@@ -1061,7 +1061,10 @@ internal fun defaultRuntimePersistence(poolName: String = "runtime"): RuntimePer
         "postgres" -> {}
         else -> throw IllegalArgumentException("Unsupported RUNTIME_PERSISTENCE: $persistence")
     }
+    return postgresRuntimePersistenceFromEnv(poolName)
+}
 
+internal fun postgresRuntimePersistenceFromEnv(poolName: String): RuntimePersistence {
     val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"
     val user = System.getenv("RUNTIME_POSTGRES_USER") ?: "reef"
     val password = System.getenv("RUNTIME_POSTGRES_PASSWORD") ?: "reef"

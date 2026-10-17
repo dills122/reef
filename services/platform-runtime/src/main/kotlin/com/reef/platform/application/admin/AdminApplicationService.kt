@@ -1,7 +1,6 @@
 package com.reef.platform.application.admin
 
 import com.reef.platform.api.AccountRiskControlStore
-import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.JsonCodec
 import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.domain.Account
@@ -15,8 +14,7 @@ import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.VenueSessionPostTradeProfile
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
-import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
-import com.reef.platform.infrastructure.persistence.RuntimeDataSources
+import com.reef.platform.application.postgresRuntimePersistenceFromEnv
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
 import java.time.Instant
 import java.util.UUID
@@ -338,25 +336,5 @@ private fun defaultRuntimePersistence(): RuntimePersistence {
         return InMemoryRuntimePersistence()
     }
 
-    val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-    val user = System.getenv("RUNTIME_POSTGRES_USER") ?: "reef"
-    val password = System.getenv("RUNTIME_POSTGRES_PASSWORD") ?: "reef"
-    val projectionJdbcUrl = System.getenv("RUNTIME_PROJECTION_POSTGRES_JDBC_URL")?.trim().orEmpty()
-    val projectionUser = System.getenv("RUNTIME_PROJECTION_POSTGRES_USER") ?: user
-    val projectionPassword = System.getenv("RUNTIME_PROJECTION_POSTGRES_PASSWORD") ?: password
-    val runtimeDataSource = RuntimeDataSources.dataSource(jdbcUrl, user, password, "admin-runtime")
-    val projectionDataSource = if (projectionJdbcUrl.isBlank()) {
-        runtimeDataSource
-    } else {
-        RuntimeDataSources.dataSource(
-            projectionJdbcUrl,
-            projectionUser,
-            projectionPassword,
-            "admin-runtime-projection"
-        )
-    }
-    return PostgresRuntimePersistence(
-        dataSource = runtimeDataSource,
-        projectionDataSource = projectionDataSource
-    )
+    return postgresRuntimePersistenceFromEnv("admin-runtime")
 }

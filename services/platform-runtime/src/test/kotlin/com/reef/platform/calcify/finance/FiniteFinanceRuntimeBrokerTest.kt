@@ -7,13 +7,6 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.sql.DriverManager
 import java.util.concurrent.TimeUnit
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.common.acl.AccessControlEntry
-import org.apache.kafka.common.acl.AclBinding
-import org.apache.kafka.common.acl.AclOperation
-import org.apache.kafka.common.acl.AclPermissionType
-import org.apache.kafka.common.resource.PatternType
-import org.apache.kafka.common.resource.ResourcePattern
-import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.streams.KafkaStreams
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

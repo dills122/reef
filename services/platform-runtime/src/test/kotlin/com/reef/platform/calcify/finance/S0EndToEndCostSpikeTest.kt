@@ -21,7 +21,6 @@ import org.apache.kafka.streams.processor.api.Record
 import org.apache.kafka.streams.state.KeyValueStore
 import org.junit.jupiter.api.Tag
 import org.postgresql.ds.PGSimpleDataSource
-import java.util.Random
 import kotlin.test.Test
 
 /** Child process for the crash-restart measurement: the real finance topology on the production Streams properties, optionally with a lower session timeout. */
