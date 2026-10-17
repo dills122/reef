@@ -92,7 +92,7 @@ func compileSubmitPayload(
 	payload := map[string]string{
 		"commandId":      commandID,
 		"traceId":        traceID,
-		"causationId":    scenarioStepID(scenario.PathID, "cause", maxInt(1, step.Sequence-1)),
+		"causationId":    scenarioStepID(scenario.PathID, "cause", max(1, step.Sequence-1)),
 		"correlationId":  scenarioStepID(scenario.PathID, "corr", 1),
 		"actorId":        accountID,
 		"actorType":      "BOT",
@@ -181,11 +181,4 @@ func copyStringMap(values map[string]string) map[string]string {
 		out[key] = value
 	}
 	return out
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

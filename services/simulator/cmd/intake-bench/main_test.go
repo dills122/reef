@@ -136,15 +136,6 @@ func TestValidRateSchedule(t *testing.T) {
 	}
 }
 
-func TestMaxInt(t *testing.T) {
-	if maxInt(3, 5) != 5 {
-		t.Error("maxInt(3,5) should be 5")
-	}
-	if maxInt(5, 3) != 5 {
-		t.Error("maxInt(5,3) should be 5")
-	}
-}
-
 func TestTokenFeederSchedulesSelectAppropriateFeeder(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
