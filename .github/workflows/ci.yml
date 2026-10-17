@@ -349,6 +349,8 @@ jobs:
             scripts/dev/lib/source-cohort.test.mjs \
             scripts/dev/lib/stream-profile-guard.test.mjs \
             scripts/dev/lib/script-surface.test.mjs \
+            scripts/dev/lib/cli-args.test.mjs \
+            scripts/dev/lib/sleep.test.mjs \
             scripts/ci/tests/ci-workflow-hardening.test.mjs \
             scripts/dev/ci-pr-change-scope.test.mjs \
             scripts/ci/check-required-results.test.mjs \

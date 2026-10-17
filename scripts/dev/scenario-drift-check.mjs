@@ -1,11 +1,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildDriftBaseline, evaluateReportDrift } from "./lib/scenario-drift.mjs";
+import { parseKeyValueArgs } from "./lib/cli-args.mjs";
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseKeyValueArgs(process.argv.slice(2));
 const baselinePath = args.baseline ?? env("DEV_SCENARIO_DRIFT_BASELINE", "");
 const reportPath = args.report ?? env("DEV_SCENARIO_DRIFT_REPORT", "");
 const outPath = args.out ?? env("DEV_SCENARIO_DRIFT_OUT", "");
@@ -52,28 +53,4 @@ if (!check.pass) {
 }
 if (outPath) {
   console.log(`check: ${outPath}`);
-}
-
-function parseArgs(argv) {
-  const out = {};
-  for (let index = 0; index < argv.length; index++) {
-    const arg = argv[index];
-    if (!arg.startsWith("--")) {
-      throw new Error(`unexpected positional argument: ${arg}`);
-    }
-    const keyValue = arg.slice(2);
-    const [key, inlineValue] = keyValue.split("=", 2);
-    if (inlineValue != null) {
-      out[key] = inlineValue;
-      continue;
-    }
-    const next = argv[index + 1];
-    if (!next || next.startsWith("--")) {
-      out[key] = "true";
-      continue;
-    }
-    out[key] = next;
-    index++;
-  }
-  return out;
 }
