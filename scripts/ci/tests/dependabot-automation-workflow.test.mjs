@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const dependabot = await readFile(new URL("../../.github/dependabot.yml", import.meta.url), "utf8");
-const autoMerge = await readFile(new URL("../../.github/workflows/dependabot-auto-merge.yml", import.meta.url), "utf8");
-const ci = await readFile(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
+const dependabot = await readFile(new URL("../../../.github/dependabot.yml", import.meta.url), "utf8");
+const autoMerge = await readFile(new URL("../../../.github/workflows/dependabot-auto-merge.yml", import.meta.url), "utf8");
+const ci = await readFile(new URL("../../../.github/workflows/ci.yml", import.meta.url), "utf8");
 
 const expectedDomainSchedules = new Map([
   ["matching-engine", "monday"],

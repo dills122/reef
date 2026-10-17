@@ -349,12 +349,12 @@ jobs:
             scripts/dev/lib/source-cohort.test.mjs \
             scripts/dev/lib/stream-profile-guard.test.mjs \
             scripts/dev/lib/script-surface.test.mjs \
-            scripts/dev/ci-workflow-hardening.test.mjs \
+            scripts/ci/tests/ci-workflow-hardening.test.mjs \
             scripts/dev/ci-pr-change-scope.test.mjs \
             scripts/ci/check-required-results.test.mjs \
             scripts/ci/build-container.test.mjs \
             scripts/dev/db/migrate.test.mjs \
-            scripts/dev/container-images-workflow.test.mjs \
+            scripts/ci/tests/container-images-workflow.test.mjs \
             scripts/dev/command-log-integrity-check.test.mjs \
             scripts/dev/command-log-pin.test.mjs \
             scripts/dev/command-log-archive.test.mjs \
@@ -362,7 +362,7 @@ jobs:
             scripts/dev/command-log-prune.test.mjs \
             scripts/dev/bot-submission-register-merged.test.mjs \
             scripts/dev/export-simulation-run.test.mjs \
-            scripts/dev/deploy-receiver.test.mjs \
+            scripts/ci/tests/deploy-receiver.test.mjs \
             scripts/dev/analyze-arena-actor-diagnostics.test.mjs \
             scripts/dev/lib/arena-score-breakdown.test.mjs \
             scripts/dev/compare-arena-score-v1-proof.test.mjs \

@@ -46,12 +46,12 @@ calcify-droplet-run:
 test-dev-tooling:
 	node scripts/dev/doctor.test.mjs
 	node scripts/dev/lib/dev-links.test.mjs
-	node scripts/dev/onboarding-links.test.mjs
+	node scripts/ci/tests/onboarding-links.test.mjs
 	node scripts/dev/lib/smoke-identity.test.mjs
 	node scripts/dev/ci-pr-change-scope.test.mjs
 	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
 	node --test scripts/dev/lib/benchmark-runtime-signature.test.mjs scripts/dev/lib/cohort-residence.test.mjs scripts/dev/lib/downstream-cohort.test.mjs scripts/dev/lib/downstream-freshness.test.mjs scripts/dev/lib/downstream-sampler.test.mjs scripts/dev/lib/instrumentation-perturbation.test.mjs scripts/dev/lib/run-profile-roles.test.mjs scripts/dev/lib/source-cohort.test.mjs scripts/dev/lib/stream-profile-guard.test.mjs scripts/dev/lib/script-surface.test.mjs
-	node scripts/dev/ci-workflow-hardening.test.mjs
+	node scripts/ci/tests/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs
 	node --test scripts/ci/build-container.test.mjs
 	node --test scripts/dev/calcify-financial/record-attempt.test.mjs
@@ -141,7 +141,7 @@ test-bot-sdk:
 	bun scripts/dev/bot-submission-invite-workflow.test.mjs
 	bun scripts/dev/bot-submission-pr-comment.test.mjs
 	bun scripts/dev/arena-admin-access-normalize.test.mjs
-	bun scripts/dev/dependabot-automation-workflow.test.mjs
+	bun scripts/ci/tests/dependabot-automation-workflow.test.mjs
 	bun scripts/dev/bot-submission-provision-openbao.test.mjs
 	bun scripts/dev/bot-sdk-test-bot.test.mjs
 	bun scripts/dev/arena-ingest-bot-run-result.test.mjs

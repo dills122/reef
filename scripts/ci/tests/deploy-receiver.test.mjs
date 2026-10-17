@@ -13,7 +13,7 @@ import {
   validateArchiveEntryMetadata,
   validateClaims,
   validateStartupConfig,
-} from "../../infra/hetzner-core/server/deploy-receiver/server.mjs";
+} from "../../../infra/hetzner-core/server/deploy-receiver/server.mjs";
 
 const now = 1_800_000_000;
 const config = {

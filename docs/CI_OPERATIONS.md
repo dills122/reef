@@ -77,7 +77,7 @@ merge protection cannot guarantee downstream service uptime.
 - Upload diagnostic and coverage artifacts with `if: always()` when earlier
   steps can fail.
 - Set `cache-dependency-path` for nested Go modules.
-- Update `scripts/dev/ci-workflow-hardening.test.mjs` when adding workflows,
+- Update `scripts/ci/tests/ci-workflow-hardening.test.mjs` when adding workflows,
   jobs, or external actions.
 
 ## Opt-in OpenCodeReview pilot
@@ -97,9 +97,9 @@ skipped tests; configured URL with missing credentials fails. Renewal tests cove
 expiry, concurrent replacement and preservation of live results.
 
 ```bash
-node scripts/dev/ci-workflow-hardening.test.mjs
+node scripts/ci/tests/ci-workflow-hardening.test.mjs
 node --test scripts/ci/check-required-results.test.mjs
-node scripts/dev/dependabot-automation-workflow.test.mjs
+node scripts/ci/tests/dependabot-automation-workflow.test.mjs
 node scripts/dev/script-surface-check.mjs
 actionlint
 make test-dev-tooling

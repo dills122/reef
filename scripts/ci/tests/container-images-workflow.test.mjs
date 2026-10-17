@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const workflow = await readFile(
-  new URL("../../.github/workflows/container-images.yml", import.meta.url),
+  new URL("../../../.github/workflows/container-images.yml", import.meta.url),
   "utf8",
 );
 

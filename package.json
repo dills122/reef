@@ -34,10 +34,10 @@
     "bot-sdk:test:submission-admission": "bun scripts/dev/bot-submission-record-admission.test.mjs",
     "bot-sdk:test:submission-invite-workflow": "bun scripts/dev/bot-submission-invite-workflow.test.mjs",
     "bot-sdk:test:submission-pr-comment": "bun scripts/dev/bot-submission-pr-comment.test.mjs",
-    "repo:test:dependabot-automation": "bun scripts/dev/dependabot-automation-workflow.test.mjs",
+    "repo:test:dependabot-automation": "bun scripts/ci/tests/dependabot-automation-workflow.test.mjs",
     "repo:check:records": "bun scripts/ci/check-records-retention.mjs",
     "repo:test:records": "node --test scripts/ci/check-records-retention.test.mjs",
-    "repo:test:ci-hardening": "node scripts/dev/ci-workflow-hardening.test.mjs && node --test scripts/ci/check-required-results.test.mjs scripts/ci/build-container.test.mjs scripts/dev/lib/script-surface.test.mjs",
+    "repo:test:ci-hardening": "node scripts/ci/tests/ci-workflow-hardening.test.mjs && node --test scripts/ci/check-required-results.test.mjs scripts/ci/build-container.test.mjs scripts/dev/lib/script-surface.test.mjs",
     "repo:test:ci-change-scope": "node scripts/dev/ci-pr-change-scope.test.mjs",
     "bot-sdk:test:openbao-provision": "bun scripts/dev/bot-submission-provision-openbao.test.mjs",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
@@ -69,8 +69,8 @@
     "arena-admin:ui-audit": "bun scripts/dev/arena-admin-ui-audit.mjs",
     "arena-admin:test:access-normalize": "bun scripts/dev/arena-admin-access-normalize.test.mjs",
     "arena-admin:check": "bun run --cwd apps/arena-admin check",
-    "infra:test:deploy-receiver": "node scripts/dev/deploy-receiver.test.mjs",
-    "infra:test:service-deploy": "node scripts/dev/service-deploy.test.mjs"
+    "infra:test:deploy-receiver": "node scripts/ci/tests/deploy-receiver.test.mjs",
+    "infra:test:service-deploy": "node scripts/ci/tests/service-deploy.test.mjs"
   },
   "devDependencies": {
     "decimal.js": "10.6.0",
