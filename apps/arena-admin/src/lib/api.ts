@@ -424,12 +424,6 @@ export function githubLoginUrl(redirectPath: string): string {
 	return `${ARENA_API_BASE_URL}/admin/auth/github/start?redirectPath=${encodeURIComponent(redirectPath)}`;
 }
 
-export async function fetchAdminBots(limit = 100): Promise<ArenaBot[]> {
-	const params = new URLSearchParams({ limit: String(limit) });
-	const body = await fetchAdminJson<{ bots: ArenaBot[] }>(`/admin/v1/arena/bots?${params}`);
-	return body.bots ?? [];
-}
-
 export async function fetchOwnedArenaBots(limit = 100): Promise<OwnedArenaBotsResponse> {
 	const params = new URLSearchParams({ limit: String(limit) });
 	const body = await fetchAdminJson<Partial<OwnedArenaBotsResponse>>(
@@ -512,13 +506,6 @@ export async function removeArenaRosterEntry(input: {
 	return body.removal;
 }
 
-export async function fetchAdminRiskControls(): Promise<AccountRiskControl[]> {
-	const body = await fetchAdminJson<{ controls: AccountRiskControl[] }>(
-		'/admin/v1/risk/account-controls'
-	);
-	return body.controls ?? [];
-}
-
 export async function fetchAdminAccessUsers(limit = 100): Promise<AdminAccessUser[]> {
 	const params = new URLSearchParams({ limit: String(limit) });
 	const body = await fetchAdminJson<{ users: AdminAccessUser[] }>(`/admin/v1/access/users?${params}`);
@@ -566,17 +553,6 @@ export async function revokeAdminAccessRole(
 export async function fetchBotConfigStatus(botId: string): Promise<BotConfigStatus> {
 	const params = new URLSearchParams({ botId });
 	return await fetchAdminJson<BotConfigStatus>(`/admin/v1/arena/bots/config?${params}`);
-}
-
-export async function fetchBotRuntimeConfigDescriptors(
-	botId: string,
-	versionId: string
-): Promise<BotRuntimeConfigDescriptor[]> {
-	const params = new URLSearchParams({ botId, versionId });
-	const body = await fetchAdminJson<{ descriptors: BotRuntimeConfigDescriptor[] }>(
-		`/admin/v1/arena/runtime-config-descriptors?${params}`
-	);
-	return body.descriptors ?? [];
 }
 
 export async function replaceBotConfig(botId: string, config: unknown): Promise<BotConfigStatus> {

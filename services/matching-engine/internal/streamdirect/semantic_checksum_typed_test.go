@@ -1,6 +1,9 @@
 package streamdirect
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"math"
 	"math/rand"
 	"reflect"
@@ -209,4 +212,24 @@ func BenchmarkVenueEventBatchChecksumViaJSON200(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		benchmarkChecksum, _ = venueEventBatchChecksumViaJSON(batch)
 	}
+}
+
+// genericChecksumOf hashes any JSON-encodable value by the general route (marshal, decode into generic values, canonical walk), without the batch's
+// top-level exclusions. It exists to test the typed walk on small probe types.
+func genericChecksumOf(value any) (string, error) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	var root any
+	decoder := json.NewDecoder(strings.NewReader(string(payload)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&root); err != nil {
+		return "", err
+	}
+	digest := sha256.New()
+	if err := writeCanonicalValue(digest, root); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }

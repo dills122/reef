@@ -180,3 +180,9 @@ func TestKafkaMaxMessageBytesOverrideAndInvalidFallback(t *testing.T) {
 		})
 	}
 }
+
+func newKafkaTransactionalClientConfig(clientID string, transactionalID string) *sarama.Config {
+	config := newKafkaClientConfig(clientID)
+	applyKafkaTransaction(config, transactionalID)
+	return config
+}
