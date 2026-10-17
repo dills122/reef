@@ -4,3 +4,16 @@
 **/build
 **/node_modules
 coverage
+artifacts
+reports
+.serena
+.planning
+.agents
+.claude
+.claude-flow
+.swarm
+.codebase-memory
+ruvector.db
+.env
+.env.*
+!.env.example

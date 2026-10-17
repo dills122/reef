@@ -3,7 +3,7 @@
 First authoring surface for Reef trading bots. The package is currently private
 and repository-local; it is not yet published as a standalone package.
 
-This package currently defines the `ReefBotV1` contract and example bots. It intentionally does not create runtime routes, persistence tables, or direct service clients.
+This package currently defines the `ReefBotV1` contract and example bots. It intentionally does not create runtime routes or persistence tables; it does contain the venue HTTP read/write clients (`venue-client.ts`, `live-client.ts`) that bot runners use to reach the platform.
 
 Bot Arena is in limited preview. A same-repository smoke bot has passed the
 submission pipeline, but the selected invite-only fork flow is not available

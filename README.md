@@ -7,7 +7,7 @@
 [![Go](https://img.shields.io/badge/matching--engine-Go-00ADD8.svg)](./services/matching-engine)
 
 <p align="center">
-  <img src="./reef-logo-main.png" alt="Reef project logo" width="260" height="260" />
+  <img src="./docs/assets/reef-logo-main.png" alt="Reef project logo" width="260" height="260" />
 </p>
 
 Reef is a simulation-first institutional trading venue and post-trade platform. It is built to model market-infrastructure workflows locally, replay them deterministically, and measure command-intake and lifecycle behavior with evidence instead of assumptions.

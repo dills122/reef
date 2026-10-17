@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatDateTime, pnlClass, signed } from '$lib/format';
 	import { page } from '$app/state';
 	import {
 		ARENA_API_BASE_URL,
@@ -59,14 +60,6 @@
 	function enforcementHref(selectedRunId: string) {
 		const params = new URLSearchParams({ runId: selectedRunId });
 		return `${ARENA_API_BASE_URL}/admin/v1/arena/run-enforcement-events?${params}`;
-	}
-
-	function signed(n: number) {
-		return `${n > 0 ? '+' : ''}${n.toLocaleString()}`;
-	}
-
-	function pnlClass(n: number) {
-		return cn(n > 0 && 'text-accent', n < 0 && 'text-destructive');
 	}
 </script>
 
@@ -130,11 +123,11 @@
 						</div>
 						<div>
 							<dt class="text-xs font-bold uppercase tracking-normal text-muted">created</dt>
-							<dd class="mt-1 text-ink">{new Date(run.createdAt).toLocaleString()}</dd>
+							<dd class="mt-1 text-ink">{formatDateTime(run.createdAt)}</dd>
 						</div>
 						<div>
 							<dt class="text-xs font-bold uppercase tracking-normal text-muted">completed</dt>
-							<dd class="mt-1 text-ink">{run.completedAt ? new Date(run.completedAt).toLocaleString() : 'not complete'}</dd>
+							<dd class="mt-1 text-ink">{run.completedAt ? formatDateTime(run.completedAt) : 'not complete'}</dd>
 						</div>
 					</dl>
 				</div>
@@ -268,7 +261,7 @@
 									<td class="max-w-[16ch] truncate border-b border-rule py-2.5 pr-4 text-muted" title={event.policyVersion}>
 										{event.policyVersion}
 									</td>
-									<td class="border-b border-rule py-2.5 text-muted">{new Date(event.occurredAt).toLocaleString()}</td>
+									<td class="border-b border-rule py-2.5 text-muted">{formatDateTime(event.occurredAt)}</td>
 								</tr>
 							{/each}
 						</tbody>

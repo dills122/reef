@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatDateTime } from '$lib/format';
 	import {
 		fetchArenaAdmissionWindow,
 		fetchArenaEligibilityDecisions,
@@ -159,10 +160,6 @@
 		}
 	}
 
-	function formatTime(value: string) {
-		return new Date(value).toLocaleString();
-	}
-
 	function outcomeVariant(outcome: ArenaEligibilityDecision['outcome']) {
 		if (outcome === 'eligible_for_roster') return 'success' as const;
 		if (outcome === 'excluded') return 'danger' as const;
@@ -216,11 +213,11 @@
 			<Badge variant={roster ? 'success' : 'muted'}>{roster ? 'locked' : 'pre-lock'}</Badge>
 		</div>
 		<dl class="mt-5 grid gap-4 border-t border-rule pt-4 text-sm sm:grid-cols-2 lg:grid-cols-5">
-			<div><dt class="font-bold text-muted">invite cutoff</dt><dd class="mt-1">{formatTime(admissionWindow.inviteDecisionCutoff)}</dd></div>
-			<div><dt class="font-bold text-muted">readiness cutoff</dt><dd class="mt-1">{formatTime(admissionWindow.mergeReadinessCutoff)}</dd></div>
-			<div><dt class="font-bold text-muted">roster lock</dt><dd class="mt-1">{formatTime(admissionWindow.rosterLockAt)}</dd></div>
-			<div><dt class="font-bold text-muted">recheck</dt><dd class="mt-1">{formatTime(admissionWindow.operationalRecheckAt)}</dd></div>
-			<div><dt class="font-bold text-muted">game start</dt><dd class="mt-1">{formatTime(admissionWindow.scheduledStart)}</dd></div>
+			<div><dt class="font-bold text-muted">invite cutoff</dt><dd class="mt-1">{formatDateTime(admissionWindow.inviteDecisionCutoff)}</dd></div>
+			<div><dt class="font-bold text-muted">readiness cutoff</dt><dd class="mt-1">{formatDateTime(admissionWindow.mergeReadinessCutoff)}</dd></div>
+			<div><dt class="font-bold text-muted">roster lock</dt><dd class="mt-1">{formatDateTime(admissionWindow.rosterLockAt)}</dd></div>
+			<div><dt class="font-bold text-muted">recheck</dt><dd class="mt-1">{formatDateTime(admissionWindow.operationalRecheckAt)}</dd></div>
+			<div><dt class="font-bold text-muted">game start</dt><dd class="mt-1">{formatDateTime(admissionWindow.scheduledStart)}</dd></div>
 		</dl>
 	</Card>
 
