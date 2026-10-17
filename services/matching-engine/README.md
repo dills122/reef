@@ -2,7 +2,7 @@
 
 This service is the Go-based matching and execution engine for Reef.
 
-Go security baseline: module/CI floor `1.26.9`, container builder `1.27.2`,
+Go security baseline: module/CI floor `1.26.9`, container builder `1.26.9`,
 and `golang.org/x/net v0.60.0`. October 9, 2026 verification: pinned
 `govulncheck v1.7.0` reports zero affected vulnerabilities; module-only
 `GO-2026-5932` concerns unimported OpenPGP package. Whole-module uncached tests,
