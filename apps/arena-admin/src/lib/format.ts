@@ -1,4 +1,4 @@
-import { cn } from '$lib/utils';
+import { cn } from '#lib/utils.js';
 
 export function signed(n: number): string {
 	return `${n > 0 ? '+' : ''}${n.toLocaleString()}`;

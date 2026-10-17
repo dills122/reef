@@ -6,8 +6,8 @@
 		githubLoginUrl,
 		hasOperatorAccess,
 		type SessionUser
-	} from '$lib/api';
-	import Button from '$lib/components/ui/Button.svelte';
+	} from '#lib/api.js';
+	import Button from '#lib/components/ui/Button.svelte';
 
 	let { children } = $props();
 	let session = $state<SessionUser | null | 'loading'>('loading');

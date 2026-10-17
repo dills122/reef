@@ -1,7 +1,7 @@
 <script lang="ts">
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import PageHeader from '$lib/components/ui/PageHeader.svelte';
-	import { GAME_MODES } from '$lib/config/game-modes';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
+	import { GAME_MODES } from '#lib/config/game-modes.js';
 </script>
 
 <svelte:head>

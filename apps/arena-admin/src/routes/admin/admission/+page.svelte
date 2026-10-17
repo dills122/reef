@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatDateTime } from '$lib/format';
+	import { formatDateTime } from '#lib/format.js';
 	import {
 		fetchArenaAdmissionWindow,
 		fetchArenaEligibilityDecisions,
@@ -11,13 +11,13 @@
 		type ArenaRoster,
 		type ArenaRosterPreview,
 		type ArenaRosterRemoval
-	} from '$lib/api';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import PageHeader from '$lib/components/ui/PageHeader.svelte';
-	import StateMessage from '$lib/components/ui/StateMessage.svelte';
-	import TextInput from '$lib/components/ui/TextInput.svelte';
+	} from '#lib/api.js';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
+	import StateMessage from '#lib/components/ui/StateMessage.svelte';
+	import TextInput from '#lib/components/ui/TextInput.svelte';
 
 	let windowId = $state('');
 	let maxBots = $state(8);

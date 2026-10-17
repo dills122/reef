@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatDateTime, pnlClass, signed } from '$lib/format';
+	import { formatDateTime, pnlClass, signed } from '#lib/format.js';
 	import { page } from '$app/state';
 	import {
 		ARENA_API_BASE_URL,
@@ -9,15 +9,15 @@
 		type ArenaRun,
 		type ArenaRunBotResult,
 		type ArenaRunEnforcementEvent
-	} from '$lib/api';
-	import ActionBar from '$lib/components/ui/ActionBar.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import PageHeader from '$lib/components/ui/PageHeader.svelte';
-	import StateMessage from '$lib/components/ui/StateMessage.svelte';
-	import { createRunDetailLoader } from '$lib/admin-run-detail';
-	import { cn } from '$lib/utils';
+	} from '#lib/api.js';
+	import ActionBar from '#lib/components/ui/ActionBar.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
+	import StateMessage from '#lib/components/ui/StateMessage.svelte';
+	import { createRunDetailLoader } from '#lib/admin-run-detail.js';
+	import { cn } from '#lib/utils.js';
 
 	let run = $state<ArenaRun | null>(null);
 	let results = $state<ArenaRunBotResult[]>([]);

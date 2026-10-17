@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../app.css';
-	import favicon from '$lib/assets/favicon.svg';
+	import favicon from '#lib/assets/favicon.svg';
 	import { page } from '$app/state';
 	import {
 		displayRoles,
@@ -9,7 +9,7 @@
 		hasBotAdminAccess,
 		hasOperatorAccess,
 		type SessionUser
-	} from '$lib/api';
+	} from '#lib/api.js';
 
 	let { children } = $props();
 	let session = $state<SessionUser | null | 'loading'>('loading');

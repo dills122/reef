@@ -79,6 +79,46 @@ const rootPackage = JSON.parse(await read("package.json"));
 const expectedBun = rootPackage.packageManager.match(/^bun@(.+)$/)?.[1];
 assert.ok(expectedBun, "root packageManager must pin Bun");
 
+// Any npm package declared in more than one package.json must use an identical range.
+const packageJsonPaths = [
+  "package.json",
+  "apps/arena-admin/package.json",
+  "apps/docs-site/package.json",
+  "packages/bot-sdk/package.json",
+];
+const declaredRanges = new Map();
+for (const path of packageJsonPaths) {
+  const manifest = JSON.parse(await read(path));
+  for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+    for (const [name, range] of Object.entries(manifest[section] ?? {})) {
+      declaredRanges.set(name, [...(declaredRanges.get(name) ?? []), [path, range]]);
+    }
+  }
+}
+for (const [name, declarations] of declaredRanges) {
+  const distinct = new Set(declarations.map(([, range]) => range));
+  assert.equal(
+    distinct.size,
+    1,
+    `${name} must use the same range in every package.json: ${declarations.map(([path, range]) => `${path}=${range}`).join(", ")}`,
+  );
+}
+
+// The bot SDK approved-package list pins exact versions that hosted artifacts bundle from the root install.
+const approvedPackages = JSON.parse(await read("packages/bot-sdk/approved-packages.v1.json")).packages;
+const approvedPolicySource = await read("packages/bot-sdk/src/sandbox-policy.ts");
+for (const { name, version } of approvedPackages) {
+  assert.equal(
+    rootPackage.devDependencies?.[name],
+    version,
+    `approved bot package ${name}@${version} must match the root package.json devDependency`,
+  );
+  assert.ok(
+    new RegExp(`name: "${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}",\\s+version: "${version.replace(/\./g, "\\.")}"`).test(approvedPolicySource),
+    `sandbox-policy.ts approved package ${name} must be ${version} (same as approved-packages.v1.json)`,
+  );
+}
+
 const workflowDirectory = new URL(".github/workflows/", root);
 const workflowNames = (await readdir(workflowDirectory)).filter((name) => name.endsWith(".yml"));
 const workflowEntries = await Promise.all(
@@ -93,6 +133,31 @@ for (const [path, content] of workflowEntries) {
 assert.ok(workflowBun.length > 0, "expected at least one CI Bun pin");
 for (const [path, version] of workflowBun) {
   assert.equal(version, expectedBun, `${path} Bun version must match packageManager bun@${expectedBun}`);
+}
+
+// Every external action must resolve to a single pinned ref across workflows and composite actions.
+const compositeDirectory = new URL(".github/actions/", root);
+const compositeEntries = await Promise.all(
+  (await readdir(compositeDirectory, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map(async (entry) => {
+      const path = `.github/actions/${entry.name}/action.yml`;
+      return [path, await read(path)];
+    }),
+);
+const actionRefs = new Map();
+for (const [path, content] of [...workflowEntries, ...compositeEntries]) {
+  for (const match of content.matchAll(/^\s*(?:-\s+)?uses:\s*([^\s@]+)@(\S+)(?:\s+#\s*(\S+))?/gm)) {
+    const [, action, ref, comment] = match;
+    if (action.startsWith("./")) continue;
+    actionRefs.set(action, [...(actionRefs.get(action) ?? []), { path, ref, comment }]);
+  }
+}
+for (const [action, uses] of actionRefs) {
+  const refs = new Set(uses.map(({ ref }) => ref));
+  assert.equal(refs.size, 1, `${action} must use one pinned ref everywhere: ${[...refs].join(", ")}`);
+  const comments = new Set(uses.map(({ comment }) => comment));
+  assert.equal(comments.size, 1, `${action} version comments must match everywhere: ${[...comments].join(", ")}`);
 }
 
 console.log("dependency alignment checks passed");

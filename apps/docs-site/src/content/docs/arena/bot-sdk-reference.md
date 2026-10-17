@@ -67,7 +67,7 @@ No external network access, no direct filesystem access, no `setTimeout`/`setInt
 Bot source may import from an approved allowlist, bundled into the hosted artifact and scanned post-bundling:
 
 - `trading-signals@7.4.3`
-- `simple-statistics@7.9.3`
+- `simple-statistics@7.12.1`
 - `decimal.js@10.6.0`
 - `lodash-es@4.18.1`
 

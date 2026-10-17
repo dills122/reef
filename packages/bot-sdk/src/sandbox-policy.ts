@@ -37,7 +37,7 @@ export const reefBotApprovedPackagesV1: readonly BotApprovedPackageV1[] = [
   },
   {
     name: "simple-statistics",
-    version: "7.9.3",
+    version: "7.12.1",
     license: "ISC",
     status: "approved",
     reason: "Pure JavaScript statistics helpers for strategy calculations.",

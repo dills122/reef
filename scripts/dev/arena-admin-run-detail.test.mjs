@@ -140,7 +140,7 @@ for (const [error, message] of [[new Error("current failed"), "current failed"],
 
 // Verify the route uses this tested loader and returns cleanup to Svelte's effect.
 const page = readFileSync(new URL("../../apps/arena-admin/src/routes/admin/run/+page.svelte", import.meta.url), "utf8");
-assert.match(page, /import \{ createRunDetailLoader \} from '\$lib\/admin-run-detail'/);
+assert.match(page, /import \{ createRunDetailLoader \} from '#lib\/admin-run-detail.js'/);
 assert.match(page, /const loadRun = createRunDetailLoader\(/);
 assert.match(page, /\$effect\(\(\) => loadRun\(runId\)\)/);
 for (const field of ["run", "results", "enforcementEvents", "loading", "error"]) {

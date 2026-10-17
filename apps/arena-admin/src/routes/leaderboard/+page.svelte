@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { pnlClass, signed } from '$lib/format';
-	import { fetchLeaderboard, type LeaderboardResponse } from '$lib/api';
-	import PageHeader from '$lib/components/ui/PageHeader.svelte';
-	import SegmentButton from '$lib/components/ui/SegmentButton.svelte';
-	import StateMessage from '$lib/components/ui/StateMessage.svelte';
-	import { GAME_MODES, type GameMode } from '$lib/config/game-modes';
-	import { cn } from '$lib/utils';
+	import { pnlClass, signed } from '#lib/format.js';
+	import { fetchLeaderboard, type LeaderboardResponse } from '#lib/api.js';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
+	import SegmentButton from '#lib/components/ui/SegmentButton.svelte';
+	import StateMessage from '#lib/components/ui/StateMessage.svelte';
+	import { GAME_MODES, type GameMode } from '#lib/config/game-modes.js';
+	import { cn } from '#lib/utils.js';
 
 	let selectedMode = $state(GAME_MODES[0].id);
 	let selectedModeConfig = $state<GameMode>(GAME_MODES[0]);
