@@ -21,8 +21,6 @@ import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
-import com.reef.platform.domain.EngineOrderAccepted
-import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.VenueSessionPostTradeProfile
 import java.math.BigDecimal
 import java.time.Duration

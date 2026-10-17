@@ -1,6 +1,5 @@
 package com.reef.platform.calcify.finance
 
-import java.security.MessageDigest
 import java.util.HexFormat
 
 /**
