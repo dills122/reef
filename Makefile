@@ -12,7 +12,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 
 .PHONY: test test-dev-tooling test-finite-o2-harness calcify-droplet-run lint check-scripts check-dependency-alignment check-env-reference check-reef-arena-boundaries check-js-runtime check-bun-runtime check-bot-sdk-js-deps
 .PHONY: test-go test-platform-runtime test-reef-core build-reef-core build-arena-control-plane test-arena-control-plane test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
-.PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
+.PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check bench-preflight
 .PHONY: dev-up dev-up-reef dev-up-arena dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
 .PHONY: dev-compose-config dev-validate-stream-profile dev-down dev-down-arena dev-reset dev-reset-arena dev-db-migrate dev-smoke-reef dev-smoke-arena
 .PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-arena-isolation
@@ -45,6 +45,7 @@ calcify-droplet-run:
 
 test-dev-tooling:
 	node scripts/dev/doctor.test.mjs
+	node --test scripts/bench/preflight.test.mjs
 	node scripts/dev/lib/dev-links.test.mjs
 	node scripts/ci/tests/onboarding-links.test.mjs
 	node scripts/dev/lib/smoke-identity.test.mjs
@@ -100,6 +101,12 @@ bench-matching-engine-check:
 
 bench-platform-runtime-check:
 	./scripts/ci/check-runtime-bench.sh
+
+# Benchmark configuration preflight (scripts/bench/README.md). CLASS=a|b|c; optional LAUNCHER=materializer|nodb|none,
+# PREFLIGHT_ARGS="--target droplet --env-file X --json". Exit 0 pass, 1 config fail, 2 could not check.
+bench-preflight:
+	@test -n "$(CLASS)" || { echo "usage: make bench-preflight CLASS=a|b|c [LAUNCHER=materializer|nodb|none] [PREFLIGHT_ARGS=...]"; exit 2; }
+	node scripts/bench/preflight.mjs --class $(CLASS) $(if $(LAUNCHER),--launcher $(LAUNCHER)) $(PREFLIGHT_ARGS)
 
 test-platform-runtime:
 	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew test
@@ -466,7 +473,7 @@ dev-stress-stream-ack:
 
 dev-stress-stream-direct-nodb:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stress run stream-direct-nodb
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" ./scripts/bench/run-with-preflight.sh c nodb -- $(JS_RUNTIME) scripts/dev/reef-dev.mjs stress run stream-direct-nodb
 
 dev-stream-publish-bench:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -483,7 +490,7 @@ dev-export-simulation-run:
 
 dev-stress-venue-event-materializer:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/venue-event-materializer-stress.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" ./scripts/bench/run-with-preflight.sh c materializer -- $(JS_RUNTIME) scripts/dev/venue-event-materializer-stress.mjs
 
 dev-projection-drain-bench:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -603,6 +610,7 @@ hetzner-core-tofu:
 	$(JS_RUNTIME) scripts/deploy/hetzner-core-tofu.mjs $(ARGS)
 
 # Full-chain paced run (intake, engine, Phase 1 and 2, capacity lanes, projection); FC_RATE and FC_SECONDS set the load, see the header of the script. Builds the images and tears the stack down.
+# Runs scripts/bench/preflight.mjs first (BENCH_PREFLIGHT=skip bypasses it and stamps the output 'PREFLIGHT SKIPPED').
 .PHONY: calcify-fullchain-soak
 calcify-fullchain-soak:
-	$(JS_RUNTIME) scripts/dev/calcify-fullchain-soak.mjs
+	./scripts/bench/run-with-preflight.sh b none -- $(JS_RUNTIME) scripts/dev/calcify-fullchain-soak.mjs
