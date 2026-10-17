@@ -1,8 +1,12 @@
-import { env } from '$env/dynamic/public';
+import {
+	PUBLIC_ARENA_API_BASE_URL,
+	PUBLIC_ARENA_LOCAL_DEV_FAKE_ADMIN,
+	PUBLIC_ARENA_LOCAL_DEV_FIXTURES
+} from '$app/env/public';
 import { resolveFixture } from './dev-fixtures';
 import { normalizeAdminAccessCollections } from './admin-access-normalize';
 
-export const ARENA_API_BASE_URL = env.PUBLIC_ARENA_API_BASE_URL?.trim() ?? '';
+export const ARENA_API_BASE_URL = PUBLIC_ARENA_API_BASE_URL?.trim() ?? '';
 
 export type LeaderboardEntry = {
 	rank: number;
@@ -311,13 +315,13 @@ type ErrorBody = {
 
 function localDevFakeAdminEnabled(): boolean {
 	if (!import.meta.env.DEV) return false;
-	const value = (env.PUBLIC_ARENA_LOCAL_DEV_FAKE_ADMIN ?? '').trim().toLowerCase();
+	const value = (PUBLIC_ARENA_LOCAL_DEV_FAKE_ADMIN ?? '').trim().toLowerCase();
 	return value === '1' || value === 'true' || value === 'yes' || value === 'on';
 }
 
 function localDevFixturesEnabled(): boolean {
 	if (!import.meta.env.DEV) return false;
-	const value = (env.PUBLIC_ARENA_LOCAL_DEV_FIXTURES ?? '').trim().toLowerCase();
+	const value = (PUBLIC_ARENA_LOCAL_DEV_FIXTURES ?? '').trim().toLowerCase();
 	return value === '1' || value === 'true' || value === 'yes' || value === 'on';
 }
 

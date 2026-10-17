@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatDateTime } from '$lib/format';
+	import { formatDateTime } from '#lib/format.js';
 	import {
 		displayRoles,
 		fetchSession,
@@ -14,15 +14,15 @@
 		type ArenaBotOwner,
 		type BotConfigStatus,
 		type SessionUser
-	} from '$lib/api';
-	import ActionBar from '$lib/components/ui/ActionBar.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import PageHeader from '$lib/components/ui/PageHeader.svelte';
-	import SegmentButton from '$lib/components/ui/SegmentButton.svelte';
-	import StateMessage from '$lib/components/ui/StateMessage.svelte';
-	import TextInput from '$lib/components/ui/TextInput.svelte';
+	} from '#lib/api.js';
+	import ActionBar from '#lib/components/ui/ActionBar.svelte';
+	import Badge from '#lib/components/ui/Badge.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
+	import SegmentButton from '#lib/components/ui/SegmentButton.svelte';
+	import StateMessage from '#lib/components/ui/StateMessage.svelte';
+	import TextInput from '#lib/components/ui/TextInput.svelte';
 
 	let session = $state<SessionUser | null | 'loading'>('loading');
 	let ownedBots = $state<ArenaBot[]>([]);

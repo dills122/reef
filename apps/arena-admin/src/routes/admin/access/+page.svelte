@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatTimestamp } from '$lib/format';
+	import { formatTimestamp } from '#lib/format.js';
 	import {
 		assignAdminAccessRole,
 		fetchAdminAccessRoles,
@@ -10,9 +10,9 @@
 		type AdminAccessRole,
 		type AdminAccessUser,
 		type SessionUser
-	} from '$lib/api';
-	import Button from '$lib/components/ui/Button.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
+	} from '#lib/api.js';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
 
 	type AccessFilter = 'review' | 'trusted' | 'operators' | 'all';
 

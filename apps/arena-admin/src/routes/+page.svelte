@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Button from '$lib/components/ui/Button.svelte';
-	import { GAME_MODES } from '$lib/config/game-modes';
+	import Button from '#lib/components/ui/Button.svelte';
+	import { GAME_MODES } from '#lib/config/game-modes.js';
 </script>
 
 <svelte:head>
