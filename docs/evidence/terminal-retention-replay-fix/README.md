@@ -6,14 +6,14 @@ No broker stack, new throughput run, or JSON-library treatment used.
 
 ## Reproductions
 
-- [Original red](red.log): limit 1; run A submits/cancels order A, run B
+- [Original red](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/red.log): limit 1; run A submits/cancels order A, run B
   submits/cancels newer order B. Repeated cancel A returns `NOT_FOUND` if B
   interleaves first, `INVALID_STATE` if B follows, despite identical A-lane commands.
   Also proves old snapshots admitted enabled retention and changed limits.
-- [Batch-cut red](red-batch-cut.log): same book submits/cancels A then B,
+- [Batch-cut red](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/red-batch-cut.log): same book submits/cancels A then B,
   repeats cancel A. One publication batch returns `INVALID_STATE`; separate
   commits return `NOT_FOUND`. Deferred retention caused this second defect.
-- [Review regression red](red-provisional-reservation.log): first immediate
+- [Review regression red](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/red-provisional-reservation.log): first immediate
   eviction design let another book accept an evicted order ID before publication;
   rollback could overwrite that committed record. Final design holds the
   shard-global reservation until the owning batch closes.
@@ -42,25 +42,25 @@ post-commit ID release and snapshot policy/checksum/limit guards.
 
 During development, initial focused checks required changing assertions that
 still described deferred/global retention and explicitly supplying limit 128 to
-restore the concurrency-test snapshots. [First broad race run](first-race-policy-assertion.log)
+restore the concurrency-test snapshots. [First broad race run](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/first-race-policy-assertion.log)
 found one additional old stream-direct assertion expecting cross-book eviction;
 updated it to assert lane-local state and exact command outcomes. A subsequent
-[pre-reservation full race run](green-race-pre-reservation.log) passed all packages.
-[Intermediate reservation API compile check](first-reservation-api-build.log)
+[pre-reservation full race run](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/green-race-pre-reservation.log) passed all packages.
+[Intermediate reservation API compile check](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/first-reservation-api-build.log)
 found old index unit callers; retained the existing non-batch `reserve` API and
 added explicit owned-batch reservation API. Provisional-reservation reproduction
 initially used an absent public `OrderState.RunID` field; corrected it to inspect
 internal record scope before capturing its behavioral red failure.
 
-A second [review counterexample](red-multibook-preimage.log) proved that restricting
+A second [review counterexample](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/red-multibook-preimage.log) proved that restricting
 same-owner reuse to one book changed outcomes when a multi-book batch was split.
 Final correction permits reuse across books owned by the same batch and journals
 one initial global order-index preimage per ID. Per-book undo restores books;
 index restoration then runs once per ID, independently of map iteration order.
 Both preexisting active IDs and IDs first created inside the batch are covered.
 
-Final [focused checks](green-focused.log) passed in app and stream-direct packages.
-Final [whole matcher race suite](green-race-all.log) passed all packages with
+Final [focused checks](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/green-focused.log) passed in app and stream-direct packages.
+Final [whole matcher race suite](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/green-race-all.log) passed all packages with
 `go test -race ./... -count=1`, exit 0, after both review corrections. No race
 diagnostics. [Manifest](manifest.json) records commands and source/log hashes.
 
@@ -83,4 +83,4 @@ diagnostics. [Manifest](manifest.json) records commands and source/log hashes.
 
 Original evidence above describes source at `9778e847` on base `1e77575a`; original manifest and logs remain historical. Master `92cdd20b` includes PR #436 run-scoped order identity. Updated reservations/preimages use `(runId, orderId)`; previous engine-wide namespace boundary is superseded for different runs. [Review and integration evidence](https://github.com/dills122/reef-records/blob/ecd00e479853bcb9fd842b33f017289f37499226/records/reef/docs/evidence/terminal-retention-replay-fix/pr-review-2026-10-01/README.md) records OCR triage and final checks after conflict resolution.
 
-Second [OCR review pass](pr-review-pass2-2026-10-01/README.md) assesses three additional unsupported claims, adds default-environment restore and multi-entry rollback coverage, and records passing matcher race suite after master24cdc1de sync. Matcher runtime safeguards unchanged.
+Second [OCR review pass](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/evidence/terminal-retention-replay-fix/pr-review-pass2-2026-10-01/README.md) assesses three additional unsupported claims, adds default-environment restore and multi-entry rollback coverage, and records passing matcher race suite after master24cdc1de sync. Matcher runtime safeguards unchanged.

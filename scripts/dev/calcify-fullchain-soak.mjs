@@ -1,4 +1,4 @@
-// Full-chain paced run of the Calcify capacity path on the validated 10k ingress profile (docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md, D7):
+// Full-chain paced run of the Calcify capacity path on the validated 10k ingress profile (https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md, D7):
 // Netty HTTP -> in-memory bounded intake -> durable Redpanda ACK -> 16 direct Go matching lanes -> canonical event batches -> Phase 1 extractor/verifier -> Phase 2 managed resolver
 // -> capacity finance lanes (RocksDB + changelog, eviction on) -> projection into Postgres.
 //

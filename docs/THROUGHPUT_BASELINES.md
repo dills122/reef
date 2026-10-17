@@ -1472,16 +1472,16 @@ Fresh independent source review found fail-closed gaps: expired verified-input c
 
 Frozen base `037971d6` plus bounded stage polls/checksum candidate; local Docker10CPU/RF1, stub verifier, PostgreSQL durable intake, five topic cohorts fsync after initial diagnostics. Unit: HTTP-durably-accepted **order commands/s**, not resolved contexts/s. q1 completed300s at6,250.80 strict ACK/s;940,045 exact trade contexts/receipts, receipt789ms/resolved upper2,065ms. q2 balancedfour partitions/Netty256/pool128/PGgroup1000µs completed300s at**7,708.36 strict ACK/s**,1,158,676 exact contexts/all-stage counts, receipt1,191ms/resolved upper1,652ms, zero failures/retries. Both fail10k intake/drop gates. q3 higher concurrency stops200.974s on guest-disk ENOSPC;800,374 trade contexts exact, but1,805 request failures and partial-pair command accounting fail. Never count incomplete q3 as five-minute record.
 
-First three60s cohorts used old sampled-deadline/drain origins; later strict per-ACK measurement preserves all old artifacts. Early topics inherited caching; fsync cohorts are different configuration. Direct matcher admission groups corrected beforegen6;50k backlog limit unchanged. Captured350-outcome checksum A/B shows~23% less time/~70% fewer allocations, not causal whole-platform gain. Latest-master `16e15340` integration preserves run/hidden-limit and Phase1 retention guards; timed numbers do not transfer to updated code. [Full report/results/corrections](research/CALCIFY_10K_TIMEBOX_2026-10-02.md). Guest disk150GB,35MB free at q3 failure; ten oldest audited test topics deleted with proof, best q2 and PG volumes retained. No further load without guest-space sizing. No10k/RF3/hosted/settlement qualification.
+First three60s cohorts used old sampled-deadline/drain origins; later strict per-ACK measurement preserves all old artifacts. Early topics inherited caching; fsync cohorts are different configuration. Direct matcher admission groups corrected beforegen6;50k backlog limit unchanged. Captured350-outcome checksum A/B shows~23% less time/~70% fewer allocations, not causal whole-platform gain. Latest-master `16e15340` integration preserves run/hidden-limit and Phase1 retention guards; timed numbers do not transfer to updated code. [Full report/results/corrections](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_10K_TIMEBOX_2026-10-02.md). Guest disk150GB,35MB free at q3 failure; ten oldest audited test topics deleted with proof, best q2 and PG volumes retained. No further load without guest-space sizing. No10k/RF3/hosted/settlement qualification.
 
 
 ### CAL-J10K configuration correction — October2
 
-Campaign reused Calcify functional smoke, which forces PostgreSQL intake/idempotency and disables publish pipeline. Documented direct-ingress/materializer performance profile uses in-memory intake and enabled publish pipeline while retaining broker-durable ACK/direct Go consumer. Thus7,708.36/s and PostgreSQL contention apply only to SQL-backed smoke configuration; intended fast-ingress+Calcify ceiling remains unmeasured. Original records preserved; selecting smoke as capacity profile was setup error. [Source/config correction and next checks](research/CALCIFY_10K_TIMEBOX_2026-10-02.md#configuration-correction--october2-after-campaign).
+Campaign reused Calcify functional smoke, which forces PostgreSQL intake/idempotency and disables publish pipeline. Documented direct-ingress/materializer performance profile uses in-memory intake and enabled publish pipeline while retaining broker-durable ACK/direct Go consumer. Thus7,708.36/s and PostgreSQL contention apply only to SQL-backed smoke configuration; intended fast-ingress+Calcify ceiling remains unmeasured. Original records preserved; selecting smoke as capacity profile was setup error. [Source/config correction and next checks](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_10K_TIMEBOX_2026-10-02.md#configuration-correction--october2-after-campaign).
 
 ### Calcify direct-path D7 sustained qualification (October 2, 2026)
 
-Fresh C5-style durable direct ingress16lanes/64instruments/1,024workers/matching batch500 attached Phase1 stub verifier and Phase2 managed resolver. Local10CPU/15.6GiB, RF1/write.caching=false; PostgreSQL startup identity control only. D7 passed300s: conservative deadline rates10,425.19 verified matched trades/s and10,440.92 resolved full-fact contexts/s. All3,142,846trades exact/ordered/unique, zero HTTP failures/retries;64seeded maker orders excluded. Timed durable HTTP ACKs10,475.59orders/s. One aggressor order per trade; does not establish two-sided paired or mixed-command10k trade capacity. Whole-batch matching-entry->verified visibility p99 upper433ms, not exact individual matching-acceptance latency. Bounded poll-level extraction transactions fixed actual backlog: comparable60s paired D4~2,045->D5~5,167verified trades/s. D6 standing-liquidity60s diagnostic precedes fresh D7; workload/retention changes separately declared. [Report/config/corrections](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md), [frozen policy and exact qualification](https://github.com/dills122/reef-records/blob/a1050bc104ea0b701f436c36f09b1ef5561d9b91/records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/results.json). Earlier SQL campaign and D1 caching mistake remain historical diagnostics, not intended-path capacity bounds.
+Fresh C5-style durable direct ingress16lanes/64instruments/1,024workers/matching batch500 attached Phase1 stub verifier and Phase2 managed resolver. Local10CPU/15.6GiB, RF1/write.caching=false; PostgreSQL startup identity control only. D7 passed300s: conservative deadline rates10,425.19 verified matched trades/s and10,440.92 resolved full-fact contexts/s. All3,142,846trades exact/ordered/unique, zero HTTP failures/retries;64seeded maker orders excluded. Timed durable HTTP ACKs10,475.59orders/s. One aggressor order per trade; does not establish two-sided paired or mixed-command10k trade capacity. Whole-batch matching-entry->verified visibility p99 upper433ms, not exact individual matching-acceptance latency. Bounded poll-level extraction transactions fixed actual backlog: comparable60s paired D4~2,045->D5~5,167verified trades/s. D6 standing-liquidity60s diagnostic precedes fresh D7; workload/retention changes separately declared. [Report/config/corrections](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md), [frozen policy and exact qualification](https://github.com/dills122/reef-records/blob/a1050bc104ea0b701f436c36f09b1ef5561d9b91/records/reef/docs/evidence/calcify-direct-throughput-2026-10-02/d7-300s-standing-liquidity/results.json). Earlier SQL campaign and D1 caching mistake remain historical diagnostics, not intended-path capacity bounds.
 
 
 ### Calcify financial empirical diagnostic — October6, 2026 UTC
@@ -1524,7 +1524,7 @@ Fixed 8GiB permission retains workload/disk limits, changes no kernel/reference
 algorithm. User authorized one extra review; review4of4 code/concrete envelope Ready.
 Original failures, frozen identities, cleanup and forensic receipts published
 in [immutable closed proof](https://github.com/dills122/reef-records/tree/2331d97d9f9e6af8638d6ed335adbfac743d2c03/records/reef/docs/evidence/calcify-financial-sprint1/sprint1-exit-2026-10-06-1c143125049d); exact source bytes and journal reassembly
-verified. Local raw session retained until archive lands; no tracked originals removed. Current execution owner: [work plan](work/CALCIFY_HISTORY_LOG.md#calcify-sprint1-exit-continuation--october-6-2026-utc).
+verified. Local raw session retained until archive lands; no tracked originals removed. Current execution owner: [work plan](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-sprint1-exit-continuation--october-6-2026-utc).
 
 
 Arm5 fixed 8GiB/fresh cluster strict sample03:06:14.705Z; closed03:10:21.499Z.
@@ -1567,7 +1567,7 @@ No broker, SQL, managed adapter or new capture qualification. Owner clarified
 hard10k/s capture/context only, single server; settlement may lag within an
 explicit operating envelope. Larger server allowed if justified.
 
-[Research](research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md#5-new-experiment-diagnose-the-kernel-before-blaming-its-adapter)
+[Research](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_SINGLE_SERVER_ARCHITECTURE_REVIEW_2026-10-11.md#5-new-experiment-diagnose-the-kernel-before-blaming-its-adapter)
 and [compact receipt](evidence/calcify-architecture-pressure-test/verification.json)
 record all five runs, initial profiling run and harness changes. Each run warms
 2000 trades then executes four10000-trade arms (encode off/on/on/off). Latest
@@ -1584,7 +1584,7 @@ scope; it does not qualify P0 no-reuse state at millions of order IDs.
 
 ## Calcify aged single-server contention/recovery — October 11, 2026
 
-[Proof](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md),
+[Proof](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md),
 [compact receipt](evidence/calcify-aged-contention/verification.json), and
 [retention](records/2026-10-11-calcify-aged-contention-retention.json).
 Baseline b9a8756e plus research probe/harness; current Phase1/2, finite P0 off,
@@ -1615,7 +1615,7 @@ cohort; both retained. All owned services stopped, volumes preserved.
 
 ## Calcify matched no-cold-restart control — October 11, 2026
 
-[Control/comparison](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md) and
+[Control/comparison](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md) and
 [compact evidence](evidence/calcify-matched-control/comparison.json). Same source
 b9a8756e, exact runtime images/resource settings, normalized Compose and300s
 workload as preceding treatment:64makers,retention0,10,500 offered/s,1,024workers.

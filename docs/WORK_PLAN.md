@@ -23,7 +23,7 @@ audited checkout; missing local reports do not prove a run never happened.
 
 Single living status and plan: [program status and sprint plan](work/CALCIFY_PROGRAM_STATUS_AND_SPRINT_PLAN_2026-10-11.md)
 (section 0 is the October 16 update). Dated checkpoint history, including the October 11 to 13 sections that used to sit here,
-is in the [Calcify history log](work/CALCIFY_HISTORY_LOG.md). Keep entries here short; put evidence in `docs/evidence/` and
+is in the [Calcify history log](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md). Keep entries here short; put evidence in `docs/evidence/` and
 analysis in the plan. Delivery goal (owner): **10,000 booked trades/s sustained for 15 to 30 minutes**; 15 to 20k/s is later work.
 
 | Track | State | Next bounded action |
@@ -62,7 +62,7 @@ exists. Hosted CI is Linux/Node 22/Bun 1.3.14; the finite O2 harness is macOS-lo
   proposed architecture [`CALCIFY_SYSTEM_ARCHITECTURE_RFC.md`](./work/CALCIFY_SYSTEM_ARCHITECTURE_RFC.md);
   finite contract [`CALCIFY_FINITE_P3_SOURCE_CONTRACT.md`](./work/CALCIFY_FINITE_P3_SOURCE_CONTRACT.md);
   goalpost [`CALCIFY_ARENA_THROUGHPUT_CONTRACT.md`](./work/CALCIFY_ARENA_THROUGHPUT_CONTRACT.md);
-  history [`CALCIFY_HISTORY_LOG.md`](./work/CALCIFY_HISTORY_LOG.md)
+  history [`CALCIFY_HISTORY_LOG.md`](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md)
 - Documentation lifecycle:
   [`DOCUMENTATION_CLEANUP_PLAN.md`](./DOCUMENTATION_CLEANUP_PLAN.md)
 

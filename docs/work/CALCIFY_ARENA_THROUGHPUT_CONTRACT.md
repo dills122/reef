@@ -17,7 +17,7 @@ and latency targets still need calibration/adoption; runtime policy is unchanged
 within 1s; eligible settlement p99 within 5s; final session reconciliation within
 30s of close.** Settlement delay may vary by policy, but technical backlog must
 stay bounded. This extends earlier capture-only target; it does not retroactively
-change [October 11 proofs](../research/CALCIFY_MATCHED_CONTROL_2026-10-11.md).
+change [October 11 proofs](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md).
 
 ## Completion boundary
 
@@ -306,8 +306,8 @@ proof. Inspect concurrent branches separately before implementation.
 
 | Finding | Evidence | Consequence |
 | --- | --- | --- |
-| Context throughput passes without cold restart | [Matched control](../research/CALCIFY_MATCHED_CONTROL_2026-10-11.md): 10,321.21–10,349.52/s, 300s, 64 standing makers; financial input independent | Useful component pass; new trading-view gate **unqualified** |
-| Cold recovery misses capture target | [Treatment](../research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md): 8,106.99–8,145.11/s; 29.12s drain upper bound | Neither exact per-trade latency nor integrated session flush evidence |
+| Context throughput passes without cold restart | [Matched control](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md): 10,321.21–10,349.52/s, 300s, 64 standing makers; financial input independent | Useful component pass; new trading-view gate **unqualified** |
+| Cold recovery misses capture target | [Treatment](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md): 8,106.99–8,145.11/s; 29.12s drain upper bound | Neither exact per-trade latency nor integrated session flush evidence |
 | Existing trade JSON carries execution facts | [PlatformApi](../../services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformApi.kt), `TradeCreated.toMap`, `orderWithStatus`; [model](../../services/platform-runtime/src/main/kotlin/com/reef/platform/domain/Models.kt) | No booking/settlement/progress fields in this trade shape; define versioned bundle |
 | Participant fills exist, global recent tape is bounded | [HTTP routes](../../services/platform-runtime/src/main/kotlin/com/reef/platform/api/PlatformHttpServer.kt), `/api/v1/orders/fills`; [SQL](../../services/platform-runtime/src/main/kotlin/com/reef/platform/infrastructure/persistence/PostgresRuntimePersistence.kt), `recentTrades` | Reuse public auth/scope, add provable history/progress semantics; global recent tape alone cannot qualify |
 | Settlement score distinguishes pending, failed and settled | [SettlementScoreProjection](../../services/platform-runtime/src/main/kotlin/com/reef/platform/application/settlement/SettlementScoreProjection.kt) | Useful state vocabulary; not evidence this projection or arena scoring sustains 10k |

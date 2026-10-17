@@ -8,7 +8,7 @@ Defaults off; Go runner/recovery and Kotlin live entry
 refuse activation pending O2. Production financial authority unchanged.
 
 [Current work](../../WORK_PLAN.md#calcify-eight-hour-p3-session--october-910-2026)
-owns resumed delivery/PR/OCR-pilot; [handoff](../../work/handoffs/2026-10-10-calcify-finite-p3-overnight.md)
+owns resumed delivery/PR/OCR-pilot; [handoff](https://github.com/dills122/reef-records/blob/282d302db3adcff9bb38cd88a2b31447511c09b/records/reef/docs/work/handoffs/2026-10-10-calcify-finite-p3-overnight.md)
 preserves eight-hour deadline outcome. Runtime baseline `51cd90eee`; accepted
 source/budget contract `45211653`, documentation reconciliation `7aba4d0a`.
 Branch `codex/calcify-p3-overnight-2026-10-09`. Full P3 target not achieved at deadline.

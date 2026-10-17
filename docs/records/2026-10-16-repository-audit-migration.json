@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "migration_date": "2026-10-16",
+  "source_repository": "https://github.com/dills122/reef",
+  "source_commit": "cab570aa518530dada1f7b9a5e5f07f33880129d",
+  "selection_policy": "Exact tracked September 30 isolated Calcify Phase 2 experiment and six superseded October Calcify handoff/session artifacts. Active production source, executable fixtures, current contracts, owner plans and focused evidence remain in Reef. Historical source paths in the Phase 2 evidence manifest resolve through Reef relocation inventory after archive publication.",
+  "files": [
+    {
+      "source_path": "docs/work/handoffs/2026-10-02-calcify-10k-timebox.md",
+      "archive_path": "records/reef/docs/work/handoffs/2026-10-02-calcify-10k-timebox.md",
+      "bytes": 6137,
+      "sha256": "c1119014344412159bf0b7fa8f6b32b5e7e10f0e1f16807a832d4e22d6d2afed",
+      "reason": "Dated Calcify handoff or unfinished session patch; current tasks and evidence are owned by WORK_PLAN, program plan and focused checkpoints.",
+      "source_blob_oid": "6e94b0a46cf752b08647ddc80ed2b3e9cda67c06"
+    },
+    {
+      "source_path": "docs/work/handoffs/2026-10-02-calcify-direct-throughput.md",
+      "archive_path": "records/reef/docs/work/handoffs/2026-10-02-calcify-direct-throughput.md",
+      "bytes": 9600,
+      "sha256": "3ce5ed65dc9f3f8dd98e8623bda9e23652c3cb789eb27f4d509081a5c9c01365",
+      "reason": "Dated Calcify handoff or unfinished session patch; current tasks and evidence are owned by WORK_PLAN, program plan and focused checkpoints.",
+      "source_blob_oid": "fcb7ebceb28d2ce5d198d1b4c94b30bd666e55c7"
+    },
+    {
+      "source_path": "docs/work/handoffs/2026-10-02-calcify-system-architecture-author.md",
+      "archive_path": "records/reef/docs/work/handoffs/2026-10-02-calcify-system-architecture-author.md",
+      "bytes": 5214,
+      "sha256": "1ed79902af82fa90415cd1b05ffdf290f1d8b5089f978a3a1d88f36955c85749",
+      "reason": "Dated Calcify handoff or unfinished session patch; current tasks and evidence are owned by WORK_PLAN, program plan and focused checkpoints.",
+      "source_blob_oid": "5a8ad1ad2714dffca617977b4364dafe12537200"
+    },
+    {
+      "source_path": "docs/work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md",
+      "archive_path": "records/reef/docs/work/handoffs/2026-10-04-calcify-financial-sprint1-recovery.md",
+      "bytes": 14009,
+      "sha256": "f7d45d0d080266380e0d1588a123806c17366e3a4c970b916ab3f7c814b0009d",
+      "reason": "Dated Calcify handoff or unfinished session patch; current tasks and evidence are owned by WORK_PLAN, program plan and focused checkpoints.",
+      "source_blob_oid": "8de24928adffb69552fa2ae08f2b2e009c53e890"
+    },
+    {
+      "source_path": "docs/work/handoffs/2026-10-10-calcify-finite-p3-overnight.md",
+      "archive_path": "records/reef/docs/work/handoffs/2026-10-10-calcify-finite-p3-overnight.md",
+      "bytes": 7975,
+      "sha256": "30c4f7fa2e8df8e8ba5119812b841e629eb8c1320c07ea62c480f24000217ada",
+      "reason": "Dated Calcify handoff or unfinished session patch; current tasks and evidence are owned by WORK_PLAN, program plan and focused checkpoints.",
+      "source_blob_oid": "51720340de57e9a94b06f2522be744a93fe274e6"
+    },
+    {
+      "source_path": "docs/work/handoffs/calcify-sprint1-unfinished-heap-guard.patch",
+      "archive_path": "records/reef/docs/work/handoffs/calcify-sprint1-unfinished-heap-guard.patch",
+      "bytes": 2118,
+      "sha256": "9f7c633c60d82c41d5a3265969c81d9622028519073a0c86192e75f965fd61a8",
+      "reason": "Dated Calcify handoff or unfinished session patch; current tasks and evidence are owned by WORK_PLAN, program plan and focused checkpoints.",
+      "source_blob_oid": "894a91d9e9cc793a1dabf5d96bafd698ef96588d"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/.gitattributes",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/.gitattributes",
+      "bytes": 98,
+      "sha256": "8577f746d328c77bd97b92fec6e49529daec9f71adee69693be6dba137b1bf4d",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "a4728c6f6742e32a57b62a1484114eb1b6af9fb7"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/.gitignore",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/.gitignore",
+      "bytes": 35,
+      "sha256": "0f555d13a59a82a4f17204ece2ba5f56882a5b9b7807c53b5917cfee178d6bc1",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "da0936955fe3b97bdaeba5d53fc65f3f230e0ccf"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/MATRIX.md",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/MATRIX.md",
+      "bytes": 2393,
+      "sha256": "a827cbfbf6935cc962abe82505282a89b95fffd25d0b66cd3600dfd1e3549df9",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "8a45a8c23a310ee6ab0465d199127597d8c20051"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/README.md",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/README.md",
+      "bytes": 5119,
+      "sha256": "785cff065cffd051cc2933caf0e110685505b276293f4db6faa58615f611dd58",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "297e852115a04e34101fb79a7f5ce4092deec016"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/build.gradle.kts",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/build.gradle.kts",
+      "bytes": 507,
+      "sha256": "60f63f85878182cff3c95fc1829b733f3357a14122343649c8d0c2815afa38fb",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "7a2755fa906b675dad56a2fc61b21b4550acc72e"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/run-availability.py",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/run-availability.py",
+      "bytes": 3487,
+      "sha256": "e48f04fda1beba40443d3fdf6dfe6275760a575bf282675bf62bcd692038ae85",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "b6364fccbe4cced659bd12789ec6c5f702e7114a"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/run-fixtures.py",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/run-fixtures.py",
+      "bytes": 3270,
+      "sha256": "48bc3788ce7ee38201953902c02bf84eaba7385d3684d2a2c9b424767f90c41a",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "ed2b232580c91bc93c99c09dd60193bb460eb5f5"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/run-recovery.py",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/run-recovery.py",
+      "bytes": 5130,
+      "sha256": "52cf56d4c5d245a332297a0529329c75703eb7598b2257e18f682cb05243e27a",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "b3b61ff562d660341fba35a2bd5fc4b7e452719f"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/run-scope-prototype.patch",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/run-scope-prototype.patch",
+      "bytes": 4744,
+      "sha256": "37e148d8b7d91727278925d9169cdb32a50796fe993641efc297524b93f96844",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "3b194e7f800f3f0ba07bb5e34571ef14d2e04a04"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/settings.gradle.kts",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/settings.gradle.kts",
+      "bytes": 48,
+      "sha256": "32c63ffbe4cb9d18b12707d5a4729183477aff9a4810f43bf6999f28847c93aa",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "de5cdf15389543389e9e6037d2eb4da5235ebb64"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/source_fixture_test.go.txt",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/source_fixture_test.go.txt",
+      "bytes": 5040,
+      "sha256": "93575a1242f45dfd1ff4ec8d4893c70424af5d26c5c1147156489424e55a879d",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "7c0159db805a1f25d87536fcc79f31179a681698"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/src/main/java/BoundedRocks.java",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/src/main/java/BoundedRocks.java",
+      "bytes": 581,
+      "sha256": "0748e8ce37af2a27bbc57e552636dfcb0f80cbca0ab7624f69e101a91ef782da",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "8a9f354a367114118019c586272cb2d03ef92d73"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/src/main/java/CalcifyExperiment.java",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/src/main/java/CalcifyExperiment.java",
+      "bytes": 26535,
+      "sha256": "488151b8e9e5a82d0b17ac9e0e6de137f93e80974a57ce3969e502cff6d205f3",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "c53644d98b58bb415472ed591b5332ba4805a553"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/src/main/java/Capacity.java",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/src/main/java/Capacity.java",
+      "bytes": 6741,
+      "sha256": "a0fb88dc905837654e77e60c80095cc003fae0434aa1d71d9c53ae81525851b0",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "5fda2c06b34322bf9f7486f14658939a4eaa6afc"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/src/main/java/Facts.java",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/src/main/java/Facts.java",
+      "bytes": 7423,
+      "sha256": "d454270a9c95e215630cdd744b963cfe0b584baa6027a891f09ce29d8aa3f4f2",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "79c53daaa3945bd7758d1c85f77917c74bffeff6"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/src/main/java/FlowControl.java",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/src/main/java/FlowControl.java",
+      "bytes": 2321,
+      "sha256": "67ff8c87edbe5879413c3f80eb939a28a1131b2a542301bda308816a5a75da08",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "10471325750b4b32d2cb55762ab72dff78461151"
+    },
+    {
+      "source_path": "scripts/experiments/calcify-phase2/src/main/java/Resolver.java",
+      "archive_path": "records/reef/scripts/experiments/calcify-phase2/src/main/java/Resolver.java",
+      "bytes": 11235,
+      "sha256": "27915aaea5370ed7105329f6aba7e525ae825dbea767b9a41138abcad38092c4",
+      "reason": "Isolated September 30 Phase 2 experiment; its decision report is archived and production Phase 1/2 code supersedes this prototype.",
+      "source_blob_oid": "9a0d32d9aa639b61763fcaefc56d57b80b751db8"
+    }
+  ],
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "282d302db3adcff9bb38cd88a2b31447511c09b6",
+  "archive_manifest": "manifests/2026-10-16-reef-repository-retention-audit.json",
+  "redirect_paths": []
+}

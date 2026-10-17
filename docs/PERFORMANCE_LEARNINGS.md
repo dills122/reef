@@ -896,7 +896,7 @@ Investigation identified producer `ON CONFLICT DO NOTHING` invalidation coalesci
 
 Durable direct-ingress comparison found extractor source lag growing while downstream verifier/resolver lag stayed small. One Kafka transaction per source batch, despite poll100, limited paired-trade output~2.1k/s. Atomic valid-prefix batching across bounded poll raised comparable60s verified output~5.2k/s; source offsets remain inside output transaction. After explicitly switching to64standing makers and one timed aggressor per trade, fresh300s D7 delivered10,425.19verified/10,440.92resolved trades/s,3,142,846exact outputs. Workload changes must not be credited entirely to batching.
 
-Requested broker durability differs from actual durability: unsupported redpanda.write.caching key left D1 cache enabled; corrected write.caching=false and actual-topic inspection required before promotion. Matching acceptance uses simulated acceptedAt, so measured batch-entry->verified p99 upper433ms is conservative bound, not exact acceptance latency. Per-book retention250k across64books means16m terminals; fresh test3,906/book narrows lookup/reuse horizon and requires new state. [Detailed report and evidence](research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md).
+Requested broker durability differs from actual durability: unsupported redpanda.write.caching key left D1 cache enabled; corrected write.caching=false and actual-topic inspection required before promotion. Matching acceptance uses simulated acceptedAt, so measured batch-entry->verified p99 upper433ms is conservative bound, not exact acceptance latency. Per-book retention250k across64books means16m terminals; fresh test3,906/book narrows lookup/reuse horizon and requires new state. [Detailed report and evidence](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_DIRECT_THROUGHPUT_2026-10-02.md).
 
 ## Calcify aged state and recovery compete with capture (October 11, 2026)
 
@@ -909,7 +909,7 @@ state. Fresh steady throughput and process RUNNING do not establish aged recover
 capacity. Budget exact identity lifetime and old+new recovery space, distinguish
 restored from caught-up frontiers, and reserve capture resources before admission.
 Combined trial cannot isolate bottleneck; matched aged control precedes tuning or
-hardware pivot. [Proof and scope](research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md).
+hardware pivot. [Proof and scope](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md).
 
 ## Calcify control distinguishes steady service from recovery (October 11, 2026)
 
@@ -922,7 +922,7 @@ Prioritize persisted-state restart/recovery service proof before hardware choice
 A20s pause at10k arrivals/s creates200k backlog; clearing it in60s requires
 13,333/s service, before other interference. This is arithmetic headroom scenario,
 not measured capacity or adopted SLO. Process RUNNING alone cannot close recovery.
-[Comparison and remaining limits](research/CALCIFY_MATCHED_CONTROL_2026-10-11.md).
+[Comparison and remaining limits](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md).
 
 ## Calcify arena completion and session budgets (October 11, 2026)
 

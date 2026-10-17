@@ -5,7 +5,7 @@ O0 implementation contract, October 9/10, 2026 overnight session. Baseline
 `codex/calcify-p3-overnight-2026-10-09`. This document freezes proposed finite
 implementation scope; independent review and manager acceptance precede dispatch.
 Execution status belongs in [WORK_PLAN](../WORK_PLAN.md). Requirements derive from
-[overnight plan](CALCIFY_OVERNIGHT_SESSION_PLAN.md),
+[overnight plan](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_OVERNIGHT_SESSION_PLAN.md),
 [RFC §5](CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#5-source-dependencies-and-admission),
 [RFC P3](CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#10-proof-plan-and-stop-conditions), and
 [rollout boundaries](CALCIFY_SYSTEM_ARCHITECTURE_RFC.md#11-rollout-observability-and-decisions).

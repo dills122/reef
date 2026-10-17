@@ -112,7 +112,7 @@ manual release. Same-binding restart retains opening and budgets; capture can
 restore/drain known source while unresolved admission remains stopped. This
 finite synchronous SQL ingress path requires stage-cost evidence before wider
 adoption. O2 is merged (PR488; G9 transport proven; independent reviews 2 and 3 "Ready with non-blocking follow-ups");
-G1-G8/G10 live replay remains open in [current work plan](work/CALCIFY_HISTORY_LOG.md#calcify-finite-p3-o2--october-11-2026).
+G1-G8/G10 live replay remains open in [current work plan](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/work/CALCIFY_HISTORY_LOG.md#calcify-finite-p3-o2--october-11-2026).
 
 ## Configuration Matrix
 
