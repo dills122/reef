@@ -49,7 +49,7 @@ Make sure Docker has enough free disk and memory for a multi-container build.
 |---|---|---|
 | Node.js | `22.22.1` in `.node-version` (major 22 is the compatibility floor) | Docs site and frontend toolchains |
 | npm | Bundled with Node 22 | Reproducible docs-site install from `package-lock.json` |
-| Go | `1.26.9` or newer patched release | Matching engine and simulator security floor; CI scans use 1.26.9 and container builders use 1.27.2 |
+| Go | `1.26.9` or newer patched release | Matching engine and simulator security floor; CI scans and container builders use 1.26.9 |
 | Java/JDK | 21, recorded in `.java-version` | Platform runtime, Arena control plane, and stock-data Gradle builds |
 
 Gradle itself does not need a separate install. The Kotlin services use their
