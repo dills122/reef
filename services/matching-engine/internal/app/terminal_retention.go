@@ -2,7 +2,6 @@ package app
 
 import (
 	"container/heap"
-	"sort"
 	"sync"
 	"time"
 
@@ -122,21 +121,6 @@ func (t *terminalOrderRetention) rollback(mutations []terminalRetentionMutation)
 			delete(t.lanes, mutation.lane)
 		}
 	}
-}
-
-func (t *terminalOrderRetention) trackedOrderIDs() []string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	entries := make(terminalRetentionHeap, 0)
-	for _, lane := range t.lanes {
-		entries = append(entries, (*lane)...)
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries.Less(i, j) })
-	orderIDs := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		orderIDs = append(orderIDs, entry.orderID)
-	}
-	return orderIDs
 }
 
 func normalizedTerminalTime(raw string) string {
