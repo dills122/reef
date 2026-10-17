@@ -389,7 +389,7 @@ Evidence:
   - `11k/sec`, `2m`, `448` workers: `1,320,000` requests, `0` failures, `10999.48 rps`, p99 `34.46ms`.
   - `12.5k/sec`, `2m`, `448` workers: `1,499,983` requests, `0` failures, `12499.43 rps`, p99 `34.10ms`, API RSS about `1.205GiB`, publish queue single digits, API `restartCount=0`, `oomKilled=false`.
 - focused verification passed:
-  - platform-runtime tests: `StreamCommandIntakeTest` and `PlatformHttpServerBoundaryTest.streamAckLatePublishAckAfterResponseTimeoutReplaysAcceptedReference`
+  - platform-runtime tests: `StreamCommandIntakeTest` and `PlatformHttpStreamAckBoundaryTest.streamAckLatePublishAckAfterResponseTimeoutReplaysAcceptedReference`
   - simulator load-tester tests: `go test ./cmd/load-tester`
 
 Immediate implications:

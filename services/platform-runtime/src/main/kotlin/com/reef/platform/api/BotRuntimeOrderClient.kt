@@ -53,7 +53,7 @@ class BotRuntimeOrderClient(
             route = route,
             status = response.status,
             body = response.body,
-            commandId = JsonFields.extract(body, "commandId")
+            commandId = JsonCodec.parseLegacyObjectOrEmpty(body).string("commandId")
         )
     }
 }
