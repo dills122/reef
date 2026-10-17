@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # droplet-sizes.sh OUTFILE -- every 2 s, append the size in KiB of the Redpanda and Postgres data directories of the running containers ("redpanda KB" / "postgres KB"). Used by droplet-chain-run.sh to size a tmpfs data volume.
+# Best-effort sampler: -u and pipefail catch typos, but no -e, because a container can vanish mid-sample and `docker exec`/`inspect` failures must not stop the loop.
+set -uo pipefail
 out="$1"; : > "$out"
 # Never outlive a forgotten run: stop after SIZES_MAX_SECONDS (default 1800) even if nobody kills it.
 deadline=$(( $(date +%s) + ${SIZES_MAX_SECONDS:-1800} ))
