@@ -16,16 +16,16 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
     implementation("org.postgresql:postgresql:42.7.14")
     implementation("com.zaxxer:HikariCP:7.1.0")
-    implementation("io.grpc:grpc-netty-shaded:1.84.2")
-    implementation("io.grpc:grpc-protobuf:1.84.2")
-    implementation("io.grpc:grpc-stub:1.84.2")
+    implementation("io.grpc:grpc-netty-shaded:1.85.0")
+    implementation("io.grpc:grpc-protobuf:1.85.0")
+    implementation("io.grpc:grpc-stub:1.85.0")
     implementation("io.nats:jnats:2.26.4")
-    implementation("org.apache.kafka:kafka-clients:4.3.1")
-    implementation("org.apache.kafka:kafka-streams:4.3.1")
+    implementation("org.apache.kafka:kafka-clients:4.4.0")
+    implementation("org.apache.kafka:kafka-streams:4.4.0")
     implementation("com.google.protobuf:protobuf-java:4.36.2")
 
     testImplementation(kotlin("test"))
-    testImplementation("org.apache.kafka:kafka-streams-test-utils:4.3.1")
+    testImplementation("org.apache.kafka:kafka-streams-test-utils:4.4.0")
 }
 
 application {
