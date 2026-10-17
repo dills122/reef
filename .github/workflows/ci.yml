@@ -78,6 +78,8 @@ jobs:
           node-version: '22'
       - name: Check shared dependency and toolchain alignment
         run: make check-dependency-alignment
+      - name: Check Compose environment variables are documented
+        run: make check-env-reference
 
   proto-governance:
     needs: change-scope
