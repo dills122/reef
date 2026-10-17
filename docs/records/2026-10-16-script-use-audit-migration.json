@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "migration_date": "2026-10-16",
+  "source_repository": "https://github.com/dills122/reef",
+  "source_commit": "9bbec61aafef55b05c1250b747e56fef92094f31",
+  "selection_policy": "Script-use audit follow-up: isolate dated, uncalled benchmark/research tools after checking Make/CI/package wiring, current configurations, original run evidence, replacement paths, and retained proof. Exact original bytes preserved before Reef removal. Active migrations, scenario tooling, default product tests, direct/full-chain Calcify, Arena operations and current fixtures remain.",
+  "files": [
+    {
+      "source_path": "scripts/dev/ablation-ladder.mjs",
+      "archive_path": "records/reef/scripts/dev/ablation-ladder.mjs",
+      "bytes": 7360,
+      "sha256": "efcdafb5d927b5ab1ce73bdf7676887aea6a30988b953c3b5f17f5d956ca2f90",
+      "reason": "Closed July projection-depth ablation driver; it resets Docker volumes, has no current run owner, and newer projection plans own measurement contracts.",
+      "source_blob_oid": "52bae456d175e18a01d30d32b785ca3e79155671"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/budget-model.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/budget-model.mjs",
+      "bytes": 4606,
+      "sha256": "c8dda9000d16a0163f332f37f2921d43effa2fe8b72ed62aa179456a5bcfc432",
+      "reason": "October 11 toy arithmetic model tied only to the dated architecture-pressure-test receipt; current throughput ledger and financial owner docs retain conclusions.",
+      "source_blob_oid": "76a7dcd241c9a5737fef64d73a0973559b4ef8d8"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/compare-contention.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/compare-contention.mjs",
+      "bytes": 4399,
+      "sha256": "b042dc14a8397e84dc757ee7d978ebeda84701afcd13f91379fcc718c15c49b6",
+      "reason": "October 11 bounded contention proof runner, comparison math, its tests and sole Kotlin SQL contender; proof source and failures already archived, hard-coded dated image/project/host paths prevent general current-profile use.",
+      "source_blob_oid": "363fbe03252d303e96038a0dd40d2da3d25ec673"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/compare-contention.test.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/compare-contention.test.mjs",
+      "bytes": 1665,
+      "sha256": "a3dd00cc2b5fbc1e1b68233f349632f3cf4efbfd53b7bb816b29ff2136a798f1",
+      "reason": "October 11 bounded contention proof runner, comparison math, its tests and sole Kotlin SQL contender; proof source and failures already archived, hard-coded dated image/project/host paths prevent general current-profile use.",
+      "source_blob_oid": "3210c5b6183165b84a6694923e52c8a994e1715a"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/run-contention.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/run-contention.mjs",
+      "bytes": 8289,
+      "sha256": "cdcdb6112b95af9b59aa22c553f153f27536719e1f4064a90afbf14bc7a64eaa",
+      "reason": "October 11 bounded contention proof runner, comparison math, its tests and sole Kotlin SQL contender; proof source and failures already archived, hard-coded dated image/project/host paths prevent general current-profile use.",
+      "source_blob_oid": "ea308ab7982ed8b59a4cc1c649970531154bee03"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/summarize-contention.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/summarize-contention.mjs",
+      "bytes": 3376,
+      "sha256": "21e4dbc3fef7b8f541101a0c60a72f43ae41f27966125928b807001e9c2cc29e",
+      "reason": "October 11 bounded contention proof runner, comparison math, its tests and sole Kotlin SQL contender; proof source and failures already archived, hard-coded dated image/project/host paths prevent general current-profile use.",
+      "source_blob_oid": "5ba2c856d91ddb96fb856f4cde25e4c715225503"
+    },
+    {
+      "source_path": "scripts/dev/calcify-financial/research/summarize-contention.test.mjs",
+      "archive_path": "records/reef/scripts/dev/calcify-financial/research/summarize-contention.test.mjs",
+      "bytes": 1573,
+      "sha256": "bb20061ea5275f03aabea9d0ecdddeb51b9e3bb2ba889c82902f70036ada7926",
+      "reason": "October 11 bounded contention proof runner, comparison math, its tests and sole Kotlin SQL contender; proof source and failures already archived, hard-coded dated image/project/host paths prevent general current-profile use.",
+      "source_blob_oid": "f6ea25994f67a0ca6a27bfce61d4c5b04b70441f"
+    },
+    {
+      "source_path": "scripts/dev/downstream-state-reference.mjs",
+      "archive_path": "records/reef/scripts/dev/downstream-state-reference.mjs",
+      "bytes": 13140,
+      "sha256": "032302d029e45bb2d8f8713dd5014eee3382f162964f066d7a947704d385c13b",
+      "reason": "September 25 fixed-backlog projection research harness and self-tests; no current Make/package/CI run target, current source-cohort and projection tests remain.",
+      "source_blob_oid": "51a8b41c2b850f51c283c2672596e79881bf35fc"
+    },
+    {
+      "source_path": "scripts/dev/downstream-state-reference.test.mjs",
+      "archive_path": "records/reef/scripts/dev/downstream-state-reference.test.mjs",
+      "bytes": 4397,
+      "sha256": "518974127efa880e040b93689a2ff4890f635e26b3537c57b6479935b505a6ad",
+      "reason": "September 25 fixed-backlog projection research harness and self-tests; no current Make/package/CI run target, current source-cohort and projection tests remain.",
+      "source_blob_oid": "141d4d8003b1407347bb2351cc045714ccd88ef7"
+    },
+    {
+      "source_path": "scripts/dev/full-projection-headroom.mjs",
+      "archive_path": "records/reef/scripts/dev/full-projection-headroom.mjs",
+      "bytes": 33388,
+      "sha256": "6f14315e0760e2b38b2127362ede95854de3bc19167effcd88821238f1b9c3f8",
+      "reason": "September 25 fixed-backlog projection research harness and self-tests; no current Make/package/CI run target, current source-cohort and projection tests remain.",
+      "source_blob_oid": "2eb85bf9a618691a9d0abc5a9652f9494c1dbdc2"
+    },
+    {
+      "source_path": "scripts/dev/full-projection-headroom.test.mjs",
+      "archive_path": "records/reef/scripts/dev/full-projection-headroom.test.mjs",
+      "bytes": 11858,
+      "sha256": "16235f14cb4e08464d1ddb97e3bb16edbfe8b22edb554a9d255b2e213e9c4f7b",
+      "reason": "September 25 fixed-backlog projection research harness and self-tests; no current Make/package/CI run target, current source-cohort and projection tests remain.",
+      "source_blob_oid": "b99407bbb8cccd127b814f557b736704d0571b59"
+    },
+    {
+      "source_path": "scripts/dev/isolated-downstream-capacity.mjs",
+      "archive_path": "records/reef/scripts/dev/isolated-downstream-capacity.mjs",
+      "bytes": 21113,
+      "sha256": "33ef2341540f9967b9fe5291551afa912e03e16d2eb3db6473cfc1daec387ff3",
+      "reason": "September 25 fixed-backlog projection research harness and self-tests; no current Make/package/CI run target, current source-cohort and projection tests remain.",
+      "source_blob_oid": "78ba749d516d3861323fd6c1f0e17e71658040fb"
+    },
+    {
+      "source_path": "scripts/dev/isolated-downstream-capacity.test.mjs",
+      "archive_path": "records/reef/scripts/dev/isolated-downstream-capacity.test.mjs",
+      "bytes": 6528,
+      "sha256": "046306bce0dfe41ea6b909944658ed4fae769870a09555c80c61f7f20adf59ff",
+      "reason": "September 25 fixed-backlog projection research harness and self-tests; no current Make/package/CI run target, current source-cohort and projection tests remain.",
+      "source_blob_oid": "0379b9fcab687b3577f7270d95002ad34ea3a896"
+    },
+    {
+      "source_path": "scripts/dev/throughput-campaign.mjs",
+      "archive_path": "records/reef/scripts/dev/throughput-campaign.mjs",
+      "bytes": 13647,
+      "sha256": "5e1eb062af76f5157e6f1e675ab1e9f5a13234a30ac7a009ea79d3eb032de01a",
+      "reason": "Legacy local throughput campaign (300–1500 rps) and its comparator; current direct/full-chain 10k work uses separate supported runners and the campaign is not a capacity qualification.",
+      "source_blob_oid": "c742ed1aa8e4c0edd3109a1101f2aca157dd2bcb"
+    },
+    {
+      "source_path": "scripts/dev/throughput-compare.mjs",
+      "archive_path": "records/reef/scripts/dev/throughput-compare.mjs",
+      "bytes": 6159,
+      "sha256": "4854cbea709e5234bb3a68b0654bd95c546a8118ded070ee77a78d946c905ac4",
+      "reason": "Legacy local throughput campaign (300–1500 rps) and its comparator; current direct/full-chain 10k work uses separate supported runners and the campaign is not a capacity qualification.",
+      "source_blob_oid": "bc15931d6c1ad62d9e4f352e04308903a787dfce"
+    },
+    {
+      "source_path": "services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/ContentionSqlProbe.kt",
+      "archive_path": "records/reef/services/platform-runtime/src/test/kotlin/com/reef/platform/calcify/financial/ContentionSqlProbe.kt",
+      "bytes": 8606,
+      "sha256": "e65fdbfce8c53912f9144c9f928e198d0ddb4fd9726db58f72070b84e295458d",
+      "reason": "October 11 bounded contention proof runner, comparison math, its tests and sole Kotlin SQL contender; proof source and failures already archived, hard-coded dated image/project/host paths prevent general current-profile use.",
+      "source_blob_oid": "83edb9e24c152152262667a76404aa1ef5364dc8"
+    }
+  ],
+  "archive_repository": "https://github.com/dills122/reef-records",
+  "archive_commit": "5a8fed1d9efa9091ae5e5b5fcc93f0f3c1beca12",
+  "archive_manifest": "manifests/2026-10-16-reef-script-use-audit.json",
+  "redirect_paths": []
+}

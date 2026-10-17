@@ -65,6 +65,21 @@ To restore one file, read its `archive_path` at pinned archive commit with `git 
 
 Source deletion reduces current checkout size. Old Reef Git history still contains original blobs; this migration does not rewrite history. Ignored local runs, caches and build output are outside tracked migration inventory.
 
+## October 16 script-use audit follow-up
+
+The [script-use audit](REPOSITORY_RETENTION_AUDIT.md#script-use-audit-october-16-follow-up)
+classified all 443 tracked `scripts/` paths and retired 15 dated script files
+plus one Kotlin SQL probe (150,104 bytes). Exact originals from Reef source
+`9bbec61aafef55b05c1250b747e56fef92094f31` were published in
+[Records PR #17](https://github.com/dills122/reef-records/pull/17) at archive
+commit `5a8fed1d9efa9091ae5e5b5fcc93f0f3c1beca12`. The
+[relocation inventory](records/2026-10-16-script-use-audit-migration.json)
+records each source blob, SHA-256, destination and reason. The
+[full script inventory](https://github.com/dills122/reef-records/blob/7f1aa5d94107c307357d5681d931df94853ef777/docs/imports/2026-10-16-reef-script-surface-audit.tsv)
+distinguishes last source edit from last known run evidence. Current
+configurations and retained callers were checked before each removal; no
+runtime behavior or performance qualification changed.
+
 ## October 3 Calcify E0 split
 
 User-directed evidence split:97 original E0 files preserved at [Records08a4347](https://github.com/dills122/reef-records/blob/08a4347f7410f94837cdf18136296629e8f551ce/records/reef/docs/evidence/calcify-financial-sprint1/README.md),

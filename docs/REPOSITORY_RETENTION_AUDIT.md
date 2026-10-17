@@ -83,17 +83,48 @@ immutable imports `282d302db3adcff9bb38cd88a2b31447511c09b6` and
   Active finite-P3/financial work and distinct projection/arena proof contracts
   have no verified replacement. Do not mass-delete them from reference counts.
 
+## Script-use audit, October 16 follow-up
+
+Rechecked all 443 tracked `scripts/` paths after the first pass. The
+[443-path inventory](https://github.com/dills122/reef-records/blob/7f1aa5d94107c307357d5681d931df94853ef777/docs/imports/2026-10-16-reef-script-surface-audit.tsv)
+records each path's role, last source edit, static callers and decision. Of 294
+JavaScript, TypeScript and shell paths, 117 are tests, 94 runnable commands,
+48 imported helpers, 23 test-only modules, 8 operational-documentation tools
+and 4 evidence-only scripts. The other 149 paths include 137 ordered SQL
+migrations plus support files. These counts describe source roles, not run
+frequency. Git gives last edit, not last execution; manually invoked Make
+commands have no central run telemetry. September 25 projection proof and
+October 11 contention proof bound known use of selected tools. No newer
+retained invocation was found for the July campaign.
+
+| Selection | Files | Current setup check |
+| --- | ---: | --- |
+| July throughput campaign/comparator and ablation ladder | 3 | Campaign defaults target 300–1,500 requests/s on old quality/abuse lanes, not the named 10k direct or full-chain stack. Ablation unconditionally removes Compose volumes. Make/manual wiring only; current profiles and baselines own qualification. |
+| September downstream/projection capacity proof drivers and tests | 6 | Only their self-tests were in a Make aggregate; no current run target or production caller. Current source-cohort tests and projection measurement tools remain. |
+| October 11 aged/matched contention runner, analyzers, tests and Kotlin SQL contender | 6 | Frozen proof hardcodes dated Docker project/image and host load binary. Historical results and original source snapshots are already in Records; current local configuration now points to supported profiles. |
+| October 11 budget arithmetic model | 1 | Historical architecture-pressure-test input only; no operational caller. Original provenance manifest stays unchanged. |
+
+Follow-up retires 16 originals, 150,104 bytes, after exact-byte publication in
+[Records PR #17](https://github.com/dills122/reef-records/pull/17). The
+[relocation inventory](records/2026-10-16-script-use-audit-migration.json)
+pins source blob, SHA-256 and archive commit. Current direct/full-chain Calcify
+commands, finance/credit and Arena controls, droplet microbench sources,
+scenario paths, CI tests, fixtures and 137 ordered migrations remain. Python
+financial reference encoder checks pass. This audit does not claim every
+retained manual command has been run under today's configuration; retained
+command owners still need profile-specific validation before use.
+
 ## Next bounded reviews
 
 1. Review remaining `scripts/dev/calcify-financial/research/` paths against
    recovery, credit-calibration and mutation-proof tasks before retirement.
-   `run-contention.mjs` is named by current local configuration; financial
-   mutation check appears in the live program plan.
+   Financial mutation check appears in the live program plan; the dated
+   `run-contention.mjs` proof was archived in the follow-up above.
 2. Review remaining `docs/work/` when each owner changes. Recent footprint work
    is in progress in another checkout, so this pass does not rewrite its evidence.
 3. Review script command aliases against supported workflows, not script count.
    The October 13 script review retained projection and arena diagnostics for
    owner review; no equivalent replacement was established here.
 
-This pass changes no runtime, API, schema, scenario or throughput behavior.
+These passes change no runtime, API, schema, scenario or throughput behavior.
 No new performance qualification is claimed.

@@ -87,10 +87,10 @@ subnet and `CALCIFY_DIRECT_BROKER_IMAGE` records explicit broker-version overrid
 Defaults remain unchanged; host ports must still be free. See
 [aged contention proof](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md) for
 frozen setup, synthetic financial contender and measured limits.
-Research runner `scripts/dev/calcify-financial/research/run-contention.mjs` accepts `control` to retain financial
-start/crash/replay while omitting resolver cold restart; `CALCIFY_CONTENTION_PLAN`
-pins explicit plan file. Reproduce only with frozen setup and a new output directory:
-`bun scripts/dev/calcify-financial/research/run-contention.mjs SETUP_DIR NEW_OUTPUT_DIR control`.
+The October 11 contention runner and synthetic SQL contender are preserved with
+the frozen setup in Records. That dated runner hardcodes its original container
+project and image; use the current direct or full-chain profiles below for new
+measurements rather than treating its historical command as a supported profile.
 [Matched control](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_MATCHED_CONTROL_2026-10-11.md)
 records configuration equality and sequential-run limits. Do not reinterpret
 no-restart capacity as a successful recovery proof.

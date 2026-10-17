@@ -26,7 +26,6 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-admin-auth-local-seed dev-admin-owned-bot-local-seed dev-smoke-admin-auth-local dev-control-room
 .PHONY: dev-bootstrap dev-doctor dev-seed-p2-settlement-facts dev-sim dev-sim-batch
 .PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-compare-reef-arena-separation dev-replay
-.PHONY: dev-throughput-campaign dev-throughput-compare
 .PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-stream-ack-up kube-smoke-stream-ack kube-materializer-up
 .PHONY: kube-materializer-scale kube-autoscale-apply kube-smoke-venue-event-materializer kube-port-forward
 .PHONY: backbone-local-up backbone-local-up-infra backbone-local-init-openbao backbone-local-migrate backbone-local-verify backbone-local-status backbone-local-logs backbone-local-down
@@ -52,7 +51,6 @@ test-dev-tooling:
 	node scripts/dev/ci-pr-change-scope.test.mjs
 	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
 	node --test scripts/dev/lib/benchmark-runtime-signature.test.mjs scripts/dev/lib/cohort-residence.test.mjs scripts/dev/lib/downstream-cohort.test.mjs scripts/dev/lib/downstream-freshness.test.mjs scripts/dev/lib/downstream-sampler.test.mjs scripts/dev/lib/instrumentation-perturbation.test.mjs scripts/dev/lib/run-profile-roles.test.mjs scripts/dev/lib/source-cohort.test.mjs scripts/dev/lib/stream-profile-guard.test.mjs scripts/dev/lib/script-surface.test.mjs
-	node --test scripts/dev/downstream-state-reference.test.mjs scripts/dev/full-projection-headroom.test.mjs scripts/dev/isolated-downstream-capacity.test.mjs
 	node scripts/dev/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs
 	node --test scripts/ci/build-container.test.mjs
@@ -496,10 +494,6 @@ dev-projection-instrumentation-ab-check:
 	@if [ -z "$(CONTROL)" ] || [ -z "$(INSTRUMENTED)" ]; then echo 'usage: make dev-projection-instrumentation-ab-check CONTROL=path INSTRUMENTED=path [OUT=path]'; exit 1; fi
 	$(JS_RUNTIME) scripts/dev/projection-instrumentation-ab-check.mjs "$(CONTROL)" "$(INSTRUMENTED)" $(if $(OUT),"$(OUT)")
 
-dev-ablation-ladder:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/ablation-ladder.mjs
-
 dev-intake-bench:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/intake-bench.mjs
@@ -588,14 +582,6 @@ dev-compare-reef-arena-separation:
 dev-replay:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/replay-pack.mjs
-
-dev-throughput-campaign:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/throughput-campaign.mjs
-
-dev-throughput-compare:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/throughput-compare.mjs
 
 do-benchmark:
 	./scripts/dev/do-benchmark-host.sh $(ARGS)

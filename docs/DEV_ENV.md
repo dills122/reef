@@ -826,41 +826,12 @@ Run matching-engine benchmark guardrail check (CI-equivalent):
 make bench-matching-engine-check
 ```
 
-Run the throughput campaign (quality + capacity lanes with cap summary):
-
-```bash
-make dev-throughput-campaign
-```
-
-Run campaign with optional intentional-trip abuse lane:
-
-```bash
-DEV_CAMPAIGN_INCLUDE_ABUSE_TRIP=1 \
-DEV_CAMPAIGN_ABUSE_TRIP_RATES=1200 \
-DEV_CAMPAIGN_ABUSE_TRIP_WORKERS=128 \
-make dev-throughput-campaign
-```
-
-Optional guardrails for intentional-trip lane (enabled by default):
-
-- `DEV_CAMPAIGN_ENFORCE_ABUSE_TRIP_GUARDRAIL=1`
-- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_TRIPS=1`
-- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_BLOCKS=1`
-- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT=1`
-
-Run campaign with an automatic clean reset first (recommended for fair high-rate comparisons):
-
-```bash
-DEV_CAMPAIGN_RESET_STACK=1 make dev-throughput-campaign
-```
-
-Compare two throughput campaign summaries (baseline vs candidate):
-
-```bash
-DEV_CAMPAIGN_BASELINE_SUMMARY=/tmp/reef-throughput-campaign-baseline/throughput-campaign-summary.json \
-DEV_CAMPAIGN_CANDIDATE_SUMMARY=/tmp/reef-throughput-campaign/throughput-campaign-summary.json \
-make dev-throughput-compare
-```
+For throughput qualification, select a named current workload and stack in
+[Local run profiles](LOCAL_RUN_PROFILES.md), then compare it with the matching
+profile in [throughput baselines](THROUGHPUT_BASELINES.md). The older local
+campaign, comparator and volume-reset ablation ladder are archived in Records;
+their defaults describe a different capacity profile and are not current run
+instructions. See the [script-use audit](REPOSITORY_RETENTION_AUDIT.md#script-use-audit-october-16-follow-up).
 
 Run ad hoc simulator load against active dev env:
 

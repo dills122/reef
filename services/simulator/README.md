@@ -16,9 +16,9 @@ make test-simulator
 make test
 ```
 
-Long-running load, stress, throughput-campaign, and soak runs remain explicit
-developer/operations commands (`make dev-stress`, `make dev-throughput-campaign`,
-and related scripts). Do not move those into the fast test target without a
+Long-running load, stress and soak runs remain explicit developer/operations
+commands (`make dev-stress` and the named throughput profiles in
+`docs/LOCAL_RUN_PROFILES.md`). Do not move those into the fast test target without a
 separate CI/runtime-budget decision.
 
 ## Load Tester CLI
