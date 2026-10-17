@@ -28,7 +28,7 @@ export default defineConfig({
           items: [
             { label: "What Is Reef", slug: "overview/what-is-reef" },
             { label: "Architecture", slug: "overview/architecture" },
-            { label: "September 4 Snapshot", slug: "overview/status" },
+            { label: "Status Snapshot", slug: "overview/status" },
             { label: "Developer Setup", slug: "overview/developer-setup" },
           ],
         },

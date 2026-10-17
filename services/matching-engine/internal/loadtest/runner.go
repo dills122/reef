@@ -184,8 +184,8 @@ func Run(ctx context.Context, service *app.Service, cfg Config) (Report, error) 
 
 	started := time.Now().UTC()
 	totalAttempts := int64(float64(cfg.RatePerSecond) * cfg.Duration.Seconds())
-	jobs := make(chan commandEnvelope, maxInt(cfg.RatePerSecond, cfg.Workers*4))
-	samples := make(chan sample, maxInt(cfg.RatePerSecond, cfg.Workers*4))
+	jobs := make(chan commandEnvelope, max(cfg.RatePerSecond, cfg.Workers*4))
+	samples := make(chan sample, max(cfg.RatePerSecond, cfg.Workers*4))
 
 	var workers sync.WaitGroup
 	workers.Add(cfg.Workers)
@@ -750,11 +750,4 @@ func writeArtifacts(runDir string, report Report) error {
 		return fmt.Errorf("flush intervals artifact: %w", err)
 	}
 	return nil
-}
-
-func maxInt(a int, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

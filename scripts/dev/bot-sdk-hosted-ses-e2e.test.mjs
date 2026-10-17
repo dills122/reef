@@ -9,7 +9,7 @@ lockdown(hostedSesLockdownOptions);
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const fixture = JSON.parse(readFileSync(join(repoRoot, "packages/bot-sdk/fixtures/aapl-multi-tick.json"), "utf8"));
-const source = readFileSync(join(repoRoot, "packages/bot-sdk/examples/hosted-simple-market-maker.bundle.js"), "utf8");
+const source = readFileSync(join(repoRoot, "packages/bot-sdk/test-fixtures/hosted-simple-market-maker.bundle.js"), "utf8");
 const hostedRunner = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/src/hosted-runner.ts")).href);
 
 await assertSesHostedScenarioRuns();

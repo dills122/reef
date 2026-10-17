@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pnlClass, signed } from '$lib/format';
 	import { fetchLeaderboard, type LeaderboardResponse } from '$lib/api';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import SegmentButton from '$lib/components/ui/SegmentButton.svelte';
@@ -32,14 +33,6 @@
 		);
 		return () => controller.abort();
 	});
-
-	function signed(n: number) {
-		return `${n > 0 ? '+' : ''}${n.toLocaleString()}`;
-	}
-
-	function pnlClass(n: number) {
-		return cn(n > 0 && 'text-accent', n < 0 && 'text-destructive');
-	}
 
 	function formatNumber(n: number) {
 		return n.toLocaleString();

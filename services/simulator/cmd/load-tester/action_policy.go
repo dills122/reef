@@ -166,7 +166,7 @@ func updateRecoveryState(state *workerState, cfg Config) {
 		return
 	}
 	state.rejectStreak++
-	state.submitOnlyTicks = maxInt(state.submitOnlyTicks, lifecycleRecoveryTicks(cfg.Mode))
+	state.submitOnlyTicks = max(state.submitOnlyTicks, lifecycleRecoveryTicks(cfg.Mode))
 	if state.rejectStreak >= 3 {
 		if cfg.Mode == "capacity-baseline" {
 			state.submitOnlyTicks = 36
@@ -188,9 +188,9 @@ func compactTrackedOrders(orders []trackedOrder, cfg Config) []trackedOrder {
 	if !isLifecycleManagedMode(cfg.Mode) {
 		return orders
 	}
-	maxTracked := maxInt(cfg.StrictMinLiveOrders*2, 32)
+	maxTracked := max(cfg.StrictMinLiveOrders*2, 32)
 	if cfg.Mode == "capacity-baseline" {
-		maxTracked = maxInt(cfg.StrictMinLiveOrders*2, 16)
+		maxTracked = max(cfg.StrictMinLiveOrders*2, 16)
 	}
 	if len(orders) <= maxTracked {
 		return orders
@@ -314,8 +314,8 @@ func profileQuantity(rng *rand.Rand, cfg Config, profile string) int {
 }
 
 func profileQuantityBand(rng *rand.Rand, cfg Config, preferredMin, preferredMax int) int {
-	minValue := maxInt(cfg.QuantityMin, preferredMin)
-	maxValue := minInt(cfg.QuantityMax, preferredMax)
+	minValue := max(cfg.QuantityMin, preferredMin)
+	maxValue := min(cfg.QuantityMax, preferredMax)
 	if maxValue < minValue {
 		minValue = cfg.QuantityMin
 		maxValue = cfg.QuantityMax
@@ -342,9 +342,9 @@ func profilePrice(rng *rand.Rand, cfg Config, profile string, instrument *sessio
 		}
 		span := (base * int64(volBps)) / 10_000
 		if span <= 0 {
-			span = maxInt64(1, (cfg.PriceMax-cfg.PriceMin)/10)
+			span = max(1, (cfg.PriceMax-cfg.PriceMin)/10)
 		}
-		price := randomInt64(rng, maxInt64(1, base-span), base+span)
+		price := randomInt64(rng, max(1, base-span), base+span)
 		return quantizePrice(price, instrument.PriceTickNanos)
 	}
 	switch profile {
@@ -445,27 +445,6 @@ func normalizeProfile(profile string) string {
 	}
 }
 
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func maxInt64(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func isValidRateSchedule(schedule string) bool {
 	switch strings.ToLower(strings.TrimSpace(schedule)) {
 	case rateScheduleDrop, rateSchedulePrecise:
@@ -480,7 +459,7 @@ func rateChannelDepth(cfg Config) int {
 		return cfg.RateQueueDepth
 	}
 	if strings.EqualFold(strings.TrimSpace(cfg.RateSchedule), rateSchedulePrecise) {
-		return maxInt(maxInt(cfg.Workers*4, cfg.RatePerSecond), 1)
+		return max(max(cfg.Workers*4, cfg.RatePerSecond), 1)
 	}
 	return 1
 }

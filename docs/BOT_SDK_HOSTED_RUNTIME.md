@@ -46,7 +46,7 @@ The hosted runner wraps loaded bot classes with host-owned execution guards. Cur
 Use the hosted artifact runner for compiled single-file JavaScript bot bundles:
 
 ```bash
-bun scripts/dev/bot-sdk-hosted-run.mjs packages/bot-sdk/examples/hosted-simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json --unsafe-vm-for-local-dev
+bun scripts/dev/bot-sdk-hosted-run.mjs packages/bot-sdk/test-fixtures/hosted-simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json --unsafe-vm-for-local-dev
 ```
 
 Without `--unsafe-vm-for-local-dev`, the script uses the default SES-compatible path and expects `globalThis.Compartment` to be available after SES lockdown/bootstrap. The unsafe VM flag is local-only test plumbing; it is not a hosted security boundary.

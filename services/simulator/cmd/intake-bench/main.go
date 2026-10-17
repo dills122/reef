@@ -177,7 +177,7 @@ func run(cfg config) report {
 		cfg.RunID = sessionID
 	}
 	started := time.Now()
-	results := make(chan requestResult, maxInt(cfg.Workers*8, 1024))
+	results := make(chan requestResult, max(cfg.Workers*8, 1024))
 	rateCh := make(chan struct{}, rateChannelDepth(cfg))
 	if cfg.RatePerSecond > 0 {
 		go tokenFeeder(ctx, cfg.RatePerSecond, cfg.RateSchedule, rateCh)
@@ -415,7 +415,7 @@ func errorText(status int, body []byte, err error) string {
 
 func rateChannelDepth(cfg config) int {
 	if strings.EqualFold(strings.TrimSpace(cfg.RateSchedule), rateSchedulePrecise) {
-		return maxInt(cfg.Workers*2, 1)
+		return max(cfg.Workers*2, 1)
 	}
 	return 1
 }
@@ -526,11 +526,4 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return parsed
-}
-
-func maxInt(left int, right int) int {
-	if left > right {
-		return left
-	}
-	return right
 }
