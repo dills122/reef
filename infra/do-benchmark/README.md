@@ -108,7 +108,7 @@ Use `run` while iterating; it provisions or reuses the stack, syncs the checkout
 
 `run-destroy` provisions the stack, syncs the checkout, runs the benchmark, fetches artifacts, validates reports, and destroys resources in one command. Keep it for final lifecycle confirmation, not for every debugging iteration.
 
-**What runs on the droplet.** `sync` here rsyncs the whole working tree, including uncommitted and untracked files (it excludes only `.env`, `.env.local` and build directories), so a dirty checkout benchmarks the dirty code. `scripts/dev/calcify-financial/droplet-chain-run.sh` does the opposite: it refuses a dirty tracked tree and ships `git archive HEAD`, so uncommitted work is not run. Commit first in either case and record the head SHA with the result.
+**What runs on the droplet.** `sync` here refuses a dirty tracked tree and ships the tracked tree at HEAD (`git archive HEAD`, rsynced with `--delete`, keeping `.env`, `.env.local` and build directories on the host), exactly like `scripts/dev/calcify-financial/droplet-chain-run.sh`. Uncommitted and untracked work is never run. Commit first and record the head SHA with the result.
 
 ## Named Materializer 10k Gate
 

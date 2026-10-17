@@ -40,7 +40,7 @@ commands:
   up             provision the DO benchmark droplet and firewall
   plan-goal      print resolved profile, sizing, load, and report gates without provisioning
   status         print OpenTofu outputs
-  sync           rsync the current checkout to the droplet
+  sync           rsync the tracked tree at HEAD (git archive) to the droplet; refuses a dirty tracked tree
   start          start the remote stream-ack stack
   run            provision, sync, run the benchmark, fetch artifacts, and check reports
   check          check fetched benchmark artifacts without touching DO resources
@@ -735,7 +735,16 @@ sync_repo() {
   host="$(droplet_ip)"
   user="$(ssh_user)"
   private_key="$(private_key_path)"
-  echo "syncing repo to $user@$host:$REMOTE_DIR"
+  # Ship exactly what droplet-chain-run.sh ships: the tracked tree at HEAD (git archive), never untracked files
+  # (.env, .planning, local notes) and never uncommitted edits, so the benchmarked code is a known commit.
+  if [ "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" != 0 ]; then
+    echo "tracked changes present; commit or stash them so the shipped tree is exactly HEAD" >&2
+    return 1
+  fi
+  local stage
+  stage="$(mktemp -d)"
+  git -C "$ROOT_DIR" archive --format=tar HEAD | tar -x -C "$stage"
+  echo "syncing tracked tree at $(git -C "$ROOT_DIR" rev-parse --short HEAD) to $user@$host:$REMOTE_DIR"
   rsync -az --delete \
     -e "ssh -i $private_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$ROOT_DIR/.tmp-do-known-hosts" \
     --exclude ".env" \
@@ -749,7 +758,8 @@ sync_repo() {
     --exclude "infra/do-benchmark/.terraform/" \
     --exclude "infra/do-benchmark/terraform.tfstate" \
     --exclude "infra/do-benchmark/terraform.tfstate.backup" \
-    "$ROOT_DIR/" "$user@$host:$REMOTE_DIR/"
+    "$stage/" "$user@$host:$REMOTE_DIR/" || { rm -rf "$stage"; return 1; }
+  rm -rf "$stage"
 }
 
 fetch_artifacts() {

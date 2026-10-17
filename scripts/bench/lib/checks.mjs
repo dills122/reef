@@ -196,7 +196,7 @@ export function checkGit(git, { target = "local" } = {}) {
   const dirty = git.dirtyTracked.length;
   if (target === "droplet") {
     return [result("git:tree", dirty === 0 ? PASS : FAIL, "tracked tree clean (droplet run)", "0 modified tracked files", String(dirty),
-      "Dedicated-host harnesses ship the tree: droplet-chain-run.sh refuses a dirty tracked tree and ships `git archive HEAD`, do-benchmark-host.sh rsyncs everything incl. untracked files. The run must be traceable to one commit.")];
+      "Dedicated-host harnesses ship the tree: droplet-chain-run.sh and do-benchmark-host.sh sync both refuse a dirty tracked tree and ship `git archive HEAD`. The run must be traceable to one commit.")];
   }
   return [result("git:tree", dirty === 0 ? PASS : WARN, "tracked tree clean", "0 modified tracked files", String(dirty),
     "A local run on a dirty tree is not reproducible from the stamped git sha.")];
