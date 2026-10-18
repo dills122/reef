@@ -139,6 +139,82 @@ export function extractBootstrapOverlay(source, processEnv = {}) {
   return { overlay: { services }, defaultImages: { runtime: image, matching: matcher } };
 }
 
+// ---- effective compose config vs profile (.env leak guard) ----------------------------------------------
+// compose = { effective: services, baseline: services } from `docker compose config --format json`:
+//   effective = what the run would really get (process env + the auto-loaded .env + compose defaults)
+//   baseline  = compose defaults only (clean environment, --env-file /dev/null)
+// overlay   = the generated Calcify compose-profile.json (or its static extraction); its literal values
+//             override both, so it is applied on top of both sides before comparing.
+const envOf = (services, name) => services?.[name]?.environment ?? {};
+function withOverlay(services, overlay) {
+  const out = {};
+  for (const [name, def] of Object.entries(services ?? {})) out[name] = { ...(def.environment ?? {}), ...envOf(overlay?.services, name) };
+  return out;
+}
+
+export function sourceOfValue(key, baselineValue, effectiveValue, processEnv, overlayValue) {
+  if (overlayValue !== undefined) return "overlay";
+  if (effectiveValue === baselineValue) return "compose default";
+  return processEnv[key] ? "process env" : ".env";
+}
+
+export function checkEffectiveConfig(entries, compose, { overlay = null, launcher = "none", processEnv = {} } = {}) {
+  if (!compose?.effective || !compose?.baseline) {
+    return [result("compose:effective", SKIPPED, "effective compose config", "docker compose config resolves", "(not available)",
+      "Could not resolve the effective config (process env + .env + compose defaults), so a developer .env override cannot be ruled out.")];
+  }
+  const effective = withOverlay(compose.effective, overlay);
+  const baseline = withOverlay(compose.baseline, overlay);
+  const out = [];
+  const pinned = new Set();
+  let compared = 0;
+  const targets = (entry) => {
+    if (entry.family === "overlay") {
+      const [service, ...rest] = entry.key.split(".");
+      return [{ service, name: rest.join(".") }];
+    }
+    if (entry.family === "env") return ["platform-api", "matching-engine"].map((service) => ({ service, name: entry.key }));
+    return [];
+  };
+  for (const entry of entries) {
+    for (const { service, name } of targets(entry)) {
+      pinned.add(name);
+      const actual = effective[service]?.[name];
+      if (actual === undefined) continue;
+      if (entry.family === "env" && (entry.forcedBy.includes(launcher) || entry.defaultedBy.includes(launcher))) continue;
+      compared += 1;
+      if (String(actual) === entry.value) continue;
+      const source = sourceOfValue(name, baseline[service]?.[name], actual, processEnv, envOf(overlay?.services, service)[name]);
+      // A wrong compose DEFAULT for a plain env key is already reported by checkEnvEntry; here only real overrides (.env, shell, overlay) are new.
+      if (entry.family === "env" && source === "compose default") continue;
+      const fix = source === ".env" ? `remove or change ${name} in .env (compose auto-loads it), or pin it in the launcher/overlay`
+        : source === "process env" ? `unset ${name} in your shell`
+        : source === "overlay" ? `fix the overlay value for ${service}.${name}`
+        : `set ${name}=${entry.value} explicitly (the compose default is wrong for this profile)`;
+      out.push(result(`effective:${service}.${name}`, severity(entry), `${service}.${name} (effective)`, entry.value, String(actual) === "" ? "(empty)" : String(actual),
+        `${entry.why} Effective value comes from ${source}. Fix: ${fix}.`, { source }));
+    }
+  }
+  if (out.length === 0) out.push(result("effective:pinned", PASS, "effective config matches pinned keys", "every pinned key resolves to its profile value", `${compared} compared`, "docker compose config (process env + .env + compose defaults + overlay)"));
+
+  const leaks = new Map();
+  for (const [service, env] of Object.entries(effective)) {
+    for (const [key, value] of Object.entries(env)) {
+      if (pinned.has(key) || String(baseline[service]?.[key] ?? "") === String(value)) continue;
+      const source = sourceOfValue(key, baseline[service]?.[key], value, processEnv, undefined);
+      const seen = leaks.get(key) ?? { source, services: [] };
+      seen.services.push(service);
+      leaks.set(key, seen);
+    }
+  }
+  if (leaks.size > 0) {
+    const list = [...leaks].map(([key, { source, services }]) => `${key} [${source}] (${services.length > 2 ? `${services.slice(0, 2).join(", ")} +${services.length - 2}` : services.join(", ")})`).join("; ");
+    out.push(result("effective:unpinned-overrides", WARN, "unpinned .env/env overrides", "none (every override of a compose default is pinned by the profile)", list,
+      "These keys override a compose default for services in this run but the profile does not pin them, so they can silently change benchmark behavior. Values are not printed (may be secrets). Pin the benchmark-relevant ones in the profile and launcher/overlay, or remove them from .env for benchmark runs.", { source: "effective compose config" }));
+  }
+  return out;
+}
+
 // ---- Calcify image tags ---------------------------------------------------------------------------
 export function checkImages(processEnv, { entry = "soak", defaultImages = {} } = {}) {
   const stale = /master461/;

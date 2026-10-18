@@ -200,6 +200,87 @@ test("class B env knobs: two-step mode, evict off, tmpfs, skip-build and quantit
 });
 
 // ---- host / docker / git / broker -------------------------------------------------------------------------------------------------------
+// ---- effective compose config (.env leak guard) ---------------------------------------------------------------------------------------
+// Fixture shape = `docker compose config --format json` services. baseline = compose defaults only, effective = with a developer .env.
+const baselineServices = () => ({
+  "platform-api": { environment: { PLATFORM_ADMIN_AUTH_ENABLED: "false", GITHUB_OAUTH_CLIENT_ID: "", GITHUB_OAUTH_REDIRECT_URI: "", PLATFORM_HTTP_SERVER: "jdk", REEF_ENV: "" } },
+  "matching-engine": { environment: { MATCHING_ENGINE_ENABLE_GRPC: "1" } },
+});
+const withDotEnv = (patch) => {
+  const effective = baselineServices();
+  for (const [service, env] of Object.entries(patch)) Object.assign(effective[service].environment, env);
+  return { effective, baseline: baselineServices() };
+};
+const bootstrapOverlay = () => checks.extractBootstrapOverlay(read("scripts/dev/calcify-direct-bootstrap.mjs"), {}).overlay;
+
+test("effective config: pinned overlay key neutralises a .env override of PLATFORM_ADMIN_AUTH_ENABLED", () => {
+  const compose = withDotEnv({ "platform-api": { PLATFORM_ADMIN_AUTH_ENABLED: "true", GITHUB_OAUTH_CLIENT_ID: "client", GITHUB_OAUTH_REDIRECT_URI: "http://localhost/cb" } });
+  const results = checks.checkEffectiveConfig(profiles.b.entries, compose, { overlay: bootstrapOverlay(), launcher: "none", processEnv: {} });
+  assert.deepEqual(results.filter((r) => r.status !== checks.PASS).map((r) => r.id), []);
+  assert.equal(byId(results, "effective:pinned").status, checks.PASS);
+});
+
+test("effective config: a profile key whose effective value differs FAILs and names .env as the source", () => {
+  const compose = withDotEnv({ "platform-api": { PLATFORM_ADMIN_AUTH_ENABLED: "true" } });
+  const results = checks.checkEffectiveConfig(profiles.b.entries, compose, { overlay: null, launcher: "none", processEnv: {} });
+  const hit = byId(results, "effective:platform-api.PLATFORM_ADMIN_AUTH_ENABLED");
+  assert.equal(hit.status, checks.FAIL);
+  assert.equal(hit.source, ".env");
+  assert.match(hit.why, /remove or change PLATFORM_ADMIN_AUTH_ENABLED in \.env/);
+});
+
+test("effective config: the same difference from the shell is attributed to process env", () => {
+  const compose = withDotEnv({ "platform-api": { PLATFORM_ADMIN_AUTH_ENABLED: "true" } });
+  const results = checks.checkEffectiveConfig(profiles.b.entries, compose, { overlay: null, launcher: "none", processEnv: { PLATFORM_ADMIN_AUTH_ENABLED: "true" } });
+  const hit = byId(results, "effective:platform-api.PLATFORM_ADMIN_AUTH_ENABLED");
+  assert.equal(hit.source, "process env");
+  assert.match(hit.why, /unset PLATFORM_ADMIN_AUTH_ENABLED in your shell/);
+});
+
+test("effective config: a wrong overlay value FAILs and names the overlay", () => {
+  const overlay = structuredClone(bootstrapOverlay());
+  overlay.services["platform-api"].environment.PLATFORM_ADMIN_AUTH_ENABLED = "true";
+  const results = checks.checkEffectiveConfig(profiles.b.entries, withDotEnv({}), { overlay, launcher: "none", processEnv: {} });
+  assert.equal(byId(results, "effective:platform-api.PLATFORM_ADMIN_AUTH_ENABLED").source, "overlay");
+});
+
+test("effective config: class C launcher-forced keys are not failed (the launcher overwrites them), unforced ones are", () => {
+  const compose = withDotEnv({ "platform-api": { PLATFORM_ADMIN_AUTH_ENABLED: "true" } });
+  const forced = checks.checkEffectiveConfig(profiles.c.entries, compose, { launcher: "nodb", processEnv: {} });
+  assert.equal(byId(forced, "effective:platform-api.PLATFORM_ADMIN_AUTH_ENABLED"), undefined);
+  const manual = checks.checkEffectiveConfig(profiles.c.entries, compose, { launcher: "none", processEnv: {} });
+  assert.equal(byId(manual, "effective:platform-api.PLATFORM_ADMIN_AUTH_ENABLED").status, checks.FAIL);
+});
+
+test("effective config: unpinned .env overrides WARN by key name only, never by value", () => {
+  const compose = withDotEnv({ "platform-api": { REEF_ENV: "super-secret-env-name", SOME_NEW_FLAG: "x" } });
+  compose.baseline["platform-api"].environment.SOME_NEW_FLAG = "y";
+  const results = checks.checkEffectiveConfig(profiles.b.entries, compose, { overlay: bootstrapOverlay(), launcher: "none", processEnv: {} });
+  const warn = byId(results, "effective:unpinned-overrides");
+  assert.equal(warn.status, checks.WARN);
+  assert.match(warn.actual, /REEF_ENV \[\.env\]/);
+  assert.match(warn.actual, /SOME_NEW_FLAG/);
+  assert.doesNotMatch(JSON.stringify(results), /super-secret-env-name/);
+});
+
+test("effective config: no compose facts is a non-blocking SKIPPED, and runChecks wires it for B and C", () => {
+  assert.equal(checks.checkEffectiveConfig(profiles.b.entries, undefined)[0].status, checks.SKIPPED);
+  assert.equal(checks.checkEffectiveConfig(profiles.b.entries, undefined)[0].blocking, undefined);
+  const compose = withDotEnv({ "platform-api": { PLATFORM_ADMIN_AUTH_ENABLED: "true" } });
+  const results = runChecks({ cls: "b", profile: profiles.b, resolved: {}, facts: { ...goodFacts, host: droplet, compose }, launcher: "none", target: "local", entry: "soak", processEnv: {}, composeDef, bootstrapSource: read("scripts/dev/calcify-direct-bootstrap.mjs") });
+  assert.ok(byId(results, "effective:pinned"), "static bootstrap overlay pins the admin flag, so the .env value cannot leak");
+  assert.equal(checks.verdict(results.filter((r) => r.id.startsWith("effective:"))).status, "PASS");
+});
+
+test("class B profile pins the admin/auth flags in the bootstrap overlay and class C in both launchers", () => {
+  for (const key of ["PLATFORM_ADMIN_AUTH_ENABLED", "LOCAL_DEV_ADMIN_AUTH_BYPASS"]) {
+    assert.equal(profiles.b.entries.find((e) => e.key === `platform-api.${key}`)?.value, "false", key);
+    const c = profiles.c.entries.find((e) => e.key === key);
+    assert.equal(c?.value, "false", key);
+    assert.deepEqual(c.forcedBy, ["materializer", "nodb"], key);
+  }
+});
+
 test("Docker VM sizing", () => {
   assert.equal(checks.checkDockerVm(goodDocker)[0].status, checks.PASS);
   assert.equal(checks.checkDockerVm({ ...goodDocker, ncpu: 4 })[0].status, checks.FAIL);
