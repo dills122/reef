@@ -5,6 +5,7 @@ import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs"
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { configureProjectionSourceNames, printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
+import { benchTopicRpkCommands } from "./lib/bench-topics.mjs";
 import { selectPartitionSpreadInstruments } from "./lib/stream-partition-spread.mjs";
 
 const MATERIALIZER_STRESS_SESSION_ID = "venue-event-materializer-mixed-lifecycle-stress";
@@ -113,9 +114,29 @@ console.log(`  stopIdleBackgroundServices=${process.env.DEV_STRESS_STOP_IDLE_BAC
 validateStreamProfile("materializer-soak");
 printStreamProfileSummary("materializer-soak");
 
+await provisionBenchTopics();
 await runStackUp("stream-ack");
 await stopIdleBackgroundServices();
 await import("./stress.mjs");
+
+// Start the broker alone and create the command and event topics with write.caching=false and max.message.bytes=4 MiB
+// before the runtime/engine auto-create them with broker defaults (see scripts/bench/profiles class C).
+async function provisionBenchTopics() {
+  const { create, alter } = benchTopicRpkCommands(
+    [env("STREAM_ACK_COMMAND_STREAM"), env("MATCHING_ENGINE_EVENT_STREAM")],
+    Number(env("STREAM_ACK_PARTITION_COUNT", "16")),
+  );
+  console.log("provisioning benchmark topics (write.caching=false, max.message.bytes=4194304)");
+  await run("docker", composeArgs(["up", "-d", "--no-deps", "--wait", "redpanda"]));
+  try {
+    await run("docker", composeArgs(["exec", "-T", "redpanda", ...create]));
+  } catch (_error) {
+    console.log("topics already exist; applying the benchmark topic configs with alter-config");
+  }
+  for (const command of alter) {
+    await run("docker", composeArgs(["exec", "-T", "redpanda", ...command]));
+  }
+}
 
 function appendProfiles(raw, additions) {
   const profiles = new Set(

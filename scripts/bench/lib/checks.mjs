@@ -150,8 +150,8 @@ export function checkImages(processEnv, { entry = "soak", defaultImages = {} } =
   }
   if (entry === "bootstrap" && envImages.length < 2) {
     out.push(result("image:bootstrap-default", FAIL, "bootstrap default images", "explicit CALCIFY_DIRECT_IMAGE + CALCIFY_DIRECT_MATCHING_IMAGE built from this checkout",
-      `${defaultImages.runtime ?? "reef-platform-runtime:calcify-10k-master461"} / ${defaultImages.matching ?? "reef-matching-engine:calcify-10k-master461"}`,
-      "Running calcify-direct-bootstrap.mjs directly uses the stale default tags without --build. Use make calcify-fullchain-soak (it builds first and sets both)."));
+      `${defaultImages.runtime ?? "none (required, bootstrap refuses to start)"} / ${defaultImages.matching ?? "none (required)"}`,
+      "calcify-direct-bootstrap.mjs has no default image tags and exits unless CALCIFY_DIRECT_IMAGE, CALCIFY_DIRECT_MATCHING_IMAGE and CALCIFY_DIRECT_PROJECT are set. Use make calcify-fullchain-soak (it builds first and sets all three)."));
   }
   if (entry === "soak" && processEnv.FC_SKIP_BUILD === "true") {
     out.push(result("image:skip-build", WARN, "FC_SKIP_BUILD", "false (images rebuilt from this checkout)", "true",
@@ -196,7 +196,7 @@ export function checkGit(git, { target = "local" } = {}) {
   const dirty = git.dirtyTracked.length;
   if (target === "droplet") {
     return [result("git:tree", dirty === 0 ? PASS : FAIL, "tracked tree clean (droplet run)", "0 modified tracked files", String(dirty),
-      "Dedicated-host harnesses ship the tree: droplet-chain-run.sh refuses a dirty tracked tree and ships `git archive HEAD`, do-benchmark-host.sh rsyncs everything incl. untracked files. The run must be traceable to one commit.")];
+      "Dedicated-host harnesses ship the tree: droplet-chain-run.sh and do-benchmark-host.sh sync both refuse a dirty tracked tree and ship `git archive HEAD`. The run must be traceable to one commit.")];
   }
   return [result("git:tree", dirty === 0 ? PASS : WARN, "tracked tree clean", "0 modified tracked files", String(dirty),
     "A local run on a dirty tree is not reproducible from the stamped git sha.")];

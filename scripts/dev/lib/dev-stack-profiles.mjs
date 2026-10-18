@@ -234,6 +234,13 @@ function applyStreamAckProfile() {
 }
 
 function applyStreamDirectNoDbProfile() {
+  // The direct-consume path is Kafka-compatible only; the compose default (jetstream, 64 partitions) is not a
+  // valid ingestion benchmark. Force redpanda and say so when this overrides an explicit different value.
+  const requestedProvider = env("STREAM_ACK_LOG_PROVIDER", "").trim().toLowerCase();
+  if (requestedProvider !== "" && requestedProvider !== "redpanda" && requestedProvider !== "kafka") {
+    console.warn(`stream-direct-nodb: overriding STREAM_ACK_LOG_PROVIDER=${requestedProvider} with redpanda (direct stream is Kafka-only)`);
+  }
+  setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
   setValue("RUNTIME_PERSISTENCE", "noop");
   setValue("EXTERNAL_API_IDEMPOTENCY_STORE", "inmemory");
   setValue("EXTERNAL_API_COMMAND_CAPTURE_MODE", "disabled");
@@ -252,13 +259,9 @@ function applyStreamDirectNoDbProfile() {
   setDefault("STREAM_ACK_PUBLISH_PIPELINE_BATCH_LINGER_MS", "0");
   setDefault("STREAM_INGRESS_ENABLED", "false");
   setDefault("STREAM_INGRESS_PORT", "8090");
-  if (streamAckLogProvider() === "redpanda") {
-    setDefault("STREAM_ACK_PARTITION_COUNT", "16");
-    setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..15");
-    setDefault("MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE", "none");
-  } else {
-    setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..63");
-  }
+  setDefault("STREAM_ACK_PARTITION_COUNT", "16");
+  setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..15");
+  setDefault("MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE", "none");
   setValue("STREAM_ACK_WORKER_ENABLED", "false");
   if (env("DEV_STREAM_DIRECT_NODB_PROJECTOR_ENABLED", "0") === "1") {
     setValue("STREAM_ACK_PROJECTOR_ENABLED", "true");

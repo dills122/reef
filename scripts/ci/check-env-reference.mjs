@@ -13,7 +13,6 @@ export const composeFiles = [
   "compose.local.yml",
   "compose.calcify.yml",
   "compose.arena.yml",
-  "compose.fullchain-tmpfs.yml",
 ];
 const envExamplePath = ".env.example";
 const baselinePath = "scripts/ci/env-reference-baseline.txt";

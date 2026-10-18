@@ -81,10 +81,12 @@ are recorded in [direct throughput campaign](https://github.com/dills122/reef-re
 This route reuses C5 in-memory intake and direct matching controls, runs Calcify
 through managed resolved output, and omits receipt/legacy SQL settlement workers.
 Source generation/topic identity SQL remains startup/rebalance control work.
-For isolated research bootstrap, optional `CALCIFY_DIRECT_PROJECT` assigns unique
+The bootstrap requires `CALCIFY_DIRECT_PROJECT`, `CALCIFY_DIRECT_IMAGE` and
+`CALCIFY_DIRECT_MATCHING_IMAGE` (no defaults; `make calcify-fullchain-soak` builds the images and sets all three).
+`CALCIFY_DIRECT_PROJECT` assigns unique
 container names and proof labels; `CALCIFY_DIRECT_SUBNET` selects an inspected unused
 subnet and `CALCIFY_DIRECT_BROKER_IMAGE` records explicit broker-version override.
-Defaults remain unchanged; host ports must still be free. See
+Host ports must still be free. See
 [aged contention proof](https://github.com/dills122/reef-records/blob/f3c9941d5cd35df81b32970e9873ad8ca9f86391/records/reef/docs/research/CALCIFY_AGED_CONTENTION_PROOF_2026-10-11.md) for
 frozen setup, synthetic financial contender and measured limits.
 The October 11 contention runner and synthetic SQL contender are preserved with

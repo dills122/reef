@@ -1,5 +1,8 @@
 name: Materializer 10k Gate
 
+# NOTE: the weekly schedule below only runs `plan` (a configuration check). It never provisions a droplet and never
+# measures anything, so a green scheduled run says nothing about 10k/s capacity. The real gate is
+# workflow_dispatch with command=run-destroy (PAID DigitalOcean run, owner approval first).
 on:
   schedule:
     - cron: '31 9 * * 2'
@@ -97,6 +100,10 @@ jobs:
           {
             echo "## materializer 10k gate"
             echo ""
+            if [ "${{ inputs.command || 'plan' }}" = "plan" ]; then
+              echo "> **PLAN ONLY**: this run checked configuration and did not provision a droplet or measure throughput. A pass here is not a capacity result."
+              echo ""
+            fi
             echo '```text'
             tail -n 120 materializer-10k-gate.log || true
             echo '```'

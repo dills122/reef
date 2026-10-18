@@ -81,7 +81,7 @@ The script reads these knobs from the environment (`make` passes command-line va
 | `FC_CAPACITY_JAVA_OPTS` | capacity service JVM options, default `-Xmx8g -XX:+UseParallelGC` |
 | `FC_SAMPLE_SECONDS`, `FC_DRAIN_SECONDS`, `FC_OUT_DIR`, `FC_TEARDOWN`, `FC_SKIP_BUILD` | sampling interval, drain bound, output directory, teardown, reuse of already built `latest` images (stale-code risk after code changes) |
 
-There is no `FC_INSTRUMENTS` knob: the bootstrap fixes 64 instruments over the 16 lanes. The tmpfs volumes are created by the script itself (`docker volume create` with tmpfs options, named `<project>_reef-redpanda-data`, `_reef-postgres-data`, `_reef-boundary-postgres-data`); `compose.fullchain-tmpfs.yml` at the repository root declares the same volumes but no script uses it.
+There is no `FC_INSTRUMENTS` knob: the bootstrap fixes 64 instruments over the 16 lanes. The tmpfs volumes are created by the script itself (`docker volume create` with tmpfs options, named `<project>_reef-redpanda-data`, `_reef-postgres-data`, `_reef-boundary-postgres-data`).
 
 The droplet matrices `fullchain` and `fullchainsmoke` of `scripts/dev/calcify-financial/droplet-chain-run.sh` run the soak as a rate ladder; dedicated-host rules (owner approval and cost first, host class) are in [How to benchmark correctly](../PERFORMANCE_LEARNINGS.md#how-to-benchmark-correctly). The 15 minute component soak acceptance (10k trades/s, 9M trades, integrity ok, booking lag cap 1.6 s) is [D-059](../DECISIONS.md#d-059-bounded-capacity-lane-memory); the soak harness fail rules are in [CALCIFY_SOAK_HARNESS.md](CALCIFY_SOAK_HARNESS.md).
 

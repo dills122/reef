@@ -51,7 +51,7 @@ test-dev-tooling:
 	node scripts/dev/lib/smoke-identity.test.mjs
 	node scripts/dev/ci-pr-change-scope.test.mjs
 	node --test scripts/dev/lib/stress-success-guardrail.test.mjs
-	node --test scripts/dev/lib/cli-args.test.mjs scripts/dev/lib/sleep.test.mjs scripts/dev/lib/benchmark-runtime-signature.test.mjs scripts/dev/lib/cohort-residence.test.mjs scripts/dev/lib/downstream-cohort.test.mjs scripts/dev/lib/downstream-freshness.test.mjs scripts/dev/lib/downstream-sampler.test.mjs scripts/dev/lib/instrumentation-perturbation.test.mjs scripts/dev/lib/run-profile-roles.test.mjs scripts/dev/lib/source-cohort.test.mjs scripts/dev/lib/stream-profile-guard.test.mjs scripts/dev/lib/script-surface.test.mjs
+	node --test scripts/dev/lib/cli-args.test.mjs scripts/dev/lib/sleep.test.mjs scripts/dev/lib/benchmark-runtime-signature.test.mjs scripts/dev/lib/cohort-residence.test.mjs scripts/dev/lib/downstream-cohort.test.mjs scripts/dev/lib/downstream-freshness.test.mjs scripts/dev/lib/downstream-sampler.test.mjs scripts/dev/lib/instrumentation-perturbation.test.mjs scripts/dev/lib/run-profile-roles.test.mjs scripts/dev/lib/source-cohort.test.mjs scripts/dev/lib/stream-profile-guard.test.mjs scripts/dev/lib/script-surface.test.mjs scripts/dev/lib/bench-topics.test.mjs
 	node scripts/ci/tests/ci-workflow-hardening.test.mjs
 	node --test scripts/ci/check-required-results.test.mjs
 	node --test scripts/ci/build-container.test.mjs
