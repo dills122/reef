@@ -84,8 +84,8 @@ export function gatherTopics(run, containers) {
 }
 
 // `docker compose config` works without a daemon. Returns { ok, services } or { ok:false, reason }.
-export function gatherComposeConfig(run, files, cwd, env) {
-  const args = ["compose", ...files.flatMap((f) => ["-f", f]), "config", "--format", "json"];
+export function gatherComposeConfig(run, files, cwd, env, { extraFiles = [], defaultsOnly = false } = {}) {
+  const args = ["compose", ...(defaultsOnly ? ["--env-file", "/dev/null"] : []), ...[...files, ...extraFiles].flatMap((f) => ["-f", f]), "config", "--format", "json"];
   const r = run("docker", args, { cwd, env, timeout: 30000 });
   if (r.status !== 0) return { ok: false, reason: (r.stderr || "docker compose unavailable").trim().split("\n")[0] };
   try {

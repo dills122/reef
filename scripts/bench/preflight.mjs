@@ -36,6 +36,7 @@ export function runChecks({ cls, profile, resolved, facts, launcher, target, ent
   for (const e of envEntries) results.push(checks.checkEnvEntry(e, resolved, composeDef, launcher));
   if (cls === "c") results.push(...checks.checkMessageCap(resolved, composeDef, launcher, { compressionByLauncher: { nodb: "none" } }));
   if (cls === "a") results.push(...checks.checkTools(facts.tools));
+  let effectiveOverlay = null;
   if (cls === "b") {
     let overlay = overlayData;
     let label = "generated overlay";
@@ -46,10 +47,12 @@ export function runChecks({ cls, profile, resolved, facts, launcher, target, ent
       defaultImages = extracted.defaultImages;
       label = "scripts/dev/calcify-direct-bootstrap.mjs (static)";
     }
+    effectiveOverlay = overlay;
     results.push(...checks.checkOverlay(profile.entries, overlay, label));
     results.push(...checks.checkImages(processEnv, { entry, defaultImages }));
   }
   if (cls === "b" || cls === "c") {
+    results.push(...checks.checkEffectiveConfig(profile.entries, facts.compose, { overlay: effectiveOverlay, launcher, processEnv }));
     results.push(...checks.checkDockerVm(facts.docker));
     results.push(...checks.checkRunningStacks(facts.docker, facts.docker?.containers ?? [], { allow: processEnv.BENCH_ALLOW_RUNNING_STACK === "1" }));
     results.push(...checks.checkTopics(profile.entries, facts.topics ?? null));
@@ -171,7 +174,15 @@ async function main() {
   let composeDef = composeDefaults(readFileSync(join(root, "compose.base.yml"), "utf8"));
   let composeSource = "compose.base.yml (static parse)";
   if (!injected) {
-    const cfg = gatherComposeConfig(run, composeFiles, root, processEnv);
+    // Class B always runs these compose profiles (bootstrap sets them); resolve with them so the Calcify services are in the config.
+    const composeEnv = cls === "b" ? { ...processEnv, COMPOSE_PROFILES: processEnv.COMPOSE_PROFILES || "redpanda,calcify-phase1,calcify-phase2" } : processEnv;
+    const cfg = gatherComposeConfig(run, composeFiles, root, composeEnv);
+    if (cfg.ok && (cls === "b" || cls === "c")) {
+      // Defaults-only baseline: clean environment and no .env, so a difference to `cfg` is exactly an override.
+      const cleanEnv = Object.fromEntries(["PATH", "HOME", "DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT", "COMPOSE_PROFILES"].flatMap((k) => (composeEnv[k] ? [[k, composeEnv[k]]] : [])));
+      const base = gatherComposeConfig(run, composeFiles, root, cleanEnv, { defaultsOnly: true });
+      if (base.ok) facts.compose = { effective: cfg.services, baseline: base.services };
+    }
     if (cfg.ok) {
       const merged = {};
       for (const name of ["platform-api", "matching-engine"]) for (const [k, v] of Object.entries(cfg.services[name]?.environment ?? {})) if (!(k in merged)) merged[k] = v;
