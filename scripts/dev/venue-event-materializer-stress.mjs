@@ -30,6 +30,12 @@ setValue("STREAM_ACK_INTAKE_STORE", "inmemory");
 setDefault("STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES", "100000");
 setDefault("STREAM_ACK_INMEMORY_INTAKE_SHARDS", "256");
 setValue("PLATFORM_HTTP_SERVER", "netty");
+// Pin admin/auth and risk flags: loadDotEnv() above would otherwise let a developer .env change the run.
+setValue("PLATFORM_ADMIN_AUTH_ENABLED", "false");
+setValue("LOCAL_DEV_ADMIN_AUTH_BYPASS", "false");
+setValue("EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE", "allow-all");
+setValue("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE", "allow-all");
+setValue("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE", "allow-all");
 setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
 setDefault("STREAM_ACK_COMMAND_STREAM", "REEF_MATERIALIZER_STRESS_COMMANDS");
 setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.materializer.stress.cmd.v1");

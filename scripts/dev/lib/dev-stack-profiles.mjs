@@ -249,6 +249,12 @@ function applyStreamDirectNoDbProfile() {
   setDefault("STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES", "100000");
   setDefault("STREAM_ACK_INMEMORY_INTAKE_SHARDS", "256");
   setValue("PLATFORM_HTTP_SERVER", "netty");
+  // Pin admin/auth and risk flags: loadDotEnv() would otherwise let a developer .env change the run.
+  setValue("PLATFORM_ADMIN_AUTH_ENABLED", "false");
+  setValue("LOCAL_DEV_ADMIN_AUTH_BYPASS", "false");
+  setValue("EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE", "allow-all");
+  setValue("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE", "allow-all");
+  setValue("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE", "allow-all");
   setDefault("STREAM_ACK_COMMAND_STREAM", "REEF_DIRECT_NODB_COMMANDS_V2");
   setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.direct.nodb.v2.cmd.v1");
   setDefault("STREAM_ACK_COMMAND_STREAM_MAX_BYTES", "34359738368");
