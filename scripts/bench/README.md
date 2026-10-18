@@ -66,6 +66,21 @@ stale `calcify-10k-master461` image tags, Docker VM size, other running Reef sta
 tree, host class, Redpanda `write.caching` / `max.message.bytes` when a broker is reachable (otherwise `SKIPPED`),
 Go/JDK toolchain and unloosened CI thresholds for class A.
 
+### Your local `.env` cannot change a benchmark (classes B and C)
+
+`docker compose` auto-loads `.env`, and so do the dev scripts, so any key in it can change a run silently (a
+`PLATFORM_ADMIN_AUTH_ENABLED=true` there crashed `platform-api` at boot in the noop-persistence Calcify profile).
+Defences, all in this directory's profiles:
+
+- Class B pins the admin/auth/OAuth and risk-mode keys as literals in the bootstrap overlay, and
+  `calcify-direct-bootstrap.mjs` refuses to start when `docker compose config` (process env + `.env` + defaults +
+  overlay) differs from the pinned `platform-api` / `matching-engine` values. Class C launchers `setValue` the same keys.
+- The preflight resolves `docker compose config` twice (your environment, and compose defaults only with
+  `--env-file /dev/null` and a clean environment). A pinned key whose effective value differs from the profile is a
+  `FAIL` naming the source (`.env`, `process env`, `overlay`) and the fix. Launcher-forced keys are not failed.
+- Every other key where your environment overrides a compose default is a `WARN` "unpinned .env/env overrides",
+  listed by key name only (values may be secrets). Pin the benchmark-relevant ones or drop them from `.env`.
+
 ## Escape hatch
 
 `BENCH_PREFLIGHT=skip make calcify-fullchain-soak ...` runs without checking. It prints a loud banner before and
