@@ -13,9 +13,9 @@ repositories {
 dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.3")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.3")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.4")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.4")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.4")
     implementation("org.postgresql:postgresql:42.7.14")
     implementation("com.zaxxer:HikariCP:7.1.0")
     testImplementation(kotlin("test"))
