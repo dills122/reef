@@ -12,7 +12,7 @@ repositories {
 dependencies {
     implementation(files("../platform-runtime/build/libs/platform-runtime.jar"))
     implementation(kotlin("stdlib"))
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.4")
     implementation("org.postgresql:postgresql:42.7.14")
     implementation("com.zaxxer:HikariCP:7.1.0")
     testImplementation(kotlin("test"))
