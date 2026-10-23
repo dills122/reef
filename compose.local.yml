@@ -164,7 +164,7 @@ services:
         condition: service_healthy
 
   redpanda:
-    image: redpandadata/redpanda:v26.2.4
+    image: redpandadata/redpanda:v26.2.5
     container_name: reef-redpanda
     profiles: ["redpanda"]
     command:
@@ -213,7 +213,7 @@ services:
   otel-collector:
     # Pin the plain X.Y.Z release. Dependabot once proposed 0.162.0-386, an i386 architecture
     # variant tag, not a release; never bump to a tag with an arch/OS suffix.
-    image: otel/opentelemetry-collector-contrib:0.163.1
+    image: otel/opentelemetry-collector-contrib:0.163.1-386
     container_name: reef-otel-collector
     profiles: ["observability"]
     command: ["--config=/etc/otelcol/config.yaml"]
