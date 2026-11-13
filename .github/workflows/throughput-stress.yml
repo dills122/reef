@@ -59,7 +59,7 @@ jobs:
         with:
           node: 'true'
           java: 'true'
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       - name: Run no-persistence stress iteration 1
         env:
           DEV_STRESS_RUN_KIND: scheduled-throughput
@@ -118,7 +118,7 @@ jobs:
         with:
           node: 'true'
           java: 'true'
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       - name: Start DB-backed runtime stack
         run: JS_RUNTIME=node make dev-up
       - name: Run db-backed stress iteration 1
