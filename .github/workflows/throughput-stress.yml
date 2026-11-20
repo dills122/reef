@@ -51,7 +51,7 @@ jobs:
       DEV_STRESS_REPORT_OUT: throughput-artifacts/runtime-nodb/runtime-nodb.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: services/simulator/go.mod
           cache-dependency-path: services/simulator/go.sum
@@ -59,7 +59,7 @@ jobs:
         with:
           node: 'true'
           java: 'true'
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       - name: Run no-persistence stress iteration 1
         env:
           DEV_STRESS_RUN_KIND: scheduled-throughput
@@ -110,7 +110,7 @@ jobs:
       DEV_STRESS_REPORT_OUT: throughput-artifacts/runtime-db/runtime-db.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: services/simulator/go.mod
           cache-dependency-path: services/simulator/go.sum
@@ -118,7 +118,7 @@ jobs:
         with:
           node: 'true'
           java: 'true'
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       - name: Start DB-backed runtime stack
         run: JS_RUNTIME=node make dev-up
       - name: Run db-backed stress iteration 1
